@@ -474,289 +474,214 @@
     </div>
 
     <script>
-        // --- CONFIGURAÇÃO FIREBASE ---
-        const firebaseConfig = {
-            apiKey: "AIzaSyB-jzmAdf2eFqpEQVKkFdf7wkURvbzTZBY",
-            authDomain: "karaoke-bar-v2.firebaseapp.com",
-            databaseURL: "https://karaoke-bar-v2-default-rtdb.firebaseio.com",
-            projectId: "karaoke-bar-v2",
-            storageBucket: "karaoke-bar-v2.firebasestorage.app",
-            messagingSenderId: "851258881456",
-            appId: "1:851258881456:web:fb899c2fad3e142b755275",
-            measurementId: "G-1WZ9VRTQ67"
-        };
+    // --- CONFIGURAÇÃO FIREBASE ---
+    const firebaseConfig = {
+        apiKey: "AIzaSyB-jzmAdf2eFqpEQVKkFdf7wkURvbzTZBY",
+        authDomain: "karaoke-bar-v2.firebaseapp.com",
+        databaseURL: "https://karaoke-bar-v2-default-rtdb.firebaseio.com",
+        projectId: "karaoke-bar-v2",
+        storageBucket: "karaoke-bar-v2.firebasestorage.app",
+        messagingSenderId: "851258881456",
+        appId: "1:851258881456:web:fb899c2fad3e142b755275",
+        measurementId: "G-1WZ9VRTQ67"
+    };
 
-        let db = null;
-        let firebaseConnected = false;
-        const TEMPO_MEDIO_MUSICA = 5; // minutos
+    let db = null;
+    let firebaseConnected = false;
+    const TEMPO_MEDIO_MUSICA = 5; // minutos
 
-        // Gera notas musicais flutuando no fundo, para dar mais vida à tela
-        function criarNotasFlutuantes() {
-            const container = document.getElementById('notas-flutuantes');
-            const icones = ['fa-music', 'fa-microphone', 'fa-headphones-alt'];
-            const total = 14;
-            for (let i = 0; i < total; i++) {
-                const nota = document.createElement('i');
-                const icone = icones[Math.floor(Math.random() * icones.length)];
-                nota.className = `fas ${icone} nota-flutuante`;
-                nota.style.left = `${Math.random() * 100}%`;
-                nota.style.fontSize = `${20 + Math.random() * 30}px`;
-                nota.style.animationDuration = `${12 + Math.random() * 10}s`;
-                nota.style.animationDelay = `${Math.random() * 15}s`;
-                container.appendChild(nota);
-            }
+    // Notas musicais no fundo
+    function criarNotasFlutuantes() {
+        const container = document.getElementById('notas-flutuantes');
+        const icones = ['fa-music', 'fa-microphone', 'fa-headphones-alt'];
+        const total = 14;
+        for (let i = 0; i < total; i++) {
+            const nota = document.createElement('i');
+            const icone = icones[Math.floor(Math.random() * icones.length)];
+            nota.className = `fas ${icone} nota-flutuante`;
+            nota.style.left = `${Math.random() * 100}%`;
+            nota.style.fontSize = `${20 + Math.random() * 30}px`;
+            nota.style.animationDuration = `${12 + Math.random() * 10}s`;
+            nota.style.animationDelay = `${Math.random() * 15}s`;
+            container.appendChild(nota);
         }
+    }
 
-        // Monta o QR Code apontando para a página de pedidos (index.html), 
-        // usando a mesma pasta/domínio de onde o display.html está sendo servido
-        function configurarQrCode() {
-            const urlPedidos = new URL('index.html', window.location.href).href;
-            const qrImg = document.getElementById('qr-code-img');
-            qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(urlPedidos)}`;
-        }
+    // Configura o QR Code para o link de pedidos
+    function configurarQrCode() {
+        const urlPedidos = new URL('index.html', window.location.href).href;
+        const qrImg = document.getElementById('qr-code-img');
+        qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(urlPedidos)}`;
+    }
 
-        // Inicializar Firebase
-        function initFirebase() {
-            try {
-                firebase.initializeApp(firebaseConfig);
-                db = firebase.database();
-                firebaseConnected = true;
-                console.log('✅ Firebase inicializado en display.html');
-                atualizarDisplay();
-                
-                // Sincronizar cada cambio en tiempo real
-                const ref = db.ref('karaoke');
-                ref.on('value', (snapshot) => {
-                    console.log('📡 Datos actualizados en tiempo real');
-                    atualizarDisplayWithData(snapshot.val());
-                });
-
-                // Rede de segurança: além do tempo real, força uma checagem a cada 5s.
-                // Isso evita que o telão fique "atrasado" caso a conexão em tempo real
-                // engasgue por algum instante (wifi instável, muita gente votando, etc.)
-                setInterval(atualizarDisplay, 5000);
-            } catch (error) {
-                console.error('❌ Error Firebase:', error);
-                firebaseConnected = false;
-            }
-        }
-
-        function calcularMediaAvaliacoes(avaliacoes) {
-            const notas = Object.values(avaliacoes || {}).map(n => Number(n)).filter(n => !isNaN(n));
-            if (notas.length === 0) return null;
-            const soma = notas.reduce((a,b) => a + b, 0);
-            return Number((soma / notas.length).toFixed(2));
-        }
-
-        // Função corrigida para registrar avaliação de apresentação
-        function avaliarApresentacao(nota) {
-            return new Promise((resolve, reject) => {
-                // Valida existência do objeto de apresentação
-                if (typeof apresentacaoAtual === 'undefined' || !apresentacaoAtual || !apresentacaoAtual.id) {
-                    return reject(new Error('Apresentação inválida ou não carregada'));
-                }
-
-                // Converte e valida nota
-                const num = Number(nota);
-                if (Number.isNaN(num)) return reject(new Error('Nota inválida'));
-                const notaNormalizada = Math.max(1, Math.min(5, Math.round(num)));
-
-                // Obtém ID do votante
-                if (typeof getVotanteId !== 'function') return reject(new Error('Função getVotanteId não definida'));
-                const votanteId = getVotanteId();
-                if (!votanteId) return reject(new Error('Votante não identificado'));
-
-                // Atualiza estado local
-                if (!apresentacaoAtual.avaliacoes) apresentacaoAtual.avaliacoes = {};
-                apresentacaoAtual.avaliacoes[votanteId] = notaNormalizada;
-
-                // Caminho no Firebase
-                const firebasePath = `karaoke/apresentacaoAtual/avaliacoes/${votanteId}`;
-
-                // Persistência: tenta Firebase se configurado, senão local
-                if (typeof useFirebase !== 'undefined' && useFirebase && typeof db !== 'undefined' && db && apresentacaoAtual.id) {
-                    db.ref(firebasePath).set(notaNormalizada)
-                      .then(() => {
-                          // opcional: atualizar local (cache) após sucesso
-                          if (typeof salvarNoLocalStorage === 'function') {
-                              try { salvarNoLocalStorage(); } catch (e) { console.warn('salvarNoLocalStorage falhou:', e); }
-                          }
-                          resolve(true);
-                      })
-                      .catch(err => {
-                          console.error('Erro ao salvar voto no Firebase:', err);
-                          // fallback para local
-                          if (typeof salvarNoLocalStorage === 'function') {
-                              try { salvarNoLocalStorage(); } catch (e) { console.warn('salvarNoLocalStorage falhou:', e); }
-                          }
-                          // rejeita para aviso do chamador, mas já deixou o estado local atualizado
-                          reject(err);
-                      });
-                } else {
-                    // salva apenas localmente
-                    try {
-                        if (typeof salvarNoLocalStorage === 'function') salvarNoLocalStorage();
-                        resolve(true);
-                    } catch (e) {
-                        console.error('Erro ao salvar voto localmente:', e);
-                        reject(e);
-                    }
-                }
-            });
-        }
-
-        function atualizarDisplay() {
-            if (!firebaseConnected || !db) {
-                console.warn('⚠️ Firebase no disponible');
-                return;
-            }
-
+    // Inicializar Firebase
+    function initFirebase() {
+        try {
+            firebase.initializeApp(firebaseConfig);
+            db = firebase.database();
+            firebaseConnected = true;
+            console.log('✅ Firebase inicializado no display');
+            atualizarDisplay();
+            
             const ref = db.ref('karaoke');
-            ref.once('value', (snapshot) => {
+            ref.on('value', (snapshot) => {
                 atualizarDisplayWithData(snapshot.val());
-            }).catch((error) => {
-                console.error('❌ Error al obtener datos:', error);
             });
+
+            // Intervalo de segurança a cada 10s
+            setInterval(atualizarDisplay, 10000);
+        } catch (error) {
+            console.error('❌ Erro no Firebase:', error);
+            firebaseConnected = false;
+            document.getElementById('status-text').innerText = '⚠️ Erro de Conexão';
+        }
+    }
+
+    function calcularMediaAvaliacoes(avaliacoes) {
+        const notas = Object.values(avaliacoes || {}).map(n => Number(n)).filter(n => !isNaN(n));
+        if (notas.length === 0) return null;
+        const soma = notas.reduce((a,b) => a + b, 0);
+        return Number((soma / notas.length).toFixed(1));
+    }
+
+    function formatarTempo(minutos) {
+        if (minutos < 60) return `${minutos} min`;
+        const h = Math.floor(minutos / 60);
+        const m = minutos % 60;
+        return `${h}h ${m}m`;
+    }
+
+    function atualizarDisplay() {
+        if (!firebaseConnected || !db) return;
+        db.ref('karaoke').once('value', (snapshot) => {
+            atualizarDisplayWithData(snapshot.val());
+        }).catch((error) => console.error('❌ Erro ao buscar dados:', error));
+    }
+
+    function atualizarDisplayWithData(data) {
+        document.getElementById('estado-inicial').classList.add('hidden');
+        document.getElementById('fila-vazia').classList.add('hidden');
+        document.getElementById('proximo-cantor').classList.add('hidden');
+        document.getElementById('mini-fila-lista').classList.add('hidden');
+
+        const statusText = document.getElementById('status-text');
+        statusText.innerText = firebaseConnected ? '🔥 Conectado ao Firebase' : '⚠️ Offline';
+
+        if (!data) {
+            document.getElementById('estado-inicial').classList.remove('hidden');
+            document.getElementById('tempo-display').innerText = '0 min';
+            return;
         }
 
-        function atualizarDisplayWithData(data) {
-            // Ocultar todos los estados
-            document.getElementById('estado-inicial').classList.add('hidden');
-            document.getElementById('fila-vazia').classList.add('hidden');
-            document.getElementById('proximo-cantor').classList.add('hidden');
-            document.getElementById('mini-fila-lista').classList.add('hidden');
+        // Caso 1: Apresentação em Andamento
+        if (data.apresentacaoAtual) {
+            const ap = data.apresentacaoAtual;
+            const media = calcularMediaAvaliacoes(ap.avaliacoes);
+            const votos = Object.keys(ap.avaliacoes || {}).length;
 
-            // Actualizar status firebase badge
-            const statusText = document.getElementById('status-text');
-            if (firebaseConnected) {
-                statusText.innerText = '🔥 Conectado ao Firebase';
+            document.getElementById('titulo-apresentacao').innerText = 'Apresentação em Andamento';
+            document.getElementById('cantor-nombre').innerText = ap.nome || '-';
+            document.getElementById('musica-titulo').innerText = ap.musica || '-';
+            document.getElementById('musica-artista').innerText = ap.artista || '-';
+
+            const avalArea = document.getElementById('avaliacao-info');
+            if (media !== null) {
+                avalArea.innerHTML = `<div style="font-size:20px;color:#333;font-weight:700;">★ ${media} <span style="font-size:14px;color:#666;">(${votos} votos)</span></div>`;
             } else {
-                statusText.innerText = '⚠️ Offline';
+                avalArea.innerHTML = `<div style="font-size:16px;color:#666;">Escaneie o QR Code e dê sua nota!</div>`;
             }
 
-            if (!data) {
-                document.getElementById('estado-inicial').classList.remove('hidden');
-                document.getElementById('tempo-display').innerText = '0 min';
-                return;
-            }
+            document.getElementById('veces-cantadas').innerText = ap.vezesCantadas ? `${ap.vezesCantadas}ª vez` : '1ª vez';
 
-            // Se houver uma apresentação em andamento, priorizamos ela
-            if (data.apresentacaoAtual) {
-                const ap = data.apresentacaoAtual;
-                const media = calcularMediaAvaliacoes(ap.avaliacoes);
-                const votos = Object.keys(ap.avaliacoes || {}).length;
-
-                document.getElementById('titulo-apresentacao').innerText = 'Apresentação em Andamento';
-                document.getElementById('cantor-nombre').innerText = ap.nome || '-';
-                document.getElementById('musica-titulo').innerText = ap.musica || '-';
-                document.getElementById('musica-artista').innerText = ap.artista || '-';
-
-                const avalArea = document.getElementById('avaliacao-info');
-                if (media !== null) {
-                    avalArea.innerHTML = `<div style="font-size:18px;color:#333;font-weight:700;">Avaliação média: ★ ${media} <span style="font-size:12px;color:#666;margin-left:8px;">(${votos} votos)</span></div>`;
-                } else {
-                    avalArea.innerHTML = `<div style="font-size:16px;color:#666;">Sem avaliações ainda — incentive o público a votar!</div>`;
-                }
-
-                // vezes cantadas: se disponível no nó (poder vir com o objeto), senão '-' 
-                document.getElementById('veces-cantadas').innerText = '-';
-
-                // info de fila
-                const fila = data.fila || [];
-                document.getElementById('proximos-na-fila').innerText = Math.max(0, fila.length);
-                const tempoEstimado = Math.max(0, fila.length) * TEMPO_MEDIO_MUSICA;
-                document.getElementById('tempo-espera-display').innerText = tempoEstimado;
-                document.getElementById('tempo-display').innerText = tempoEstimado + ' min';
-                document.getElementById('ja-cantadas-hoje').innerText = (data.historico || []).length;
-
-                popularMiniFila(fila, 0);
-
-                document.getElementById('proximo-cantor').classList.remove('hidden');
-                return;
-            }
-
-            // Sem apresentacaoAtual: usamos a fila para mostrar o próximo
             const fila = data.fila || [];
-            if (!fila || fila.length === 0) {
-                if (data.manualFechada) {
-                    document.getElementById('fila-vazia').classList.remove('hidden');
-                } else {
-                    document.getElementById('estado-inicial').classList.remove('hidden');
-                }
-                document.getElementById('tempo-display').innerText = '0 min';
-                return;
-            }
+            const qtdFila = Math.max(0, fila.length);
+            const tempoEstimado = qtdFila * TEMPO_MEDIO_MUSICA;
 
-            const proximo = fila[0];
-            document.getElementById('titulo-apresentacao').innerText = 'Próximo a Cantar';
-            document.getElementById('cantor-nombre').innerText = proximo.nome || '-';
-            document.getElementById('musica-titulo').innerText = proximo.musica || '-';
-            document.getElementById('musica-artista').innerText = proximo.artista || '-';
-            document.getElementById('veces-cantadas').innerText = (typeof proximo.vezesCantadas !== 'undefined') ? `${proximo.vezesCantadas + 1}ª vez` : '-';
-            document.getElementById('avaliacao-info').innerHTML = '';
-
-            document.getElementById('proximos-na-fila').innerText = Math.max(0, fila.length - 1);
-            const tempoEstimado = Math.max(0, fila.length - 1) * TEMPO_MEDIO_MUSICA;
+            document.getElementById('proximos-na-fila').innerText = qtdFila;
             document.getElementById('tempo-espera-display').innerText = tempoEstimado;
-            document.getElementById('tempo-display').innerText = tempoEstimado + ' min';
+            document.getElementById('tempo-display').innerText = formatarTempo(tempoEstimado);
             document.getElementById('ja-cantadas-hoje').innerText = (data.historico || []).length;
 
-            popularMiniFila(fila, 1);
-
+            popularMiniFila(fila, 0);
             document.getElementById('proximo-cantor').classList.remove('hidden');
+            return;
         }
 
-        // Preenche a lista "A Seguir" com os próximos da fila (a partir do índice 'partirDe'),
-        // mostrando até 4 nomes
-        function popularMiniFila(fila, partirDe) {
-            const container = document.getElementById('mini-fila-itens');
-            const wrapper = document.getElementById('mini-fila-lista');
-            const proximos = fila.slice(partirDe, partirDe + 4);
-
-            if (proximos.length === 0) {
-                wrapper.classList.add('hidden');
-                return;
+        // Caso 2: Próximo Cantor da Fila
+        const fila = data.fila || [];
+        if (fila.length === 0) {
+            if (data.manualFechada) {
+                document.getElementById('fila-vazia').classList.remove('hidden');
+            } else {
+                document.getElementById('estado-inicial').classList.remove('hidden');
             }
+            document.getElementById('tempo-display').innerText = '0 min';
+            return;
+        }
 
-            wrapper.classList.remove('hidden');
-            container.innerHTML = proximos.map((p, i) => `
-                <div class="mini-fila-item">
-                    <div style="display:flex;align-items:center;">
-                        <span class="mini-fila-posicao">${i + 1}</span>
-                        <div>
-                            <div class="mini-fila-nome">${p.nome}</div>
-                            <div class="mini-fila-musica">${p.musica} — ${p.artista}</div>
-                        </div>
+        const proximo = fila[0];
+        document.getElementById('titulo-apresentacao').innerText = 'Próximo a Cantar';
+        document.getElementById('cantor-nombre').innerText = proximo.nome || '-';
+        document.getElementById('musica-titulo').innerText = proximo.musica || '-';
+        document.getElementById('musica-artista').innerText = proximo.artista || '-';
+        document.getElementById('veces-cantadas').innerText = (typeof proximo.vezesCantadas !== 'undefined') ? `${proximo.vezesCantadas + 1}ª vez` : '1ª vez';
+        document.getElementById('avaliacao-info').innerHTML = '';
+
+        const qtdFila = Math.max(0, fila.length - 1);
+        const tempoEstimado = qtdFila * TEMPO_MEDIO_MUSICA;
+
+        document.getElementById('proximos-na-fila').innerText = qtdFila;
+        document.getElementById('tempo-espera-display').innerText = tempoEstimado;
+        document.getElementById('tempo-display').innerText = formatarTempo(tempoEstimado);
+        document.getElementById('ja-cantadas-hoje').innerText = (data.historico || []).length;
+
+        popularMiniFila(fila, 1);
+        document.getElementById('proximo-cantor').classList.remove('hidden');
+    }
+
+    function popularMiniFila(fila, partirDe) {
+        const container = document.getElementById('mini-fila-itens');
+        const wrapper = document.getElementById('mini-fila-lista');
+        const proximos = fila.slice(partirDe, partirDe + 4);
+
+        if (proximos.length === 0) {
+            wrapper.classList.add('hidden');
+            return;
+        }
+
+        wrapper.classList.remove('hidden');
+        container.innerHTML = proximos.map((p, i) => `
+            <div class="mini-fila-item">
+                <div style="display:flex;align-items:center;">
+                    <span class="mini-fila-posicao">${i + 1}</span>
+                    <div style="margin-left: 12px;">
+                        <div class="mini-fila-nome">${p.nome}</div>
+                        <div class="mini-fila-musica">${p.musica} — ${p.artista}</div>
                     </div>
                 </div>
-            `).join('');
-        }
+            </div>
+        `).join('');
+    }
 
-        function resetarDisplay() {
-            if (confirm('Deseja resetar o display?')) {
-                atualizarDisplay();
-            }
-        }
+    function resetarDisplay() {
+        atualizarDisplay();
+    }
 
-        function toggleFullscreen() {
-            if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen().catch(err => {
-                    alert(`Erro ao entrar em tela cheia: ${err.message}`);
-                });
-            } else {
-                if (document.exitFullscreen) {
-                    document.exitFullscreen();
-                }
-            }
+    function toggleFullscreen() {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(err => {
+                console.error(`Erro ao entrar em tela cheia: ${err.message}`);
+            });
+        } else {
+            if (document.exitFullscreen) document.exitFullscreen();
         }
+    }
 
-        // Inicialización
-        window.addEventListener('load', () => {
-            console.log('📺 Display.html carregado');
-            criarNotasFlutuantes();
-            configurarQrCode();
-            initFirebase();
-        });
+    window.addEventListener('load', () => {
+        criarNotasFlutuantes();
+        configurarQrCode();
+        initFirebase();
+    });
     </script>
 </body>
 </html>
