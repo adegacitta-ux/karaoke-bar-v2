@@ -365,7 +365,7 @@
         }
         .mini-fila-item .mini-fila-nome { font-weight: 700; color: #444; font-size: 20px; }
         .mini-fila-item .mini-fila-musica { color: #888; font-size: 15px; }
-        .mini-fila-posicao { background: #667eea; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; margin-right: 12px; }
+        .mini-fila-posicao { background: #667eea; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-w[...]
 
         @media (max-width: 768px) {
             .qr-card { flex-direction: column; text-align: center; padding: 12px 16px; }
@@ -548,6 +548,63 @@
             return Number((soma / notas.length).toFixed(2));
         }
 
+        // Função corrigida para registrar avaliação de apresentação
+        function avaliarApresentacao(nota) {
+            return new Promise((resolve, reject) => {
+                // Valida existência do objeto de apresentação
+                if (typeof apresentacaoAtual === 'undefined' || !apresentacaoAtual || !apresentacaoAtual.id) {
+                    return reject(new Error('Apresentação inválida ou não carregada'));
+                }
+
+                // Converte e valida nota
+                const num = Number(nota);
+                if (Number.isNaN(num)) return reject(new Error('Nota inválida'));
+                const notaNormalizada = Math.max(1, Math.min(5, Math.round(num)));
+
+                // Obtém ID do votante
+                if (typeof getVotanteId !== 'function') return reject(new Error('Função getVotanteId não definida'));
+                const votanteId = getVotanteId();
+                if (!votanteId) return reject(new Error('Votante não identificado'));
+
+                // Atualiza estado local
+                if (!apresentacaoAtual.avaliacoes) apresentacaoAtual.avaliacoes = {};
+                apresentacaoAtual.avaliacoes[votanteId] = notaNormalizada;
+
+                // Caminho no Firebase
+                const firebasePath = `karaoke/apresentacaoAtual/avaliacoes/${votanteId}`;
+
+                // Persistência: tenta Firebase se configurado, senão local
+                if (typeof useFirebase !== 'undefined' && useFirebase && typeof db !== 'undefined' && db && apresentacaoAtual.id) {
+                    db.ref(firebasePath).set(notaNormalizada)
+                      .then(() => {
+                          // opcional: atualizar local (cache) após sucesso
+                          if (typeof salvarNoLocalStorage === 'function') {
+                              try { salvarNoLocalStorage(); } catch (e) { console.warn('salvarNoLocalStorage falhou:', e); }
+                          }
+                          resolve(true);
+                      })
+                      .catch(err => {
+                          console.error('Erro ao salvar voto no Firebase:', err);
+                          // fallback para local
+                          if (typeof salvarNoLocalStorage === 'function') {
+                              try { salvarNoLocalStorage(); } catch (e) { console.warn('salvarNoLocalStorage falhou:', e); }
+                          }
+                          // rejeita para aviso do chamador, mas já deixou o estado local atualizado
+                          reject(err);
+                      });
+                } else {
+                    // salva apenas localmente
+                    try {
+                        if (typeof salvarNoLocalStorage === 'function') salvarNoLocalStorage();
+                        resolve(true);
+                    } catch (e) {
+                        console.error('Erro ao salvar voto localmente:', e);
+                        reject(e);
+                    }
+                }
+            });
+        }
+
         function atualizarDisplay() {
             if (!firebaseConnected || !db) {
                 console.warn('⚠️ Firebase no disponible');
@@ -596,7 +653,7 @@
 
                 const avalArea = document.getElementById('avaliacao-info');
                 if (media !== null) {
-                    avalArea.innerHTML = `<div style="font-size:18px;color:#333;font-weight:700;">Avaliação média: ★ ${media} <span style="font-size:12px;color:#666;margin-left:8px;">(${votos} ${votos === 1 ? 'voto' : 'votos'})</span></div>`;
+                    avalArea.innerHTML = `<div style="font-size:18px;color:#333;font-weight:700;">Avaliação média: ★ ${media} <span style="font-size:12px;color:#666;margin-left:8px;">(${votos} votos)</span></div>`;
                 } else {
                     avalArea.innerHTML = `<div style="font-size:16px;color:#666;">Sem avaliações ainda — incentive o público a votar!</div>`;
                 }
