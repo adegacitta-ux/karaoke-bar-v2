@@ -515,6 +515,22 @@
         // Se a mesa não for informada, usamos só o primeiro nome (comportamento anterior).
         // Formata "Música — Artista", mas omite o traço se o artista não foi informado
         // (acontece quando a música veio pronta do YouTube, onde o artista é opcional)
+        // Igual ao JSON.stringify, mas ordena as chaves dos objetos antes de converter.
+        // Necessário porque o Firebase pode devolver os campos de um objeto em ordem
+        // diferente da que foram salvos — sem isso, a mesma fila (sem nenhuma mudança
+        // real) gerava um texto diferente a cada sincronização, e o sistema achava
+        // (errado) que precisava reconstruir a tela toda vez que alguém votava.
+        function stringifyOrdenado(valor) {
+            if (Array.isArray(valor)) {
+                return '[' + valor.map(stringifyOrdenado).join(',') + ']';
+            }
+            if (valor && typeof valor === 'object') {
+                const chaves = Object.keys(valor).sort();
+                return '{' + chaves.map(k => JSON.stringify(k) + ':' + stringifyOrdenado(valor[k])).join(',') + '}';
+            }
+            return JSON.stringify(valor);
+        }
+
         function formatarMusicaArtista(musica, artista) {
             return artista && artista.trim() ? `${musica} — ${artista}` : musica;
         }
@@ -1262,7 +1278,7 @@
             // Tabela da Fila — só reconstrói o HTML se a fila realmente mudou.
             // Isso evita "piscar"/travar a tela do DJ toda vez que alguém vota
             // (um voto muda só a avaliação da apresentação atual, não a fila).
-            const filaHashAtual = JSON.stringify(fila);
+            const filaHashAtual = stringifyOrdenado(fila);
             if (filaHashAtual !== _ultimaFilaHash) {
                 _ultimaFilaHash = filaHashAtual;
 
@@ -1331,7 +1347,7 @@
             }
 
             // Lista de Histórico — mesma lógica: só reconstrói quando o histórico muda de verdade.
-            const historicoHashAtual = JSON.stringify(historico);
+            const historicoHashAtual = stringifyOrdenado(historico);
             if (historicoHashAtual !== _ultimoHistoricoHash) {
                 _ultimoHistoricoHash = historicoHashAtual;
 
