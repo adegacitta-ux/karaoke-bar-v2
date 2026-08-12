@@ -438,23 +438,31 @@
                 // Mantém "usuarioAtual" sempre atualizado — usado por isAdminAuthenticated().
                 // Isso cobre tanto o DJ logando com e-mail/senha quanto os clientes comuns
                 // (que entram anonimamente, veja mais abaixo).
+                //
+                // IMPORTANTE: checar "firebase.auth().currentUser" logo após o initializeApp()
+                // (de forma síncrona) NÃO é confiável — o Firebase leva um instante pra
+                // restaurar uma sessão salva (ex: o login do DJ) de forma assíncrona. Fazer
+                // login anônimo nesse meio-tempo criava uma disputa: se o anônimo "vencesse"
+                // essa corrida bem no momento em que o DJ salvava alguma ação, o Firebase
+                // rejeitava a gravação silenciosamente (o DJ não estava mais autenticado como
+                // admin) — foi isso que causou dados "fantasma" reaparecendo depois de limpos.
+                // Por isso, só decidimos se precisa de login anônimo DEPOIS que o
+                // onAuthStateChanged disparar pela primeira vez com o estado real e definitivo.
+                let anonimoTentado = false;
                 firebase.auth().onAuthStateChanged((user) => {
                     usuarioAtual = user;
                     authPronta = true;
+
                     if (user) {
                         console.log(user.isAnonymous ? '👤 Sessão anônima ativa' : `🔑 Logado como ${user.email}`);
+                    } else if (!anonimoTentado) {
+                        // Não havia nenhuma sessão salva (nem DJ, nem anônima) — cria uma agora.
+                        anonimoTentado = true;
+                        firebase.auth().signInAnonymously().catch((error) => {
+                            console.error('❌ Erro na autenticação anônima:', error);
+                        });
                     }
                 });
-
-                // Todo visitante (cliente comum) recebe uma sessão anônima automaticamente.
-                // Isso garante que toda leitura/escrita no banco tenha uma autenticação válida —
-                // sem isso, alguém poderia acessar o banco diretamente por fora do site.
-                // Se o navegador já tiver uma sessão de DJ salva, o Firebase mantém ela — não sobrescreve.
-                if (!firebase.auth().currentUser) {
-                    firebase.auth().signInAnonymously().catch((error) => {
-                        console.error('❌ Erro na autenticação anônima:', error);
-                    });
-                }
 
                 // Sincronizar dados do Firebase
                 sincronizarComFirebase();
@@ -788,6 +796,12 @@
                     if (error) {
                         console.error('❌ Erro ao salvar no Firebase:', error);
                         salvarNoLocalStorage();
+                        // Se foi um erro de permissão, a ação NÃO foi salva de verdade —
+                        // avisa o DJ em vez de falhar quieto (foi exatamente isso que
+                        // causava dados "fantasma" reaparecendo depois de serem "limpos").
+                        if (error.code === 'PERMISSION_DENIED') {
+                            alert('⚠️ Essa ação não foi salva (sessão expirada). Clique em "Sair" e faça login de novo, depois repita a ação.');
+                        }
                     } else {
                         console.log('✅ Dados salvos no Firebase');
                     }
