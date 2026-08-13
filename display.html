@@ -526,6 +526,27 @@
         let firebaseConnected = false;
         const TEMPO_MEDIO_MUSICA = 5; // minutos
 
+        // --- IDENTIFICAÇÃO DO BAR (multi-tenant) — mesmo esquema do index.html ---
+        function obterBarId() {
+            const params = new URLSearchParams(window.location.search);
+            const bar = (params.get('bar') || '').trim().toLowerCase();
+            return bar.replace(/[^a-z0-9-]/g, '');
+        }
+        const BAR_ID = obterBarId();
+        function caminhoBar(sufixo) {
+            return `bares/${BAR_ID}/karaoke${sufixo ? '/' + sufixo : ''}`;
+        }
+
+        function mostrarErroSemBar() {
+            document.body.innerHTML = `
+                <div style="display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:20px;font-family:sans-serif;color:white;">
+                    <div>
+                        <h1 style="font-size:22px;margin-bottom:10px;">⚠️ Link incompleto</h1>
+                        <p>Essa página precisa saber qual bar exibir.<br>Peça o link correto pro responsável (algo como <code>?bar=nomedobar</code> no final do endereço).</p>
+                    </div>
+                </div>`;
+        }
+
         // Gera notas musicais flutuando no fundo, para dar mais vida à tela
         function criarNotasFlutuantes() {
             const container = document.getElementById('notas-flutuantes');
@@ -543,16 +564,21 @@
             }
         }
 
-        // Monta o QR Code apontando para a página de pedidos (index.html), 
+        // Monta o QR Code apontando para a página de pedidos (index.html) do MESMO bar,
         // usando a mesma pasta/domínio de onde o display.html está sendo servido
         function configurarQrCode() {
-            const urlPedidos = new URL('index.html', window.location.href).href;
+            const urlPedidos = new URL('index.html?bar=' + encodeURIComponent(BAR_ID), window.location.href).href;
             const qrImg = document.getElementById('qr-code-img');
             qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(urlPedidos)}`;
         }
 
         // Inicializar Firebase
         function initFirebase() {
+            if (!BAR_ID) {
+                mostrarErroSemBar();
+                return;
+            }
+
             try {
                 firebase.initializeApp(firebaseConfig);
                 db = firebase.database();
@@ -561,7 +587,7 @@
                 atualizarDisplay();
                 
                 // Sincronizar cada cambio en tiempo real
-                const ref = db.ref('karaoke');
+                const ref = db.ref(caminhoBar());
                 ref.on('value', (snapshot) => {
                     console.log('📡 Datos actualizados en tiempo real');
                     atualizarDisplayWithData(snapshot.val());
@@ -590,7 +616,7 @@
                 return;
             }
 
-            const ref = db.ref('karaoke');
+            const ref = db.ref(caminhoBar());
             ref.once('value', (snapshot) => {
                 atualizarDisplayWithData(snapshot.val());
             }).catch((error) => {
