@@ -57,8 +57,8 @@
 </head>
 <body class="bg-gray-100 min-h-screen">
 
-    <!-- Status Firebase -->
-    <div class="firebase-status firebase-disconnected" id="firebase-status">
+    <!-- Status Firebase — visível só na aba Admin/DJ, ver switchTab() -->
+    <div class="firebase-status firebase-disconnected hidden" id="firebase-status">
         <i class="fas fa-circle mr-2" style="animation: pulse 1s infinite;"></i>
         <span id="status-text">Conectando ao Firebase...</span>
     </div>
@@ -569,7 +569,8 @@
         function updateFirebaseStatus(connected) {
             const statusEl = document.getElementById('firebase-status');
             const statusText = document.getElementById('status-text');
-            
+            const estavaEscondido = statusEl.classList.contains('hidden');
+
             if (connected) {
                 statusEl.className = 'firebase-status firebase-connected';
                 statusText.innerText = '🔥 Conectado ao Firebase';
@@ -577,6 +578,10 @@
                 statusEl.className = 'firebase-status firebase-disconnected';
                 statusText.innerText = '📱 Usando armazenamento local';
             }
+
+            // className acima apaga qualquer classe extra — reaplica o "hidden" se já
+            // estava escondido (ele só deve aparecer quando a aba Admin/DJ está ativa)
+            if (estavaEscondido) statusEl.classList.add('hidden');
         }
 
         // --- ESTADO DO SISTEMA ---
@@ -966,6 +971,12 @@
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
             const el = document.getElementById(tabId);
             if (el) el.classList.add('active');
+
+            // O indicador "Conectado ao Firebase" é informação técnica — só interessa
+            // pro DJ (pra saber se pode confiar na fila em tempo real), não pro cliente.
+            const statusEl = document.getElementById('firebase-status');
+            if (statusEl) statusEl.classList.toggle('hidden', tabId !== 'admin');
+
             atualizarUI();
         }
 
