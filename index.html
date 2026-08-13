@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Karaokê Manager - Karaokê Do Città</title>
+    <title>Karaokê Manager</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <!-- Firebase SDK -->
@@ -75,7 +75,7 @@
     <!-- Header / Navegação Simples para o Protótipo -->
     <nav class="bg-white shadow-sm mb-4">
         <div class="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
-            <h1 class="text-xl font-bold text-indigo-600"><span>Karaokê Do Città</span></h1>
+            <h1 class="text-xl font-bold text-indigo-600"><span id="nome-do-bar">Karaokê Manager</span></h1>
             <div class="flex space-x-2">
                 <button onclick="switchTab('cliente')" class="px-3 py-1 text-sm font-medium rounded-md hover:bg-gray-100">Cliente</button>
                 <button onclick="switchTab('proximos')" class="px-3 py-1 text-sm font-medium rounded-md hover:bg-gray-100">Próximos</button>
@@ -258,7 +258,7 @@
                                 </button>
                             </div>
                             <div>
-                                <button onclick="window.open('display.html', '_blank')" class="w-full py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 bg-gradient-custom text-white hover:opacity-90">
+                                <button onclick="window.open('display.html?bar=' + encodeURIComponent(BAR_ID), '_blank')" class="w-full py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 bg-gradient-custom text-white hover:opacity-90">
                                     <i class="fas fa-tv"></i> <span>Abrir Telão</span>
                                 </button>
                             </div>
@@ -420,6 +420,53 @@
             measurementId: "G-1WZ9VRTQ67"
         };
 
+        // --- IDENTIFICAÇÃO DO BAR (multi-tenant) ---
+        // Cada bar acessa com uma URL diferente, ex: seusite.com/?bar=citta
+        // Todos os dados desse bar ficam isolados em /bares/{barId}/karaoke/...
+        // Cadastrar um bar novo = criar o nó /bares/{barId}/config no Firebase
+        // (nome, corPrimaria, adminEmail) + um usuário novo em Authentication.
+        // Não precisa editar nem duplicar este arquivo pra cada bar.
+        function obterBarId() {
+            const params = new URLSearchParams(window.location.search);
+            const bar = (params.get('bar') || '').trim().toLowerCase();
+            // só letras, números e hífen — evita path malformado no Firebase
+            return bar.replace(/[^a-z0-9-]/g, '');
+        }
+
+        const BAR_ID = obterBarId();
+
+        // Todo o caminho no banco desse bar começa aqui — é só usar `caminhoBar(...)`
+        // em vez de escrever 'karaoke/...' direto, em qualquer lugar do código.
+        function caminhoBar(sufixo) {
+            return `bares/${BAR_ID}/karaoke${sufixo ? '/' + sufixo : ''}`;
+        }
+
+        // Prefixa as chaves do localStorage com o bar, pra não misturar dados de
+        // bares diferentes se a mesma pessoa usar o navegador em mais de um bar
+        function chaveLocal(nome) {
+            return `karaoke_${BAR_ID}_${nome}`;
+        }
+
+        // E-mail do admin, nome do bar e cor — carregados do Firebase (config
+        // pública, só leitura) em vez de escritos fixos no código.
+        let ADMIN_EMAIL = null;
+        let barConfigCarregada = false;
+
+        function aplicarConfigDoBar(config) {
+            if (!config) return;
+            ADMIN_EMAIL = config.adminEmail || null;
+            barConfigCarregada = true;
+
+            if (config.nome) {
+                document.title = config.nome + ' - Karaokê';
+                const titulo = document.getElementById('nome-do-bar');
+                if (titulo) titulo.innerText = config.nome;
+            }
+            if (config.corPrimaria) {
+                document.documentElement.style.setProperty('--cor-primaria', config.corPrimaria);
+            }
+        }
+
         let db = null;
         let firebaseConnected = false;
         let useFirebase = false;
@@ -427,6 +474,11 @@
 
         // Inicializar Firebase
         function initFirebase() {
+            if (!BAR_ID) {
+                mostrarErroSemBar();
+                return;
+            }
+
             try {
                 firebase.initializeApp(firebaseConfig);
                 db = firebase.database();
@@ -464,14 +516,54 @@
                     }
                 });
 
-                // Sincronizar dados do Firebase
-                sincronizarComFirebase();
+                // Carrega o nome/cor/e-mail do admin desse bar específico (config pública,
+                // só leitura) — sem isso não dá nem pra saber quem tem permissão de admin.
+                db.ref(`bares/${BAR_ID}/config`).once('value')
+                    .then((snapshot) => {
+                        const config = snapshot.val();
+                        if (!config) {
+                            mostrarErroBarNaoEncontrado();
+                            return;
+                        }
+                        aplicarConfigDoBar(config);
+                        // Só sincroniza a fila depois de saber quem é o admin desse bar —
+                        // isAdminAuthenticated() depende de ADMIN_EMAIL já estar carregado.
+                        sincronizarComFirebase();
+                    })
+                    .catch((error) => {
+                        console.error('❌ Erro ao carregar configuração do bar:', error);
+                        mostrarErroBarNaoEncontrado();
+                    });
             } catch (error) {
                 console.warn('⚠️ Erro ao inicializar Firebase, usando localStorage:', error);
                 useFirebase = false;
                 updateFirebaseStatus(false);
                 carregarDoLocalStorage();
             }
+        }
+
+        // Tela de erro simples quando a URL não tem "?bar=algumacoisa"
+        function mostrarErroSemBar() {
+            document.body.innerHTML = `
+                <div style="display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:20px;font-family:sans-serif;">
+                    <div>
+                        <h1 style="font-size:22px;margin-bottom:10px;">⚠️ Link incompleto</h1>
+                        <p style="color:#666;">Essa página precisa saber qual bar você quer acessar.<br>
+                        Peça o link correto pro responsável (algo como <code>?bar=nomedobar</code> no final do endereço).</p>
+                    </div>
+                </div>`;
+        }
+
+        // Tela de erro quando o bar da URL não existe cadastrado no Firebase
+        function mostrarErroBarNaoEncontrado() {
+            document.body.innerHTML = `
+                <div style="display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:20px;font-family:sans-serif;">
+                    <div>
+                        <h1 style="font-size:22px;margin-bottom:10px;">⚠️ Bar não encontrado</h1>
+                        <p style="color:#666;">Não encontramos nenhum bar cadastrado com esse endereço.<br>
+                        Confira o link ou peça pro responsável verificar o cadastro.</p>
+                    </div>
+                </div>`;
         }
 
         function updateFirebaseStatus(connected) {
@@ -501,10 +593,10 @@
 
         // Identificador anônimo do dispositivo, usado para permitir 1 voto por pessoa/dispositivo
         function getVotanteId() {
-            let vid = localStorage.getItem('karaoke_votante_id');
+            let vid = localStorage.getItem(chaveLocal('votante_id'));
             if (!vid) {
                 vid = 'v-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
-                localStorage.setItem('karaoke_votante_id', vid);
+                localStorage.setItem(chaveLocal('votante_id'), vid);
             }
             return vid;
         }
@@ -559,25 +651,25 @@
         // a aba do site aberta no celular/computador.
 
         function notifAtiva() {
-            return localStorage.getItem('karaoke_notif_ativo') === '1';
+            return localStorage.getItem(chaveLocal('notif_ativo')) === '1';
         }
 
         function getMeusPedidos() {
-            try { return JSON.parse(localStorage.getItem('karaoke_meus_pedidos')) || []; }
+            try { return JSON.parse(localStorage.getItem(chaveLocal('meus_pedidos'))) || []; }
             catch (e) { return []; }
         }
 
         function salvarMeusPedidos(lista) {
-            localStorage.setItem('karaoke_meus_pedidos', JSON.stringify(lista));
+            localStorage.setItem(chaveLocal('meus_pedidos'), JSON.stringify(lista));
         }
 
         function getNotificados() {
-            try { return JSON.parse(localStorage.getItem('karaoke_notificados')) || []; }
+            try { return JSON.parse(localStorage.getItem(chaveLocal('notificados'))) || []; }
             catch (e) { return []; }
         }
 
         function salvarNotificados(lista) {
-            localStorage.setItem('karaoke_notificados', JSON.stringify(lista));
+            localStorage.setItem(chaveLocal('notificados'), JSON.stringify(lista));
         }
 
         // Toca um bipe simples via Web Audio API — não depende de nenhum arquivo de áudio
@@ -681,9 +773,9 @@
         const HORARIO_LIMITE = "23:00";
 
         // --- AUTENTICAÇÃO DO ADMIN (Firebase Authentication) ---
-        // O e-mail é fixo (1 conta de DJ por bar); a senha real é a que você cadastrar
-        // no Firebase Console em Authentication > Users. Não fica mais escrita no código.
-        const ADMIN_EMAIL = "dj@karaokedocitta.com"; // <-- troque pelo e-mail que você cadastrar no Firebase
+        // O e-mail do admin agora vem da configuração do bar no Firebase (ADMIN_EMAIL já
+        // foi declarado lá em cima, junto com BAR_ID) — não fica mais escrito no código,
+        // já que cada bar tem seu próprio e-mail de DJ.
 
         // Guarda o usuário autenticado no momento (atualizado automaticamente pelo Firebase)
         let usuarioAtual = null;
@@ -717,6 +809,13 @@
             const btnSubmit = document.querySelector('#admin-auth-form button[type="submit"]');
 
             err.classList.add('hidden');
+
+            if (!ADMIN_EMAIL) {
+                err.innerText = 'Ainda carregando os dados do bar, aguarde um instante e tente de novo.';
+                err.classList.remove('hidden');
+                return;
+            }
+
             btnSubmit.disabled = true;
             btnSubmit.innerText = 'Entrando...';
 
@@ -755,7 +854,7 @@
         function sincronizarComFirebase() {
             if (!useFirebase || !db) return;
 
-            const ref = db.ref('karaoke');
+            const ref = db.ref(caminhoBar());
             ref.on('value', (snapshot) => {
                 if (syncInProgress) return;
                 
@@ -784,7 +883,7 @@
 
             syncInProgress = true;
             try {
-                db.ref('karaoke').set({
+                db.ref(caminhoBar()).set({
                     fila: fila,
                     historico: historico,
                     contagem: contagemCantores,
@@ -826,7 +925,7 @@
 
             syncInProgress = true;
             try {
-                db.ref('karaoke/fila').set(fila, (error) => {
+                db.ref(caminhoBar('fila')).set(fila, (error) => {
                     syncInProgress = false;
                     if (error) {
                         console.error('❌ Erro ao salvar fila no Firebase:', error);
@@ -841,19 +940,19 @@
         }
 
         function salvarNoLocalStorage() {
-            localStorage.setItem('karaoke_fila', JSON.stringify(fila));
-            localStorage.setItem('karaoke_historico', JSON.stringify(historico));
-            localStorage.setItem('karaoke_contagem', JSON.stringify(contagemCantores));
-            localStorage.setItem('karaoke_manual_fechada', JSON.stringify(filaManualFechada));
-            localStorage.setItem('karaoke_apresentacao_atual', JSON.stringify(apresentacaoAtual));
+            localStorage.setItem(chaveLocal('fila'), JSON.stringify(fila));
+            localStorage.setItem(chaveLocal('historico'), JSON.stringify(historico));
+            localStorage.setItem(chaveLocal('contagem'), JSON.stringify(contagemCantores));
+            localStorage.setItem(chaveLocal('manual_fechada'), JSON.stringify(filaManualFechada));
+            localStorage.setItem(chaveLocal('apresentacao_atual'), JSON.stringify(apresentacaoAtual));
         }
 
         function carregarDoLocalStorage() {
-            fila = JSON.parse(localStorage.getItem('karaoke_fila')) || [];
-            historico = JSON.parse(localStorage.getItem('karaoke_historico')) || [];
-            contagemCantores = JSON.parse(localStorage.getItem('karaoke_contagem')) || {};
-            filaManualFechada = JSON.parse(localStorage.getItem('karaoke_manual_fechada')) || false;
-            apresentacaoAtual = JSON.parse(localStorage.getItem('karaoke_apresentacao_atual')) || null;
+            fila = JSON.parse(localStorage.getItem(chaveLocal('fila'))) || [];
+            historico = JSON.parse(localStorage.getItem(chaveLocal('historico'))) || [];
+            contagemCantores = JSON.parse(localStorage.getItem(chaveLocal('contagem'))) || {};
+            filaManualFechada = JSON.parse(localStorage.getItem(chaveLocal('manual_fechada'))) || false;
+            apresentacaoAtual = JSON.parse(localStorage.getItem(chaveLocal('apresentacao_atual'))) || null;
         }
 
         // --- LÓGICA DE NAVEGAÇÃO ---
@@ -1053,8 +1152,8 @@
             atualizarUI();
 
             // Lembra o nome e a mesa neste navegador, para não precisar digitar de novo da próxima vez
-            localStorage.setItem('karaoke_cliente_nome', nome);
-            localStorage.setItem('karaoke_cliente_mesa', mesa || '');
+            localStorage.setItem(chaveLocal('cliente_nome'), nome);
+            localStorage.setItem(chaveLocal('cliente_mesa'), mesa || '');
             document.getElementById('btn-nao-e-voce').classList.remove('hidden');
 
             // Feedback visual — limpa só música/artista; nome e mesa continuam preenchidos
@@ -1071,8 +1170,8 @@
 
         // Preenche nome/mesa automaticamente se o navegador já tiver essa informação salva
         function preencherDadosLembrados() {
-            const nomeSalvo = localStorage.getItem('karaoke_cliente_nome');
-            const mesaSalva = localStorage.getItem('karaoke_cliente_mesa');
+            const nomeSalvo = localStorage.getItem(chaveLocal('cliente_nome'));
+            const mesaSalva = localStorage.getItem(chaveLocal('cliente_mesa'));
             if (nomeSalvo) {
                 document.getElementById('input-nome').value = nomeSalvo;
                 document.getElementById('btn-nao-e-voce').classList.remove('hidden');
@@ -1082,8 +1181,8 @@
 
         // Limpa o nome/mesa lembrados neste navegador (ex: outra pessoa vai pedir no mesmo celular)
         function esquecerDadosLembrados() {
-            localStorage.removeItem('karaoke_cliente_nome');
-            localStorage.removeItem('karaoke_cliente_mesa');
+            localStorage.removeItem(chaveLocal('cliente_nome'));
+            localStorage.removeItem(chaveLocal('cliente_mesa'));
             document.getElementById('input-nome').value = '';
             document.getElementById('input-mesa').value = '';
             document.getElementById('btn-nao-e-voce').classList.add('hidden');
@@ -1168,7 +1267,7 @@
             // Isso evita que cada voto reenvie fila + histórico completos pra todo mundo,
             // o que estava deixando a tela do DJ "travando/recarregando" a cada voto.
             if (useFirebase && db && apresentacaoAtual.id) {
-                db.ref(`karaoke/apresentacaoAtual/avaliacoes/${getVotanteId()}`).set(nota, (error) => {
+                db.ref(caminhoBar(`apresentacaoAtual/avaliacoes/${getVotanteId()}`)).set(nota, (error) => {
                     if (error) console.error('❌ Erro ao salvar voto:', error);
                 });
             } else {
@@ -1460,7 +1559,7 @@
         const notifToggle = document.getElementById('notif-toggle');
         notifToggle.checked = notifAtiva();
         notifToggle.addEventListener('change', function() {
-            localStorage.setItem('karaoke_notif_ativo', this.checked ? '1' : '0');
+            localStorage.setItem(chaveLocal('notif_ativo'), this.checked ? '1' : '0');
             if (this.checked) {
                 pedirPermissaoNotificacao();
             } else {
@@ -1474,6 +1573,10 @@
         
         // Inicializar
         window.addEventListener('load', () => {
+            if (!BAR_ID) {
+                mostrarErroSemBar();
+                return; // não continua tentando mexer em elementos que acabaram de sumir
+            }
             preencherDadosLembrados();
             initFirebase();
             atualizarUI();
