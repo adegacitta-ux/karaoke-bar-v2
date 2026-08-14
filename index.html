@@ -1127,40 +1127,86 @@
             const mesa = document.getElementById('input-mesa').value.trim();
             const musica = document.getElementById('input-musica').value.trim();
             const artista = document.getElementById('input-artista').value.trim();
+            const youtubeUrlDoPedido = youtubeUrlSelecionada || null;
 
-            // Considera tanto quantas vezes a pessoa já cantou quanto pedidos dela ainda pendentes na fila,
-            // para que várias músicas da mesma pessoa não furem a prioridade de quem só pediu uma vez.
-            // Usa primeiro nome + mesa como identificador (evita duplicidade por erro de digitação/apelido).
-            const key = obterChaveNome(nome, mesa);
-            const pedidosPendentes = fila.filter(p => obterChaveNome(p.nome, p.mesa) === key).length;
-            const prioridadeCalculada = (contagemCantores[key] || 0) + pedidosPendentes;
+            const btnEnviar = document.getElementById('btn-enviar');
+            if (btnEnviar) { btnEnviar.disabled = true; }
 
-            const novoPedido = {
-                id: Date.now(),
-                nome: nome,
-                mesa: mesa || null,
-                musica: musica,
-                artista: artista,
-                timestamp: new Date().getTime(),
-                vezesCantadas: prioridadeCalculada,
-                youtubeUrl: youtubeUrlSelecionada || null
-            };
-
-            fila.push(novoPedido);
-            ordenarFila();
-
-            // Se o cliente ativou o aviso de "é a sua vez", associamos este pedido ao dispositivo dele
-            // (precisa acontecer ANTES de atualizarUI/verificarMinhaVez, para o aviso poder disparar
-            // já na primeira verificação, caso a fila esteja vazia e o pedido entre direto na posição 1)
-            if (notifAtiva()) {
-                registrarMeuPedido(novoPedido.id);
+            // Monta o pedido dentro da transação (não fora), porque precisa saber a
+            // prioridade calculada em cima do estado MAIS ATUAL da fila no servidor —
+            // não da cópia que este celular tem localmente, que pode estar um pouco
+            // desatualizada se outra pessoa mandou pedido ao mesmo tempo.
+            function montarNovoPedido() {
+                const key = obterChaveNome(nome, mesa);
+                const prioridadeCalculada = contagemCantores[key] || 0;
+                return {
+                    id: Date.now() + Math.floor(Math.random() * 1000), // evita colisão se dois pedidos vierem no mesmo milissegundo
+                    nome: nome,
+                    mesa: mesa || null,
+                    musica: musica,
+                    artista: artista,
+                    timestamp: new Date().getTime(),
+                    vezesCantadas: prioridadeCalculada,
+                    youtubeUrl: youtubeUrlDoPedido
+                };
             }
 
-            // Cliente comum só grava o campo "fila" (nunca histórico/contagem/etc) —
-            // é o que faz as regras de segurança do Firebase permitirem essa escrita
-            // mesmo vindo de uma sessão anônima.
-            salvarFilaNoFirebase();
-            atualizarUI();
+            if (useFirebase && db) {
+                // TRANSAÇÃO: o Firebase entrega o valor mais recente do servidor pra essa
+                // função, a gente devolve a fila já com o pedido novo dentro, e se OUTRO
+                // pedido tiver sido salvo bem nesse meio-tempo, o Firebase roda a função nA
+                // NOVO com o dado mais fresco de novo — automaticamente, sem perder nada.
+                // Isso é o que evita a corrida de gravação (dois pedidos simultâneos
+                // apagando um ao outro), que estava fazendo nomes sumirem/reaparecerem.
+                let ultimoPedidoCriado = null;
+                db.ref(caminhoBar('fila')).transaction((filaAtualDoServidor) => {
+                    const listaAtual = filaAtualDoServidor || [];
+                    ultimoPedidoCriado = montarNovoPedido();
+                    return [...listaAtual, ultimoPedidoCriado];
+                }, (error, comprometido, snapshot) => {
+                    if (error) {
+                        console.error('❌ Erro na transação ao adicionar pedido:', error);
+                        alert('Não deu pra enviar seu pedido agora. Tente de novo em alguns segundos.');
+                        if (btnEnviar) { btnEnviar.disabled = false; }
+                        return;
+                    }
+                    if (!comprometido) {
+                        // Não deveria acontecer (a função sempre retorna um valor), mas por
+                        // segurança avisa em vez de deixar o botão travado silenciosamente
+                        if (btnEnviar) { btnEnviar.disabled = false; }
+                        return;
+                    }
+
+                    fila = snapshot.val() || [];
+                    ordenarFila();
+
+                    if (notifAtiva() && ultimoPedidoCriado) {
+                        registrarMeuPedido(ultimoPedidoCriado.id);
+                    }
+
+                    atualizarUI();
+                    finalizarEnvioPedido(nome, mesa, btnEnviar);
+                });
+            } else {
+                // Sem Firebase (modo offline/local) não existe risco de dois dispositivos
+                // gravando ao mesmo tempo — pode adicionar direto.
+                const novoPedido = montarNovoPedido();
+                fila.push(novoPedido);
+                ordenarFila();
+
+                if (notifAtiva()) {
+                    registrarMeuPedido(novoPedido.id);
+                }
+
+                salvarNoLocalStorage();
+                atualizarUI();
+                finalizarEnvioPedido(nome, mesa, btnEnviar);
+            }
+        }
+
+        // Parte final do envio do pedido — comum aos dois caminhos (com ou sem Firebase)
+        function finalizarEnvioPedido(nome, mesa, btnEnviar) {
+            if (btnEnviar) { btnEnviar.disabled = false; }
 
             // Lembra o nome e a mesa neste navegador, para não precisar digitar de novo da próxima vez
             localStorage.setItem(chaveLocal('cliente_nome'), nome);
@@ -1200,11 +1246,28 @@
             document.getElementById('input-nome').focus();
         }
 
+        // A cada X minutos esperando, "perdoa" uma vez cantada anteriormente na hora de
+        // ordenar a fila — assim quem já cantou não fica preso atrás de gente nova pra
+        // sempre; com tempo suficiente de espera, ela volta a furar a frente. Ajuste esse
+        // número se quiser que a fila "perdoe" mais rápido ou mais devagar.
+        const MINUTOS_PARA_PERDOAR_UMA_VEZ_CANTADA = 25;
+
+        // Calcula a prioridade "de verdade" de um pedido NESTE momento: começa igual a
+        // quantas vezes a pessoa já cantou, e vai descontando conforme o tempo de espera
+        // desse pedido específico passa. Quanto MENOR o número, mais cedo ela canta.
+        function calcularPrioridadeEfetiva(pedido) {
+            const minutosEsperando = (Date.now() - pedido.timestamp) / 60000;
+            return pedido.vezesCantadas - (minutosEsperando / MINUTOS_PARA_PERDOAR_UMA_VEZ_CANTADA);
+        }
+
         function ordenarFila() {
-            // Regra: Menos vezes cantadas primeiro. Em empate, ordem de chegada (timestamp).
+            // Regra: menos vezes cantadas primeiro — mas o "peso" de já ter cantado
+            // vai diminuindo com o tempo de espera (ver calcularPrioridadeEfetiva).
+            // Em empate, ordem de chegada (timestamp).
             fila.sort((a, b) => {
-                if (a.vezesCantadas !== b.vezesCantadas) {
-                    return a.vezesCantadas - b.vezesCantadas;
+                const diferenca = calcularPrioridadeEfetiva(a) - calcularPrioridadeEfetiva(b);
+                if (Math.abs(diferenca) > 0.0001) {
+                    return diferenca;
                 }
                 return a.timestamp - b.timestamp;
             });
@@ -1345,6 +1408,13 @@
         // --- ATUALIZAÇÃO DA INTERFACE ---
 
         function atualizarUI() {
+            // Reordena a cada atualização de tela — é o que faz quem está esperando
+            // subir na fila sozinho com o tempo, mesmo sem nenhuma ação nova acontecer
+            // (novo pedido, voto, etc). Só reordena a lista local pra exibição — não
+            // salva essa reordenação no Firebase, todo mundo calcula a mesma ordem
+            // sozinho a partir dos mesmos dados (vezesCantadas + horário do pedido).
+            ordenarFila();
+
             const tempoEstimado = calcularTempoEstimado();
             const bloqueada = isFilaBloqueada();
 
