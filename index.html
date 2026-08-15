@@ -63,6 +63,12 @@
         <span id="status-text">Conectando ao Firebase...</span>
     </div>
 
+    <!-- Aviso de conexão perdida — visível pra todo mundo (cliente e DJ), só quando
+         a conexão em tempo real cai de verdade (ver monitorarConexaoReal) -->
+    <div id="aviso-sem-conexao" class="hidden bg-red-600 text-white text-sm font-medium text-center py-2 px-4">
+        <i class="fas fa-exclamation-triangle mr-2"></i>Sem conexão no momento — seu pedido pode não salvar até a internet voltar. Aguarde um instante.
+    </div>
+
     <!-- Banner "É a sua vez" -->
     <div id="minha-vez-banner" class="hidden fixed top-0 inset-x-0 z-50 bg-gradient-custom text-white px-4 py-4 shadow-lg flex items-center justify-between gap-3" style="animation: pulse-banner 1.5s infinite;">
         <div class="flex items-center gap-3">
@@ -120,10 +126,13 @@
                         </div>
 
                         <!-- Toggle de Notificação -->
-                        <label class="mb-6 flex items-center justify-between bg-yellow-50 border border-yellow-200 p-3 rounded-lg text-sm cursor-pointer select-none">
+                        <label class="mb-1 flex items-center justify-between bg-yellow-50 border border-yellow-200 p-3 rounded-lg text-sm cursor-pointer select-none">
                             <span class="text-gray-700"><i class="fas fa-bell mr-2 text-yellow-600"></i>Avisar quando for minha vez</span>
                             <input type="checkbox" id="notif-toggle" class="w-5 h-5 accent-indigo-600" />
                         </label>
+                        <p id="aviso-iphone" class="hidden -mt-1 mb-4 text-xs text-gray-400 px-1">
+                            <i class="fas fa-info-circle mr-1"></i>No iPhone, esse aviso funciona melhor com a aba aberta e a tela ligada — a notificação do sistema só chega direitinho se você adicionar este site à tela de início (compartilhar → "Adicionar à Tela de Início").
+                        </p>
                         <p id="notif-status" class="hidden -mt-4 mb-6 text-xs text-gray-500"></p>
 
                         <form id="form-pedido" class="space-y-4">
@@ -548,6 +557,7 @@
                         // Só sincroniza a fila depois de saber quem é o admin desse bar —
                         // isAdminAuthenticated() depende de ADMIN_EMAIL já estar carregado.
                         sincronizarComFirebase();
+                        monitorarConexaoReal();
                     })
                     .catch((error) => {
                         console.error('❌ Erro ao carregar configuração do bar:', error);
@@ -614,6 +624,13 @@
         // o HTML dessas listas sem necessidade (ex: a cada voto de avaliação)
         let _ultimaFilaHash = null;
         let _ultimoHistoricoHash = null;
+
+        // HTML de cada item do histórico, calculado uma vez (ver atualizarUI) e
+        // reaproveitado tanto pela lista completa do DJ quanto pela lista paginada
+        // do cliente — evita recalcular tudo de novo só pra mudar a paginação.
+        let _historicoItensHtml = [];
+        let verTudoHistoricoCliente = false;
+        const LIMITE_HISTORICO_CLIENTE = 12;
 
         // Identificador anônimo do dispositivo, usado para permitir 1 voto por pessoa/dispositivo
         function getVotanteId() {
@@ -716,6 +733,16 @@
         }
 
         // Pede permissão de notificação ao navegador (precisa ser chamado a partir de um clique do usuário)
+        // No Safari do iPhone/iPad (fora do modo "instalado como app"), notificação
+        // do sistema não funciona com a aba fechada — o aviso sonoro/visual na tela
+        // continua funcionando normalmente, mas é bom deixar essa limitação clara
+        // pra pessoa não confiar 100% na notificação e ficar de olho na tela também.
+        function ehIphoneForaDoModoApp() {
+            const ehIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            const jaInstalado = window.navigator.standalone === true;
+            return ehIOS && !jaInstalado;
+        }
+
         function pedirPermissaoNotificacao() {
             const statusEl = document.getElementById('notif-status');
             if (!('Notification' in window)) {
@@ -826,6 +853,42 @@
             });
 
             lista.innerHTML = html;
+        }
+
+        // Mostra só as últimas N músicas cantadas pro cliente por padrão (a lista
+        // completa do DJ continua sempre inteira) — evita uma rolagem gigante no
+        // celular numa noite cheia. Mostra as MAIS RECENTES primeiro (o histórico já
+        // vem nessa ordem, ver acaoFinalizarApresentacao que usa unshift).
+        function renderizarHistoricoCliente() {
+            const listaHistCliente = document.getElementById('lista-historico-cliente');
+            if (!listaHistCliente) return;
+
+            if (_historicoItensHtml.length === 0) {
+                listaHistCliente.innerHTML = '<li class="p-4 text-center text-gray-400 italic">Nenhuma música cantada ainda.</li>';
+                return;
+            }
+
+            const temMais = _historicoItensHtml.length > LIMITE_HISTORICO_CLIENTE;
+            const itensParaMostrar = verTudoHistoricoCliente
+                ? _historicoItensHtml
+                : _historicoItensHtml.slice(0, LIMITE_HISTORICO_CLIENTE);
+
+            let html = itensParaMostrar.join('');
+            if (temMais) {
+                html += verTudoHistoricoCliente
+                    ? `<li class="p-3 text-center">
+                           <button onclick="toggleVerTudoHistorico()" class="text-sm text-indigo-600 hover:underline">Ver menos ↑</button>
+                       </li>`
+                    : `<li class="p-3 text-center">
+                           <button onclick="toggleVerTudoHistorico()" class="text-sm text-indigo-600 hover:underline">Ver mais (${_historicoItensHtml.length - LIMITE_HISTORICO_CLIENTE} restantes) ↓</button>
+                       </li>`;
+            }
+            listaHistCliente.innerHTML = html;
+        }
+
+        function toggleVerTudoHistorico() {
+            verTudoHistoricoCliente = !verTudoHistoricoCliente;
+            renderizarHistoricoCliente();
         }
 
         function botaoCancelarHtml(id) {
@@ -989,6 +1052,20 @@
         }
 
         // --- Sincronizar com Firebase ---
+        // Usa o caminho especial ".info/connected" do Firebase — é o jeito oficial de
+        // saber se ESTE dispositivo está realmente conectado em tempo real (diferente
+        // de "useFirebase", que só indica se o Firebase foi inicializado com sucesso).
+        // Sem isso, se o wifi cair no meio da noite, a pessoa não teria como saber que
+        // o pedido dela pode não estar salvando de verdade.
+        function monitorarConexaoReal() {
+            if (!db) return;
+            db.ref('.info/connected').on('value', (snapshot) => {
+                const conectado = snapshot.val() === true;
+                const aviso = document.getElementById('aviso-sem-conexao');
+                if (aviso) aviso.classList.toggle('hidden', conectado);
+            });
+        }
+
         function sincronizarComFirebase() {
             if (!useFirebase || !db) return;
 
@@ -1676,17 +1753,18 @@
             }
 
             // Lista de Histórico — mesma lógica: só reconstrói quando o histórico muda de verdade.
-            // Alimenta duas listas com o mesmo conteúdo: uma no painel do DJ, outra na
-            // página do cliente (pra quem quiser ver quem já cantou e as notas recebidas).
+            // Alimenta duas listas com o mesmo conteúdo: uma no painel do DJ (sempre
+            // completa — o DJ costuma precisar ver tudo), outra na página do cliente
+            // (limitada às últimas 12 por padrão, com botão "Ver mais" — sem isso, numa
+            // noite cheia essa lista ficava enorme e obrigava rolar demais no celular).
             const historicoHashAtual = stringifyOrdenado(historico);
             if (historicoHashAtual !== _ultimoHistoricoHash) {
                 _ultimoHistoricoHash = historicoHashAtual;
 
-                let htmlHistorico;
                 if (historico.length === 0) {
-                    htmlHistorico = '<li class="p-4 text-center text-gray-400 italic">Nenhuma música cantada ainda.</li>';
+                    _historicoItensHtml = [];
                 } else {
-                    htmlHistorico = historico.map(item => {
+                    _historicoItensHtml = historico.map(item => {
                         const avaliacaoHtml = (typeof item.mediaAvaliacao === 'number')
                             ? `<div class="text-xs mt-1"><span class="mini-stars">${renderMiniEstrelas(item.mediaAvaliacao)}</span> <span class="text-gray-400">${item.mediaAvaliacao.toFixed(1)} (${item.totalVotos} ${item.totalVotos === 1 ? 'voto' : 'votos'})</span></div>`
                             : `<div class="text-xs mt-1 text-gray-400 italic">Sem avaliações</div>`;
@@ -1701,14 +1779,17 @@
                                 </div>
                                 <span class="text-xs text-gray-400">${item.horario}</span>
                             </li>`;
-                    }).join('');
+                    });
                 }
 
                 const listaHist = document.getElementById('lista-historico');
-                if (listaHist) listaHist.innerHTML = htmlHistorico;
+                if (listaHist) {
+                    listaHist.innerHTML = _historicoItensHtml.length === 0
+                        ? '<li class="p-4 text-center text-gray-400 italic">Nenhuma música cantada ainda.</li>'
+                        : _historicoItensHtml.join('');
+                }
 
-                const listaHistCliente = document.getElementById('lista-historico-cliente');
-                if (listaHistCliente) listaHistCliente.innerHTML = htmlHistorico;
+                renderizarHistoricoCliente();
             }
 
             // --- Atualizar aba "Avaliar" ---
@@ -1779,12 +1860,17 @@
         // Toggle "Avisar quando for minha vez"
         const notifToggle = document.getElementById('notif-toggle');
         notifToggle.checked = notifAtiva();
+        if (notifToggle.checked && ehIphoneForaDoModoApp()) {
+            document.getElementById('aviso-iphone').classList.remove('hidden');
+        }
         notifToggle.addEventListener('change', function() {
             localStorage.setItem(chaveLocal('notif_ativo'), this.checked ? '1' : '0');
             if (this.checked) {
                 pedirPermissaoNotificacao();
+                document.getElementById('aviso-iphone').classList.toggle('hidden', !ehIphoneForaDoModoApp());
             } else {
                 document.getElementById('notif-status').classList.add('hidden');
+                document.getElementById('aviso-iphone').classList.add('hidden');
             }
         });
 
