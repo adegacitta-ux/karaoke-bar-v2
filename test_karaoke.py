@@ -326,6 +326,38 @@ def test_dois_pedidos_simultaneos_nao_se_perdem(browser, arquivo_temp):
     context.close()
 
 
+def test_meus_pedidos_posicao_e_cancelamento(browser, arquivo_temp):
+    """Cartão 'Seus Pedidos': mostra a posição na fila e permite cancelar,
+    sem afetar pedidos de outras pessoas."""
+    context, page, erros = nova_pagina(browser, arquivo_temp)
+
+    page.evaluate("""
+        fila.push({id: 111, nome: 'OutraPessoa', mesa: null, musica: 'MusicaOutra', artista: 'X', timestamp: Date.now() - 5000, vezesCantadas: 0, youtubeUrl: null});
+        atualizarUI();
+    """)
+    escondido_antes = page.evaluate("document.getElementById('secao-meus-pedidos').classList.contains('hidden')")
+
+    preencher_pedido(page, "EuMesmo", "MinhaMusica")
+    page.wait_for_timeout(150)
+    visivel_depois = page.evaluate("!document.getElementById('secao-meus-pedidos').classList.contains('hidden')")
+    texto = page.evaluate("document.getElementById('lista-meus-pedidos').innerText")
+
+    meu_id = page.evaluate("fila.find(p => p.nome === 'EuMesmo').id")
+    page.on("dialog", lambda dialog: dialog.accept())
+    page.evaluate(f"cancelarMeuPedido({meu_id})")
+    page.wait_for_timeout(150)
+
+    ainda_na_fila = page.evaluate("fila.some(p => p.nome === 'EuMesmo')")
+    outra_pessoa_continua = page.evaluate("fila.some(p => p.nome === 'OutraPessoa')")
+
+    ok = (escondido_antes and visivel_depois and "MinhaMusica" in texto
+          and not ainda_na_fila and outra_pessoa_continua and not erros)
+    registrar("Cartão 'Seus Pedidos' mostra posição e cancela sem afetar outros", ok,
+               f"escondido_antes={escondido_antes}, visivel_depois={visivel_depois}, "
+               f"cancelado={not ainda_na_fila}, outra_pessoa_intacta={outra_pessoa_continua}")
+    context.close()
+
+
 # ---------------------------------------------------------------------------
 
 def main():
@@ -357,6 +389,7 @@ def main():
         test_media_de_avaliacoes(browser, arquivo_temp)
         test_espera_longa_faz_pessoa_furar_a_fila(browser, arquivo_temp)
         test_dois_pedidos_simultaneos_nao_se_perdem(browser, arquivo_temp)
+        test_meus_pedidos_posicao_e_cancelamento(browser, arquivo_temp)
 
         browser.close()
 
