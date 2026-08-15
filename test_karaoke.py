@@ -369,6 +369,81 @@ def test_meus_pedidos_posicao_e_cancelamento(browser, arquivo_temp):
     context.close()
 
 
+def test_historico_paginado_no_cliente(browser, arquivo_temp):
+    """Página do cliente mostra só as últimas 12 músicas cantadas por padrão,
+    com botão 'Ver mais' — a lista do painel do DJ continua sempre completa."""
+    context, page, erros = nova_pagina(browser, arquivo_temp)
+
+    page.evaluate("""
+        historico = [];
+        for (let i = 0; i < 20; i++) {
+            historico.push({
+                nome: 'Pessoa' + i, mesa: null, musica: 'Musica' + i, artista: 'X',
+                horario: '20:0' + (i % 10), mediaAvaliacao: 4.5, totalVotos: 2
+            });
+        }
+        atualizarUI();
+    """)
+    page.wait_for_timeout(150)
+
+    itens_inicio = page.evaluate("document.querySelectorAll('#lista-historico-cliente > li').length")
+    lista_admin_completa = page.evaluate("document.querySelectorAll('#lista-historico > li').length")
+
+    page.click("text=Ver mais")
+    page.wait_for_timeout(100)
+    itens_apos_clicar = page.evaluate("document.querySelectorAll('#lista-historico-cliente > li').length")
+
+    ok = (itens_inicio == 13 and lista_admin_completa == 20 and itens_apos_clicar == 21 and not erros)
+    registrar("Histórico do cliente é paginado (12 + Ver mais); painel do DJ continua completo", ok,
+               f"itens_inicio={itens_inicio}, admin_completo={lista_admin_completa}, apos_ver_mais={itens_apos_clicar}")
+    context.close()
+
+
+def test_aviso_iphone_aparece_so_no_iphone(browser, arquivo_temp):
+    """O aviso sobre a limitação de notificação no iPhone só aparece pra quem
+    está realmente usando Safari em iPhone/iPad — não deve poluir a tela de
+    quem está em qualquer outro navegador/aparelho."""
+    context_iphone = browser.new_context(
+        viewport={"width": 390, "height": 844},
+        user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15"
+    )
+    page_iphone = context_iphone.new_page()
+    erros_iphone = []
+    page_iphone.on("pageerror", lambda exc: erros_iphone.append(str(exc)))
+    page_iphone.goto(f"file://{arquivo_temp}?bar=citta")
+    page_iphone.evaluate("localStorage.clear()")
+    page_iphone.reload()
+    page_iphone.wait_for_timeout(200)
+    page_iphone.click("#notif-toggle")
+    page_iphone.wait_for_timeout(100)
+    aparece_no_iphone = page_iphone.evaluate("!document.getElementById('aviso-iphone').classList.contains('hidden')")
+    context_iphone.close()
+
+    context_normal, page_normal, erros_normal = nova_pagina(browser, arquivo_temp)
+    page_normal.click("#notif-toggle")
+    page_normal.wait_for_timeout(100)
+    nao_aparece_normal = page_normal.evaluate("document.getElementById('aviso-iphone').classList.contains('hidden')")
+    context_normal.close()
+
+    ok = aparece_no_iphone and nao_aparece_normal and not erros_iphone and not erros_normal
+    registrar("Aviso de limitação de notificação aparece só no iPhone/Safari", ok,
+               f"aparece_no_iphone={aparece_no_iphone}, escondido_em_navegador_normal={nao_aparece_normal}")
+
+
+def test_aviso_de_conexao_perdida_existe(browser, arquivo_temp):
+    """O banner de 'sem conexão' existe, começa escondido, e pode ser mostrado
+    (a checagem completa de conectar/desconectar de verdade precisa de Firebase
+    real — isso só confirma que a peça do quebra-cabeça está no lugar certo)."""
+    context, page, erros = nova_pagina(browser, arquivo_temp)
+    escondido_normal = page.evaluate("document.getElementById('aviso-sem-conexao').classList.contains('hidden')")
+    page.evaluate("document.getElementById('aviso-sem-conexao').classList.remove('hidden')")
+    aparece_quando_forcado = page.evaluate("!document.getElementById('aviso-sem-conexao').classList.contains('hidden')")
+    ok = escondido_normal and aparece_quando_forcado and not erros
+    registrar("Banner de conexão perdida existe e começa escondido", ok,
+               f"escondido_normal={escondido_normal}, aparece_quando_forcado={aparece_quando_forcado}")
+    context.close()
+
+
 # ---------------------------------------------------------------------------
 
 def main():
@@ -401,6 +476,9 @@ def main():
         test_espera_longa_faz_pessoa_furar_a_fila(browser, arquivo_temp)
         test_dois_pedidos_simultaneos_nao_se_perdem(browser, arquivo_temp)
         test_meus_pedidos_posicao_e_cancelamento(browser, arquivo_temp)
+        test_historico_paginado_no_cliente(browser, arquivo_temp)
+        test_aviso_iphone_aparece_so_no_iphone(browser, arquivo_temp)
+        test_aviso_de_conexao_perdida_existe(browser, arquivo_temp)
 
         browser.close()
 
