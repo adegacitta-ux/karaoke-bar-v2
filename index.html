@@ -88,6 +88,19 @@
         <!-- INTERFACE DO CLIENTE -->
         <section id="cliente" class="tab-content active">
             <div class="max-w-md mx-auto space-y-6">
+
+                <!-- SEUS PEDIDOS — só aparece se este dispositivo tiver pedido(s) na fila -->
+                <div id="secao-meus-pedidos" class="hidden bg-white rounded-2xl shadow-xl overflow-hidden border-2 border-indigo-300">
+                    <div class="p-4">
+                        <h3 class="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                            <i class="fas fa-user-circle text-indigo-500"></i> Seus Pedidos
+                        </h3>
+                        <ul id="lista-meus-pedidos" class="space-y-2">
+                            <!-- Inserido via JS -->
+                        </ul>
+                    </div>
+                </div>
+
                 <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
                     <div class="bg-gradient-custom p-6 text-white text-center">
                         <h2 class="text-2xl font-bold">Peça sua Música</h2>
@@ -149,8 +162,9 @@
                             <i class="fas fa-check-circle mr-2"></i> Pedido enviado para a fila!
                         </div>
 
-                        <div class="mt-6 text-center">
+                        <div class="mt-6 text-center space-x-4">
                             <a href="#secao-proximos" class="text-sm text-indigo-600 hover:underline">Ver a ordem e próximos cantores ↓</a>
+                            <a href="#secao-ja-cantadas" class="text-sm text-indigo-600 hover:underline">Ver quem já cantou ↓</a>
                         </div>
                     </div>
                 </div>
@@ -221,6 +235,20 @@
                         <div class="mt-6 text-center text-xs text-gray-500">
                             A lista é atualizada em tempo real (quando o Firebase está conectado) ou ao recarregar a página.
                         </div>
+                    </div>
+                </div>
+
+                <!-- JÁ CANTADAS -->
+                <div id="secao-ja-cantadas" class="bg-white rounded-2xl shadow-xl overflow-hidden scroll-mt-4">
+                    <div class="bg-gradient-custom p-6 text-white text-center">
+                        <h2 class="text-2xl font-bold">Já Cantadas</h2>
+                        <p class="opacity-90 text-sm">Quem já se apresentou hoje e as notas que recebeu.</p>
+                    </div>
+
+                    <div class="p-6">
+                        <ul id="lista-historico-cliente" class="divide-y divide-gray-100 text-sm bg-white rounded-lg border border-gray-100">
+                            <!-- Inserido via JS -->
+                        </ul>
                     </div>
                 </div>
             </div>
@@ -745,6 +773,92 @@
             salvarNotificados(notificados);
         }
 
+        // Mostra pro cliente onde os pedidos DELE estão na fila, com opção de cancelar.
+        // Reaproveita a lista "meus_pedidos" já limpa em verificarMinhaVez (chamada antes
+        // desta, dentro de atualizarUI) — por isso não precisa filtrar ids obsoletos de novo.
+        function atualizarMeusPedidos() {
+            const meus = getMeusPedidos();
+            const secao = document.getElementById('secao-meus-pedidos');
+            const lista = document.getElementById('lista-meus-pedidos');
+
+            const meusNaFila = fila
+                .map((pedido, indice) => ({ pedido, posicao: indice }))
+                .filter(({ pedido }) => meus.includes(pedido.id));
+
+            const meuEmAndamento = apresentacaoAtual && meus.includes(apresentacaoAtual.id)
+                ? apresentacaoAtual : null;
+
+            if (meusNaFila.length === 0 && !meuEmAndamento) {
+                secao.classList.add('hidden');
+                return;
+            }
+
+            secao.classList.remove('hidden');
+
+            let html = '';
+
+            if (meuEmAndamento) {
+                html += `
+                    <li class="p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
+                        <i class="fas fa-microphone-alt text-green-600"></i>
+                        <span class="text-sm font-semibold text-green-700">🎤 É a sua vez agora! ${meuEmAndamento.musica}</span>
+                    </li>`;
+            }
+
+            meusNaFila.forEach(({ pedido, posicao }) => {
+                const textoPosicao = posicao === 0
+                    ? '🎤 Você é o próximo!'
+                    : `Falta${posicao === 1 ? '' : 'm'} ${posicao} pessoa${posicao === 1 ? '' : 's'} antes de você`;
+                const corFundo = posicao === 0 ? 'bg-indigo-50 border-indigo-200' : 'bg-gray-50 border-gray-200';
+
+                html += `
+                    <li class="p-3 ${corFundo} border rounded-lg">
+                        <div class="flex justify-between items-start gap-2">
+                            <div class="min-w-0">
+                                <div class="text-sm font-semibold text-gray-800">${textoPosicao}</div>
+                                <div class="text-xs text-gray-500 truncate">${pedido.musica}</div>
+                            </div>
+                            <button onclick="cancelarMeuPedido(${pedido.id})" class="flex-shrink-0 text-xs text-red-500 hover:text-red-700 hover:underline whitespace-nowrap">
+                                <i class="fas fa-times mr-1"></i>Cancelar
+                            </button>
+                        </div>
+                    </li>`;
+            });
+
+            lista.innerHTML = html;
+        }
+
+        // Cancela um pedido do próprio dispositivo. Usa transação no modo Firebase
+        // (mesma proteção contra corrida de gravação usada ao adicionar pedidos) —
+        // sem isso, cancelar ao mesmo tempo que outra pessoa entra na fila poderia
+        // fazer um dos dois pedidos sumir.
+        function cancelarMeuPedido(id) {
+            if (!confirm('Cancelar esse pedido?')) return;
+
+            if (useFirebase && db) {
+                db.ref(caminhoBar('fila')).transaction((filaAtualDoServidor) => {
+                    const listaAtual = filaAtualDoServidor || [];
+                    return listaAtual.filter(p => p.id !== id);
+                }, (error, comprometido, snapshot) => {
+                    if (error) {
+                        console.error('❌ Erro ao cancelar pedido:', error);
+                        alert('Não deu pra cancelar agora. Tente de novo em alguns segundos.');
+                        return;
+                    }
+                    fila = snapshot.val() || [];
+                    const meus = getMeusPedidos().filter(mid => mid !== id);
+                    salvarMeusPedidos(meus);
+                    atualizarUI();
+                });
+            } else {
+                fila = fila.filter(p => p.id !== id);
+                const meus = getMeusPedidos().filter(mid => mid !== id);
+                salvarMeusPedidos(meus);
+                salvarNoLocalStorage();
+                atualizarUI();
+            }
+        }
+
         function dispararAvisoDeVez(pedido) {
             // 1) Som
             tocarBipe();
@@ -1171,7 +1285,10 @@
                     fila = snapshot.val() || [];
                     ordenarFila();
 
-                    if (notifAtiva() && ultimoPedidoCriado) {
+                    // Sempre associa o pedido a este dispositivo — é o que permite mostrar
+                    // "sua posição na fila" e o botão de cancelar, independente de a pessoa
+                    // ter ativado o aviso sonoro/notificação ou não.
+                    if (ultimoPedidoCriado) {
                         registrarMeuPedido(ultimoPedidoCriado.id);
                     }
 
@@ -1185,9 +1302,7 @@
                 fila.push(novoPedido);
                 ordenarFila();
 
-                if (notifAtiva()) {
-                    registrarMeuPedido(novoPedido.id);
-                }
+                registrarMeuPedido(novoPedido.id);
 
                 salvarNoLocalStorage();
                 atualizarUI();
@@ -1410,6 +1525,7 @@
             const bloqueada = isFilaBloqueada();
 
             verificarMinhaVez();
+            atualizarMeusPedidos();
 
             // UI Cliente
             document.getElementById('cliente-tempo-espera').innerText = `${tempoEstimado} min`;
@@ -1532,34 +1648,39 @@
             }
 
             // Lista de Histórico — mesma lógica: só reconstrói quando o histórico muda de verdade.
+            // Alimenta duas listas com o mesmo conteúdo: uma no painel do DJ, outra na
+            // página do cliente (pra quem quiser ver quem já cantou e as notas recebidas).
             const historicoHashAtual = stringifyOrdenado(historico);
             if (historicoHashAtual !== _ultimoHistoricoHash) {
                 _ultimoHistoricoHash = historicoHashAtual;
 
-                const listaHist = document.getElementById('lista-historico');
-                listaHist.innerHTML = '';
+                let htmlHistorico;
                 if (historico.length === 0) {
-                    listaHist.innerHTML = '<li class="p-4 text-center text-gray-400 italic">Nenhuma música cantada ainda.</li>';
+                    htmlHistorico = '<li class="p-4 text-center text-gray-400 italic">Nenhuma música cantada ainda.</li>';
                 } else {
-                    historico.forEach(item => {
-                        const li = document.createElement('li');
-                        li.className = "p-4 flex justify-between items-center";
+                    htmlHistorico = historico.map(item => {
                         const avaliacaoHtml = (typeof item.mediaAvaliacao === 'number')
                             ? `<div class="text-xs mt-1"><span class="mini-stars">${renderMiniEstrelas(item.mediaAvaliacao)}</span> <span class="text-gray-400">${item.mediaAvaliacao.toFixed(1)} (${item.totalVotos} ${item.totalVotos === 1 ? 'voto' : 'votos'})</span></div>`
                             : `<div class="text-xs mt-1 text-gray-400 italic">Sem avaliações</div>`;
-                        li.innerHTML = `
-                            <div>
-                                <span class="font-bold text-gray-700">${item.nome}</span>
-                                ${item.mesa ? `<span class="text-gray-500 mx-2">| Mesa: ${item.mesa}</span>` : ''}
-                                <span class="text-gray-500 mx-2">cantou</span>
-                                <span class="text-indigo-600 font-medium">${item.musica}</span>
-                                ${avaliacaoHtml}
-                            </div>
-                            <span class="text-xs text-gray-400">${item.horario}</span>
-                        `;
-                        listaHist.appendChild(li);
-                    });
+                        return `
+                            <li class="p-4 flex justify-between items-center">
+                                <div>
+                                    <span class="font-bold text-gray-700">${item.nome}</span>
+                                    ${item.mesa ? `<span class="text-gray-500 mx-2">| Mesa: ${item.mesa}</span>` : ''}
+                                    <span class="text-gray-500 mx-2">cantou</span>
+                                    <span class="text-indigo-600 font-medium">${item.musica}</span>
+                                    ${avaliacaoHtml}
+                                </div>
+                                <span class="text-xs text-gray-400">${item.horario}</span>
+                            </li>`;
+                    }).join('');
                 }
+
+                const listaHist = document.getElementById('lista-historico');
+                if (listaHist) listaHist.innerHTML = htmlHistorico;
+
+                const listaHistCliente = document.getElementById('lista-historico-cliente');
+                if (listaHistCliente) listaHistCliente.innerHTML = htmlHistorico;
             }
 
             // --- Atualizar aba "Avaliar" ---
