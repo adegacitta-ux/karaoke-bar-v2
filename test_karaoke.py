@@ -327,8 +327,10 @@ def test_dois_pedidos_simultaneos_nao_se_perdem(browser, arquivo_temp):
 
 
 def test_meus_pedidos_posicao_e_cancelamento(browser, arquivo_temp):
-    """Cartão 'Seus Pedidos': mostra a posição na fila e permite cancelar,
-    sem afetar pedidos de outras pessoas."""
+    """Cartão 'Seus Pedidos': mostra a posição na fila e permite cancelar (com
+    confirmação inline clara — 'Sim, cancelar' / 'Manter pedido' — em vez do
+    confirm() nativo do navegador, que tinha texto ambíguo: ver bug relatado
+    onde o botão 'Cancelar' do alerta padrão na verdade MANTINHA o pedido)."""
     context, page, erros = nova_pagina(browser, arquivo_temp)
 
     page.evaluate("""
@@ -343,18 +345,27 @@ def test_meus_pedidos_posicao_e_cancelamento(browser, arquivo_temp):
     texto = page.evaluate("document.getElementById('lista-meus-pedidos').innerText")
 
     meu_id = page.evaluate("fila.find(p => p.nome === 'EuMesmo').id")
-    page.on("dialog", lambda dialog: dialog.accept())
-    page.evaluate(f"cancelarMeuPedido({meu_id})")
-    page.wait_for_timeout(150)
 
+    # Clica em "Cancelar" -> deve aparecer a pergunta clara, SEM remover ainda
+    page.click(f"#acoes-pedido-{meu_id} button")
+    page.wait_for_timeout(100)
+    ainda_la_apos_primeiro_clique = page.evaluate("fila.some(p => p.nome === 'EuMesmo')")
+    tem_opcao_manter = page.evaluate(f"document.getElementById('acoes-pedido-{meu_id}').innerText.includes('Manter pedido')")
+
+    # Clica em "Sim, cancelar" -> agora sim remove
+    page.click(f"#acoes-pedido-{meu_id} >> text=Sim, cancelar")
+    page.wait_for_timeout(150)
     ainda_na_fila = page.evaluate("fila.some(p => p.nome === 'EuMesmo')")
     outra_pessoa_continua = page.evaluate("fila.some(p => p.nome === 'OutraPessoa')")
 
     ok = (escondido_antes and visivel_depois and "MinhaMusica" in texto
+          and ainda_la_apos_primeiro_clique and tem_opcao_manter
           and not ainda_na_fila and outra_pessoa_continua and not erros)
-    registrar("Cartão 'Seus Pedidos' mostra posição e cancela sem afetar outros", ok,
+    registrar("Cartão 'Seus Pedidos': cancelar pede confirmação clara antes de remover", ok,
                f"escondido_antes={escondido_antes}, visivel_depois={visivel_depois}, "
-               f"cancelado={not ainda_na_fila}, outra_pessoa_intacta={outra_pessoa_continua}")
+               f"opcao_manter_aparece={tem_opcao_manter}, "
+               f"nao_removeu_no_1o_clique={ainda_la_apos_primeiro_clique}, "
+               f"removido_apos_confirmar={not ainda_na_fila}, outra_pessoa_intacta={outra_pessoa_continua}")
     context.close()
 
 
