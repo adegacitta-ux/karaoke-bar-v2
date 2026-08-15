@@ -812,15 +812,15 @@
                 const corFundo = posicao === 0 ? 'bg-indigo-50 border-indigo-200' : 'bg-gray-50 border-gray-200';
 
                 html += `
-                    <li class="p-3 ${corFundo} border rounded-lg">
+                    <li id="meu-pedido-${pedido.id}" class="p-3 ${corFundo} border rounded-lg">
                         <div class="flex justify-between items-start gap-2">
                             <div class="min-w-0">
                                 <div class="text-sm font-semibold text-gray-800">${textoPosicao}</div>
                                 <div class="text-xs text-gray-500 truncate">${pedido.musica}</div>
                             </div>
-                            <button onclick="cancelarMeuPedido(${pedido.id})" class="flex-shrink-0 text-xs text-red-500 hover:text-red-700 hover:underline whitespace-nowrap">
-                                <i class="fas fa-times mr-1"></i>Cancelar
-                            </button>
+                            <div id="acoes-pedido-${pedido.id}" class="flex-shrink-0">
+                                ${botaoCancelarHtml(pedido.id)}
+                            </div>
                         </div>
                     </li>`;
             });
@@ -828,13 +828,41 @@
             lista.innerHTML = html;
         }
 
+        function botaoCancelarHtml(id) {
+            return `
+                <button onclick="pedirConfirmacaoCancelamento(${id})" class="text-xs text-red-500 hover:text-red-700 hover:underline whitespace-nowrap">
+                    <i class="fas fa-times mr-1"></i>Cancelar
+                </button>`;
+        }
+
+        // Troca o botão "Cancelar" por uma confirmação clara, escrita por extenso —
+        // evita a ambiguidade do alerta padrão do navegador, onde o botão "Cancelar"
+        // significa "cancelar A AÇÃO de cancelar" (ou seja, MANTER o pedido), o que é
+        // o oposto do que a pessoa espera intuitivamente ao ver a palavra "Cancelar".
+        function pedirConfirmacaoCancelamento(id) {
+            const container = document.getElementById(`acoes-pedido-${id}`);
+            if (!container) return;
+            container.innerHTML = `
+                <div class="flex flex-col items-end gap-1">
+                    <span class="text-xs text-gray-500">Remover esse pedido da fila?</span>
+                    <div class="flex gap-3">
+                        <button onclick="cancelarMeuPedido(${id})" class="text-xs font-bold text-red-600 hover:underline whitespace-nowrap">
+                            Sim, cancelar
+                        </button>
+                        <button onclick="atualizarMeusPedidos()" class="text-xs font-semibold text-gray-600 hover:underline whitespace-nowrap">
+                            Manter pedido
+                        </button>
+                    </div>
+                </div>`;
+        }
+
         // Cancela um pedido do próprio dispositivo. Usa transação no modo Firebase
         // (mesma proteção contra corrida de gravação usada ao adicionar pedidos) —
         // sem isso, cancelar ao mesmo tempo que outra pessoa entra na fila poderia
         // fazer um dos dois pedidos sumir.
+        // Obs: a confirmação já aconteceu antes (ver pedirConfirmacaoCancelamento) —
+        // essa função só é chamada depois que a pessoa já confirmou de forma clara.
         function cancelarMeuPedido(id) {
-            if (!confirm('Cancelar esse pedido?')) return;
-
             if (useFirebase && db) {
                 db.ref(caminhoBar('fila')).transaction((filaAtualDoServidor) => {
                     const listaAtual = filaAtualDoServidor || [];
