@@ -97,8 +97,6 @@
 
         /* Widget de avaliação por estrelas */
         .star-rating { display: flex; justify-content: center; gap: 6px; font-size: 44px; }
-        .star-rating button { appearance: none; background: transparent; border: 0; padding: 0; line-height: 1; cursor: pointer; border-radius: 6px; }
-        .star-rating button:focus-visible { outline: 3px solid #818cf8; outline-offset: 4px; }
         .star-rating i { color: #d1d5db; cursor: pointer; transition: color 0.15s, transform 0.1s; }
         .star-rating i:hover, .star-rating i.hovered { color: #fbbf24; transform: scale(1.1); }
         .star-rating.voted i { cursor: default; }
@@ -114,22 +112,20 @@
 </head>
 <body class="bg-gray-100 min-h-screen">
 
-    <a href="#conteudo-principal" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[60] focus:rounded focus:bg-white focus:px-3 focus:py-2 focus:text-indigo-700 focus:shadow-lg">Pular para o conteúdo principal</a>
-
     <!-- Status Firebase — visível só na aba Admin/DJ, ver switchTab() -->
-    <div class="firebase-status firebase-disconnected hidden" id="firebase-status" role="status" aria-live="polite">
+    <div class="firebase-status firebase-disconnected hidden" id="firebase-status">
         <i class="fas fa-circle mr-2" style="animation: pulse 1s infinite;"></i>
         <span id="status-text">Conectando ao Firebase...</span>
     </div>
 
     <!-- Aviso de conexão perdida — visível pra todo mundo (cliente e DJ), só quando
          a conexão em tempo real cai de verdade (ver monitorarConexaoReal) -->
-    <div id="aviso-sem-conexao" class="hidden bg-red-600 text-white text-sm font-medium text-center py-2 px-4" role="alert">
+    <div id="aviso-sem-conexao" class="hidden bg-red-600 text-white text-sm font-medium text-center py-2 px-4">
         <i class="fas fa-exclamation-triangle mr-2"></i>Sem conexão no momento — seu pedido pode não salvar até a internet voltar. Aguarde um instante.
     </div>
 
     <!-- Banner "É a sua vez" -->
-    <div id="minha-vez-banner" role="status" aria-live="assertive" class="hidden fixed top-0 inset-x-0 z-50 bg-gradient-custom text-white px-4 py-4 shadow-lg flex items-center justify-between gap-3" style="animation: pulse-banner 1.5s infinite;">
+    <div id="minha-vez-banner" class="hidden fixed top-0 inset-x-0 z-50 bg-gradient-custom text-white px-4 py-4 shadow-lg flex items-center justify-between gap-3" style="animation: pulse-banner 1.5s infinite;">
         <div class="flex items-center gap-3">
             <i class="fas fa-microphone text-2xl"></i>
             <span class="font-bold text-lg" id="minha-vez-texto">Prepare-se! Você é o próximo a cantar.</span>
@@ -138,23 +134,23 @@
     </div>
 
     <!-- Header / Navegação Simples para o Protótipo -->
-    <nav class="bg-white shadow-sm mb-4" aria-label="Navegação principal">
+    <nav class="bg-white shadow-sm mb-4">
         <div class="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
             <h1 class="text-xl font-bold text-indigo-600"><span id="nome-do-bar">Karaokê Manager</span></h1>
             <div class="flex items-center space-x-2">
-                <button id="btn-tab-cliente" onclick="switchTab('cliente')" class="px-3 py-1 text-sm font-medium rounded-md hover:bg-gray-100" aria-controls="cliente" aria-selected="true">Pedir Música</button>
-                <button id="btn-tab-admin" onclick="switchTab('admin')" class="px-3 py-1 text-sm font-medium rounded-md hover:bg-gray-100" aria-controls="admin" aria-selected="false">Admin/DJ</button>
-                <button onclick="alternarModoEscuro()" id="btn-toggle-tema" class="toggle-tema-btn" title="Alternar modo escuro" aria-label="Alternar modo escuro">
+                <button onclick="switchTab('cliente')" class="px-3 py-1 text-sm font-medium rounded-md hover:bg-gray-100">Pedir Música</button>
+                <button onclick="switchTab('admin')" class="px-3 py-1 text-sm font-medium rounded-md hover:bg-gray-100">Admin/DJ</button>
+                <button onclick="alternarModoEscuro()" id="btn-toggle-tema" class="toggle-tema-btn" title="Alternar modo escuro">
                     <i class="fas fa-moon" id="icone-tema"></i>
                 </button>
             </div>
         </div>
     </nav>
 
-    <main id="conteudo-principal" class="max-w-5xl mx-auto px-4 pb-12">
+    <main class="max-w-5xl mx-auto px-4 pb-12">
 
         <!-- INTERFACE DO CLIENTE -->
-        <section id="cliente" class="tab-content active" aria-labelledby="titulo-pedido" aria-hidden="false">
+        <section id="cliente" class="tab-content active">
             <div class="max-w-md mx-auto space-y-6">
 
                 <!-- SEUS PEDIDOS — só aparece se este dispositivo tiver pedido(s) na fila -->
@@ -171,7 +167,7 @@
 
                 <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
                     <div class="bg-gradient-custom p-6 text-white text-center">
-                        <h2 id="titulo-pedido" class="text-2xl font-bold">Peça sua Música</h2>
+                        <h2 class="text-2xl font-bold">Peça sua Música</h2>
                         <p class="opacity-90 text-sm">Sua vez depende de quantas vezes já cantou!</p>
                     </div>
                     
@@ -197,45 +193,39 @@
                         </p>
                         <p id="notif-status" class="hidden -mt-4 mb-6 text-xs text-gray-500"></p>
 
-                        <form id="form-pedido" class="space-y-4" novalidate aria-describedby="form-instrucoes">
+                        <form id="form-pedido" class="space-y-4">
                             <div>
-                                <div class="flex justify-between items-center mb-1">
-                                    <label for="input-nome" class="block text-sm font-medium text-gray-700">Seu Nome / Apelido</label>
+                                <label class="block text-sm font-medium text-gray-700 mb-1 flex justify-between items-center">
+                                    <span>Seu Nome / Apelido</span>
                                     <button type="button" id="btn-nao-e-voce" class="text-xs font-normal text-indigo-500 hover:underline hidden">Não é você? Trocar</button>
-                                </div>
-                                <input type="text" id="input-nome" name="nome" autocomplete="name" required aria-describedby="erro-nome" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
-                                <p id="erro-nome" class="hidden mt-1 text-sm text-red-600" role="alert"></p>
+                                </label>
+                                <input type="text" id="input-nome" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
                             </div>
 
                             <!-- NOVO CAMPO: Número da Mesa -->
                             <div>
-                                <label for="input-mesa" class="block text-sm font-medium text-gray-700 mb-1">Número da Mesa (opcional)</label>
-                                <input type="text" id="input-mesa" name="mesa" autocomplete="off" placeholder="Ex: 12" aria-describedby="erro-mesa" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
-                                <p id="erro-mesa" class="hidden mt-1 text-sm text-red-600" role="alert"></p>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Número da Mesa (opcional)</label>
+                                <input type="text" id="input-mesa" placeholder="Ex: 12" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
                             </div>
 
                             <div>
-                                <label for="input-musica" class="block text-sm font-medium text-gray-700 mb-1">Nome da Música</label>
-                                <input type="text" id="input-musica" name="musica" autocomplete="off" required aria-describedby="erro-musica instrucoes-musica" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
-                                <p id="erro-musica" class="hidden mt-1 text-sm text-red-600" role="alert"></p>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Nome da Música</label>
+                                <input type="text" id="input-musica" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
                                 <button type="button" id="btn-abrir-youtube" onclick="abrirModalYoutube()" class="mt-2 flex items-center gap-2 text-sm font-semibold text-red-600 border border-red-200 rounded-lg px-3 py-2 hover:bg-red-50 transition-colors">
                                     <i class="fab fa-youtube text-lg"></i> YouTube
                                 </button>
-                                <p id="instrucoes-musica" class="text-xs text-gray-400 mt-1"><i class="fas fa-lightbulb mr-1" aria-hidden="true"></i>Busque o karaokê da música no YouTube</p>
+                                <p class="text-xs text-gray-400 mt-1"><i class="fas fa-lightbulb mr-1"></i>Busque o karaokê da música no YouTube</p>
                             </div>
                             <div>
-                                <label for="input-artista" class="block text-sm font-medium text-gray-700 mb-1">Artista <span id="artista-opcional-tag" class="hidden text-gray-400 font-normal">(opcional — já veio do YouTube)</span></label>
-                                <input type="text" id="input-artista" name="artista" autocomplete="off" required aria-describedby="erro-artista" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
-                                <p id="erro-artista" class="hidden mt-1 text-sm text-red-600" role="alert"></p>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Artista <span id="artista-opcional-tag" class="hidden text-gray-400 font-normal">(opcional — já veio do YouTube)</span></label>
+                                <input type="text" id="input-artista" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
                             </div>
-                            <button type="submit" id="btn-enviar" class="w-full bg-gradient-custom text-white font-bold py-3 rounded-lg shadow-lg hover:opacity-90 transition-all" aria-describedby="feedback-sucesso">
+                            <button type="submit" id="btn-enviar" class="w-full bg-gradient-custom text-white font-bold py-3 rounded-lg shadow-lg hover:opacity-90 transition-all">
                                 ENVIAR PEDIDO
                             </button>
                         </form>
 
-                        <p id="form-instrucoes" class="text-xs text-gray-500 mb-4">Preencha seu nome, a música e o artista. O número da mesa é opcional.</p>
-
-                        <div id="feedback-sucesso" role="status" aria-live="polite" class="hidden mt-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 text-center animate-bounce">
+                        <div id="feedback-sucesso" class="hidden mt-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 text-center animate-bounce">
                             <i class="fas fa-check-circle mr-2"></i> Pedido enviado para a fila!
                         </div>
 
@@ -249,7 +239,7 @@
                 <!-- AVALIAÇÃO DE QUEM ESTÁ CANTANDO AGORA -->
                 <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
                     <div class="bg-gradient-custom p-6 text-white text-center">
-                        <h2 id="titulo-avaliacao" class="text-2xl font-bold">Avalie a Apresentação</h2>
+                        <h2 class="text-2xl font-bold">Avalie a Apresentação</h2>
                         <p class="opacity-90 text-sm">Dê sua nota para quem está cantando agora!</p>
                     </div>
 
@@ -266,15 +256,15 @@
                                 <div class="text-gray-500" id="avaliar-musica">-</div>
                             </div>
 
-                                <div class="star-rating my-6" id="avaliar-estrelas" role="group" aria-label="Avaliação de 1 a 5 estrelas">
-                                <button type="button" data-nota="1" aria-label="Dar 1 estrela" aria-pressed="false"><i class="fas fa-star" aria-hidden="true"></i></button>
-                                <button type="button" data-nota="2" aria-label="Dar 2 estrelas" aria-pressed="false"><i class="fas fa-star" aria-hidden="true"></i></button>
-                                <button type="button" data-nota="3" aria-label="Dar 3 estrelas" aria-pressed="false"><i class="fas fa-star" aria-hidden="true"></i></button>
-                                <button type="button" data-nota="4" aria-label="Dar 4 estrelas" aria-pressed="false"><i class="fas fa-star" aria-hidden="true"></i></button>
-                                <button type="button" data-nota="5" aria-label="Dar 5 estrelas" aria-pressed="false"><i class="fas fa-star" aria-hidden="true"></i></button>
+                            <div class="star-rating my-6" id="avaliar-estrelas">
+                                <i class="fas fa-star" data-nota="1"></i>
+                                <i class="fas fa-star" data-nota="2"></i>
+                                <i class="fas fa-star" data-nota="3"></i>
+                                <i class="fas fa-star" data-nota="4"></i>
+                                <i class="fas fa-star" data-nota="5"></i>
                             </div>
 
-                            <div class="text-center text-sm text-gray-600" id="avaliar-status" role="status" aria-live="polite"></div>
+                            <div class="text-center text-sm text-gray-600" id="avaliar-status"></div>
 
                             <div class="mt-6 flex justify-around bg-indigo-50 rounded-lg p-4 text-center">
                                 <div>
@@ -332,13 +322,13 @@
         </section>
 
         <!-- INTERFACE DO ADMIN/DJ -->
-        <section id="admin" class="tab-content" aria-labelledby="titulo-admin" aria-hidden="true">
+        <section id="admin" class="tab-content">
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
                 <!-- Coluna da Esquerda: Status e Controles -->
                 <div class="lg:col-span-1 space-y-6">
                     <div class="bg-white p-6 rounded-2xl shadow-md border border-gray-100">
-                        <h3 id="titulo-admin" class="text-lg font-bold mb-4 text-gray-800 border-b pb-2">Status da Noite</h3>
+                        <h3 class="text-lg font-bold mb-4 text-gray-800 border-b pb-2">Status da Noite</h3>
                         <div class="space-y-4">
                             <div class="flex justify-between items-center">
                                 <span class="text-gray-600">Total na Fila:</span>
@@ -407,14 +397,13 @@
                         </div>
                         <div class="overflow-x-auto">
                             <table class="w-full text-left">
-                                <caption class="sr-only">Fila de reprodução e ações disponíveis para cada pedido</caption>
                                 <thead class="bg-gray-50 text-gray-500 text-xs uppercase">
                                     <tr>
-                                        <th scope="col" class="px-6 py-3">#</th>
-                                        <th scope="col" class="px-6 py-3">Cantor</th>
-                                        <th scope="col" class="px-6 py-3">Música / Artista</th>
-                                        <th scope="col" class="px-6 py-3">Vezes</th>
-                                        <th scope="col" class="px-6 py-3 text-right">Ações</th>
+                                        <th class="px-6 py-3">#</th>
+                                        <th class="px-6 py-3">Cantor</th>
+                                        <th class="px-6 py-3">Música / Artista</th>
+                                        <th class="px-6 py-3">Vezes</th>
+                                        <th class="px-6 py-3 text-right">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody id="tabela-fila" class="divide-y divide-gray-100">
@@ -446,17 +435,17 @@
     </main>
 
     <!-- Modal de Autenticação do Admin -->
-    <div id="admin-auth-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4" role="dialog" aria-modal="true" aria-labelledby="titulo-admin-auth">
+    <div id="admin-auth-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4">
         <div class="glass max-w-md w-full rounded-2xl shadow-xl p-6">
             <div class="flex justify-between items-center mb-4">
-                <h3 id="titulo-admin-auth" class="text-lg font-bold text-gray-800">Acesso Admin/DJ</h3>
-                <button type="button" id="admin-auth-cancel" class="text-gray-500 hover:text-gray-700" aria-label="Fechar janela de acesso admin">Cancelar</button>
+                <h3 class="text-lg font-bold text-gray-800">Acesso Admin/DJ</h3>
+                <button id="admin-auth-cancel" class="text-gray-500 hover:text-gray-700">Cancelar</button>
             </div>
 
             <form id="admin-auth-form" class="space-y-4">
                 <div>
                     <label for="admin-password-input" class="block text-sm font-medium text-gray-700 mb-1">Senha</label>
-                    <input id="admin-password-input" name="password" type="password" autocomplete="current-password" required aria-describedby="admin-auth-error" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                    <input id="admin-password-input" type="password" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
                     <p id="admin-auth-error" class="mt-2 text-sm text-red-600 hidden"></p>
                 </div>
                 <div class="flex justify-end items-center gap-2">
@@ -468,21 +457,20 @@
     </div>
 
     <!-- MODAL: BUSCAR KARAOKÊ NO YOUTUBE -->
-    <div id="youtube-modal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black bg-opacity-50 px-0 sm:px-4" role="dialog" aria-modal="true" aria-labelledby="titulo-youtube-modal">
+    <div id="youtube-modal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black bg-opacity-50 px-0 sm:px-4">
         <div class="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-xl p-6 max-h-[85vh] flex flex-col">
             <div class="flex justify-between items-center mb-4">
-                <h3 id="titulo-youtube-modal" class="text-lg font-bold text-gray-800 flex items-center gap-2">
+                <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
                     <i class="fab fa-youtube text-red-600"></i> Buscar Karaokê no YouTube
                 </h3>
-                <button type="button" onclick="fecharModalYoutube()" class="text-gray-400 hover:text-gray-600 text-xl" aria-label="Fechar busca do YouTube">
+                <button type="button" onclick="fecharModalYoutube()" class="text-gray-400 hover:text-gray-600 text-xl">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
 
             <div class="flex gap-2 mb-3">
-                <label for="youtube-busca-input" class="sr-only">Nome da música para buscar no YouTube</label>
-                <input type="search" id="youtube-busca-input" placeholder="Digite o nome da música... (ex: Evidências)" aria-label="Nome da música para buscar no YouTube" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
-                <button type="button" onclick="buscarNoYoutube()" class="bg-red-100 text-red-600 px-4 rounded-lg hover:bg-red-200 transition-colors" aria-label="Buscar no YouTube">
+                <input type="text" id="youtube-busca-input" placeholder="Digite o nome da música... (ex: Evidências)" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                <button type="button" onclick="buscarNoYoutube()" class="bg-red-100 text-red-600 px-4 rounded-lg hover:bg-red-200 transition-colors">
                     <i class="fas fa-search"></i>
                 </button>
             </div>
@@ -998,7 +986,7 @@
 
         function botaoCancelarHtml(id) {
             return `
-                    <button onclick="pedirConfirmacaoCancelamento(${id})" class="text-xs text-red-500 hover:text-red-700 hover:underline whitespace-nowrap" aria-label="Cancelar pedido">
+                <button onclick="pedirConfirmacaoCancelamento(${id})" class="text-xs text-red-500 hover:text-red-700 hover:underline whitespace-nowrap">
                     <i class="fas fa-times mr-1"></i>Cancelar
                 </button>`;
         }
@@ -1014,10 +1002,10 @@
                 <div class="flex flex-col items-end gap-1">
                     <span class="text-xs text-gray-500">Remover esse pedido da fila?</span>
                     <div class="flex gap-3">
-                            <button onclick="cancelarMeuPedido(${id})" class="text-xs font-bold text-red-600 hover:underline whitespace-nowrap" aria-label="Confirmar cancelamento do pedido">
+                        <button onclick="cancelarMeuPedido(${id})" class="text-xs font-bold text-red-600 hover:underline whitespace-nowrap">
                             Sim, cancelar
                         </button>
-                            <button onclick="atualizarMeusPedidos()" class="text-xs font-semibold text-gray-600 hover:underline whitespace-nowrap" aria-label="Manter pedido na fila">
+                        <button onclick="atualizarMeusPedidos()" class="text-xs font-semibold text-gray-600 hover:underline whitespace-nowrap">
                             Manter pedido
                         </button>
                     </div>
@@ -1345,16 +1333,9 @@
                 return;
             }
 
-            document.querySelectorAll('.tab-content').forEach(tab => {
-                const ativo = tab.id === tabId;
-                tab.classList.toggle('active', ativo);
-                tab.setAttribute('aria-hidden', ativo ? 'false' : 'true');
-            });
-            document.querySelectorAll('[aria-controls]').forEach(botao => {
-                if (botao.getAttribute('aria-controls') === 'cliente' || botao.getAttribute('aria-controls') === 'admin') {
-                    botao.setAttribute('aria-selected', botao.getAttribute('aria-controls') === tabId ? 'true' : 'false');
-                }
-            });
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            const el = document.getElementById(tabId);
+            if (el) el.classList.add('active');
 
             // O indicador "Conectado ao Firebase" é informação técnica — só interessa
             // pro DJ (pra saber se pode confiar na fila em tempo real), não pro cliente.
@@ -1452,7 +1433,6 @@
                     const card = document.createElement('button');
                     card.type = 'button';
                     card.className = 'w-full flex items-center gap-3 p-2 rounded-lg border border-gray-100 hover:bg-gray-50 hover:border-indigo-200 transition-colors text-left';
-                    card.setAttribute('aria-label', `Selecionar ${titulo} no YouTube`);
                     card.innerHTML = `
                         <img src="${thumb}" class="w-20 h-14 object-cover rounded flex-shrink-0" alt="" />
                         <div class="min-w-0">
@@ -1484,56 +1464,6 @@
             return div.innerHTML;
         }
 
-        // --- VALIDAÇÃO DO FORMULÁRIO DE PEDIDO ---
-        // Mantida no arquivo único para preservar o fluxo de upload manual e os
-        // seletores já usados pela suíte Playwright.
-        function mostrarErroCampo(idCampo, mensagem) {
-            const campo = document.getElementById(idCampo);
-            const erro = document.getElementById(`erro-${idCampo.replace('input-', '')}`);
-            if (!campo || !erro) return;
-
-            campo.setCustomValidity(mensagem || '');
-            campo.setAttribute('aria-invalid', mensagem ? 'true' : 'false');
-            erro.textContent = mensagem || '';
-            erro.classList.toggle('hidden', !mensagem);
-        }
-
-        function validarCampoPedido(idCampo) {
-            const campo = document.getElementById(idCampo);
-            if (!campo) return true;
-
-            const valor = campo.value.trim();
-            let mensagem = '';
-
-            if (idCampo === 'input-nome') {
-                if (!valor) mensagem = 'Informe seu nome ou apelido.';
-                else if (valor.length > 50) mensagem = 'O nome deve ter no máximo 50 caracteres.';
-            } else if (idCampo === 'input-mesa') {
-                if (valor.length > 50) mensagem = 'O número da mesa deve ter no máximo 50 caracteres.';
-            } else if (idCampo === 'input-musica') {
-                if (!valor) mensagem = 'Informe o nome da música.';
-                else if (valor.length > 100) mensagem = 'O nome da música deve ter no máximo 100 caracteres.';
-            } else if (idCampo === 'input-artista') {
-                if (!youtubeUrlSelecionada && !valor) mensagem = 'Informe o nome do artista ou selecione um resultado do YouTube.';
-                else if (valor.length > 100) mensagem = 'O nome do artista deve ter no máximo 100 caracteres.';
-            }
-
-            mostrarErroCampo(idCampo, mensagem);
-            return !mensagem;
-        }
-
-        function validarFormularioPedido() {
-            const campos = ['input-nome', 'input-mesa', 'input-musica', 'input-artista'];
-            const valido = campos.map(validarCampoPedido).every(Boolean);
-            if (!valido) {
-                const primeiroInvalido = campos
-                    .map(id => document.getElementById(id))
-                    .find(campo => campo && campo.getAttribute('aria-invalid') === 'true');
-                if (primeiroInvalido) primeiroInvalido.focus();
-            }
-            return valido;
-        }
-
         // Monta o link "Abrir no YouTube" só se a URL salva for realmente do YouTube —
         // além de escapar (pra não quebrar o atributo href), isso barra alguém tentando
         // salvar um link do tipo "javascript:..." em vez de um vídeo de verdade.
@@ -1553,8 +1483,6 @@
             const inputArtista = document.getElementById('input-artista');
             inputArtista.required = false;
             document.getElementById('artista-opcional-tag').classList.remove('hidden');
-            validarCampoPedido('input-musica');
-            validarCampoPedido('input-artista');
 
             fecharModalYoutube();
         }
@@ -1567,8 +1495,6 @@
             youtubeUrlSelecionada = null;
             document.getElementById('input-artista').required = true;
             document.getElementById('artista-opcional-tag').classList.add('hidden');
-            validarCampoPedido('input-musica');
-            validarCampoPedido('input-artista');
         });
 
         // --- LÓGICA PRINCIPAL ---
@@ -1581,8 +1507,6 @@
                 return;
             }
 
-            if (!validarFormularioPedido()) return;
-
             const nome = document.getElementById('input-nome').value.trim();
             const mesa = document.getElementById('input-mesa').value.trim();
             const musica = document.getElementById('input-musica').value.trim();
@@ -1590,10 +1514,7 @@
             const youtubeUrlDoPedido = youtubeUrlSelecionada || null;
 
             const btnEnviar = document.getElementById('btn-enviar');
-            if (btnEnviar) {
-                btnEnviar.disabled = true;
-                btnEnviar.setAttribute('aria-busy', 'true');
-            }
+            if (btnEnviar) { btnEnviar.disabled = true; }
 
             // Monta o pedido dentro da transação (não fora), porque precisa saber a
             // prioridade calculada em cima do estado MAIS ATUAL da fila no servidor —
@@ -1630,19 +1551,13 @@
                     if (error) {
                         console.error('❌ Erro na transação ao adicionar pedido:', error);
                         alert('Não deu pra enviar seu pedido agora. Tente de novo em alguns segundos.');
-                        if (btnEnviar) {
-                            btnEnviar.disabled = false;
-                            btnEnviar.removeAttribute('aria-busy');
-                        }
+                        if (btnEnviar) { btnEnviar.disabled = false; }
                         return;
                     }
                     if (!comprometido) {
                         // Não deveria acontecer (a função sempre retorna um valor), mas por
                         // segurança avisa em vez de deixar o botão travado silenciosamente
-                        if (btnEnviar) {
-                            btnEnviar.disabled = false;
-                            btnEnviar.removeAttribute('aria-busy');
-                        }
+                        if (btnEnviar) { btnEnviar.disabled = false; }
                         return;
                     }
 
@@ -1676,10 +1591,7 @@
 
         // Parte final do envio do pedido — comum aos dois caminhos (com ou sem Firebase)
         function finalizarEnvioPedido(nome, mesa, btnEnviar) {
-            if (btnEnviar) {
-                btnEnviar.disabled = false;
-                btnEnviar.removeAttribute('aria-busy');
-            }
+            if (btnEnviar) { btnEnviar.disabled = false; }
 
             // Lembra o nome e a mesa neste navegador, para não precisar digitar de novo da próxima vez
             localStorage.setItem(chaveLocal('cliente_nome'), nome);
@@ -1691,7 +1603,6 @@
             document.getElementById('input-artista').value = '';
             document.getElementById('input-artista').required = true;
             document.getElementById('artista-opcional-tag').classList.add('hidden');
-            ['input-nome', 'input-mesa', 'input-musica', 'input-artista'].forEach(validarCampoPedido);
             document.getElementById('input-musica').focus();
             youtubeUrlSelecionada = null;
             const feedback = document.getElementById('feedback-sucesso');
@@ -1977,13 +1888,13 @@
                                 <span class="px-2 py-1 bg-gray-100 rounded text-xs font-bold">${pedido.vezesCantadas}x</span>
                             </td>
                             <td class="px-6 py-4 text-right space-x-2">
-                                <button onclick="acaoProximo(${pedido.id})" class="text-green-600 hover:bg-green-50 p-2 rounded-full" title="Chamar Próximo" aria-label="Chamar ${escaparHtml(pedido.nome)} como próximo">
+                                <button onclick="acaoProximo(${pedido.id})" class="text-green-600 hover:bg-green-50 p-2 rounded-full" title="Chamar Próximo">
                                     <i class="fas fa-play"></i>
                                 </button>
-                                <button onclick="acaoPular(${pedido.id})" class="text-orange-500 hover:bg-orange-50 p-2 rounded-full" title="Pular Vez" aria-label="Pular a vez de ${escaparHtml(pedido.nome)}">
+                                <button onclick="acaoPular(${pedido.id})" class="text-orange-500 hover:bg-orange-50 p-2 rounded-full" title="Pular Vez">
                                     <i class="fas fa-forward"></i>
                                 </button>
-                                <button onclick="acaoRemover(${pedido.id})" class="text-red-600 hover:bg-red-50 p-2 rounded-full" title="Remover" aria-label="Remover o pedido de ${escaparHtml(pedido.nome)}">
+                                <button onclick="acaoRemover(${pedido.id})" class="text-red-600 hover:bg-red-50 p-2 rounded-full" title="Remover">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </td>
@@ -2082,13 +1993,11 @@
                     const statusEl = document.getElementById('avaliar-status');
                     statusEl.innerText = notaDoUsuario ? `Você votou ${notaDoUsuario}★. Pode alterar seu voto se quiser.` : 'Toque em uma estrela para votar.';
 
-            const estrelas = document.querySelectorAll('#avaliar-estrelas button[data-nota]');
-            estrelas.forEach(estrela => {
-                const nota = Number(estrela.dataset.nota);
-                const selecionada = nota <= notaDoUsuario;
-                estrela.querySelector('i')?.classList.toggle('selected', selecionada);
-                estrela.setAttribute('aria-pressed', nota === notaDoUsuario ? 'true' : 'false');
-            });
+                    const estrelas = document.querySelectorAll('#avaliar-estrelas i');
+                    estrelas.forEach(estrela => {
+                        const nota = Number(estrela.dataset.nota);
+                        estrela.classList.toggle('selected', nota <= notaDoUsuario);
+                    });
                 }
             }
         }
@@ -2107,17 +2016,6 @@
 
         // Inicialización
         document.getElementById('form-pedido').addEventListener('submit', adicionarPedido);
-
-        // Validação progressiva: não interrompe a digitação, mas remove o erro assim
-        // que o campo fica válido e apresenta feedback ao sair dele.
-        ['input-nome', 'input-mesa', 'input-musica', 'input-artista'].forEach(id => {
-            const campo = document.getElementById(id);
-            if (!campo) return;
-            campo.addEventListener('blur', () => validarCampoPedido(id));
-            campo.addEventListener('input', () => {
-                if (campo.getAttribute('aria-invalid') === 'true') validarCampoPedido(id);
-            });
-        });
         
         // Conectar eventos do modal
         document.getElementById('admin-auth-form').addEventListener('submit', handleAdminAuthSubmit);
@@ -2130,20 +2028,12 @@
 
         // Clique nas estrelas de avaliação (delegação de evento)
         document.getElementById('avaliar-estrelas').addEventListener('click', function(e) {
-            const estrela = e.target.closest('button[data-nota]');
+            const estrela = e.target.closest('i[data-nota]');
             if (!estrela) return;
             avaliarApresentacao(estrela.dataset.nota);
         });
 
         document.getElementById('btn-nao-e-voce').addEventListener('click', esquecerDadosLembrados);
-
-        document.addEventListener('keydown', (e) => {
-            if (e.key !== 'Escape') return;
-            const youtubeModal = document.getElementById('youtube-modal');
-            const adminModal = document.getElementById('admin-auth-modal');
-            if (youtubeModal && !youtubeModal.classList.contains('hidden')) fecharModalYoutube();
-            else if (adminModal && !adminModal.classList.contains('hidden')) cancelAdminAuth();
-        });
 
         // Toggle "Avisar quando for minha vez"
         const notifToggle = document.getElementById('notif-toggle');
