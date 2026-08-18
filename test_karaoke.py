@@ -21,7 +21,14 @@ COMO RODAR:
     playwright install chromium
     python3 test_karaoke.py
 
-    (ou aponte PARA outro arquivo index.html com --arquivo /caminho/index.html)
+    (ou aponte pra outro index.html com --arquivo /caminho/index.html — a pasta
+    inteira onde esse arquivo está é servida por HTTP local automaticamente)
+
+Os testes sobem um servidor HTTP local (python -m http.server, não file://) e
+esperam o Tailwind CDN carregar de verdade antes de checar qualquer coisa na
+tela. Se o ambiente não tiver internet pra baixar o Tailwind, a suíte AVISA
+isso claramente no terminal e roda em modo degradado (só um CSS mínimo de
+compatibilidade) — não finge que testou com o Tailwind real.
 
 Cada teste imprime PASS ou FAIL. Ao final, mostra um resumo e sai com
 código de erro != 0 se algo falhou (útil pra rodar antes de qualquer deploy).
@@ -30,12 +37,20 @@ código de erro != 0 se algo falhou (útil pra rodar antes de qualquer deploy).
 import sys
 import re
 import argparse
+import functools
+import http.server
+import socketserver
+import socket
+import threading
+import contextlib
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
 
 RESULTADOS = []
+_AVISO_TAILWIND_JA_MOSTRADO = False
+ARQUIVO_INDEX = "index.html"  # ajustado em main() se --arquivo apontar pra outro nome
 
 
 def registrar(nome, ok, detalhe=""):
@@ -47,30 +62,91 @@ def registrar(nome, ok, detalhe=""):
     print(linha)
 
 
-def preparar_html_para_teste(caminho_index):
-    """Copia o index.html pra um arquivo temporário com um pequeno ajuste de
-    CSS (a classe .hidden precisa existir mesmo sem o Tailwind carregar via
-    CDN, já que o teste roda offline)."""
-    conteudo = Path(caminho_index).read_text(encoding="utf-8")
-    conteudo = conteudo.replace("</head>", "<style>.hidden{display:none;}</style></head>")
-    destino = Path(caminho_index).parent / "_tmp_teste_index.html"
-    destino.write_text(conteudo, encoding="utf-8")
-    return destino
+def _porta_livre():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
 
 
-def nova_pagina(browser, arquivo_temp, bar="citta", viewport=None):
+@contextlib.contextmanager
+def servidor_http(pasta):
+    """Sobe um servidor HTTP local de verdade (python -m http.server) servindo a
+    pasta do projeto — mais fiel à produção (GitHub Pages serve por HTTP) do que
+    abrir os arquivos direto por file://, que tem regras de navegador diferentes
+    (ex: alguns comportamentos de fetch/CORS só se manifestam via http/https)."""
+    porta = _porta_livre()
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(pasta))
+    httpd = socketserver.TCPServer(("127.0.0.1", porta), handler)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{porta}"
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+def aguardar_tailwind(page, timeout_ms=4000):
+    """Espera o Tailwind CDN carregar e gerar as classes utilitárias DE VERDADE
+    (ele injeta os estilos via JS depois que o <script> externo carrega — não é
+    instantâneo). Confirma checando uma propriedade bem específica do Tailwind
+    (border-radius de .rounded-2xl) que só existe se o CDN realmente rodou.
+
+    Se não conseguir carregar dentro do tempo — tipicamente por falta de acesso à
+    internet no ambiente que está rodando os testes — cai para um CSS mínimo
+    (só a classe .hidden) pra não travar a suíte inteira, mas avisa isso
+    CLARAMENTE no terminal, porque testar sem o Tailwind real não é equivalente:
+    é um modo degradado, não a validação completa."""
+    global _AVISO_TAILWIND_JA_MOSTRADO
+    try:
+        page.wait_for_function(
+            """() => {
+                const el = document.createElement('div');
+                el.className = 'rounded-2xl';
+                document.body.appendChild(el);
+                const raio = getComputedStyle(el).borderRadius;
+                el.remove();
+                return raio !== '' && raio !== '0px';
+            }""",
+            timeout=timeout_ms,
+        )
+        return True
+    except Exception:
+        pass
+
+    if not _AVISO_TAILWIND_JA_MOSTRADO:
+        print("⚠️  AVISO: o Tailwind CDN não carregou (provavelmente sem acesso à "
+              "internet neste ambiente). Os testes vão rodar com um CSS mínimo de "
+              "compatibilidade (só '.hidden'), o que NÃO é equivalente a testar com "
+              "o Tailwind de verdade. Rode esta suíte num ambiente com internet "
+              "pra validação completa antes de qualquer deploy.")
+        _AVISO_TAILWIND_JA_MOSTRADO = True
+    page.add_style_tag(content=".hidden{display:none;}")
+    return False
+
+
+def nova_pagina(browser, base_url, bar="citta", viewport=None):
     context = browser.new_context(viewport=viewport or {"width": 480, "height": 900},
                                    permissions=["notifications"])
     page = context.new_page()
     erros = []
     page.on("pageerror", lambda exc: erros.append(str(exc)))
-    url = f"file://{arquivo_temp}"
+    url = f"{base_url}/{ARQUIVO_INDEX}"
     if bar is not None:
         url += f"?bar={bar}"
     page.goto(url)
+    aguardar_tailwind(page)
     page.evaluate("localStorage.clear()")
     page.reload()
+    aguardar_tailwind(page)
     page.wait_for_timeout(250)
+
+    # O app fecha a fila automaticamente perto das 23h (HORARIO_LIMITE) — sem isso,
+    # os testes ficam "flaky": passam de dia e falham à noite, dependendo da hora
+    # real de quem rodar. Neutraliza só pros testes, não é um bug do app.
+    if bar is not None:
+        page.evaluate("window.isFilaBloqueada = () => false;")
+
     return context, page, erros
 
 
@@ -88,8 +164,8 @@ def preencher_pedido(page, nome, musica, artista="ArtistaX", mesa=None):
 
 # ---------------------------------------------------------------------------
 
-def test_sem_bar_mostra_erro(browser, arquivo_temp):
-    context, page, erros = nova_pagina(browser, arquivo_temp, bar=None)
+def test_sem_bar_mostra_erro(browser, base_url):
+    context, page, erros = nova_pagina(browser, base_url, bar=None)
     tem_aviso = page.evaluate("document.body.innerText.includes('Link incompleto')")
     ok = tem_aviso and not erros
     registrar("Acessar sem ?bar= mostra aviso claro (sem tela quebrada)", ok,
@@ -97,20 +173,20 @@ def test_sem_bar_mostra_erro(browser, arquivo_temp):
     context.close()
 
 
-def test_bar_valido_carrega_sem_erros(browser, arquivo_temp):
-    context, page, erros = nova_pagina(browser, arquivo_temp, bar="citta")
+def test_bar_valido_carrega_sem_erros(browser, base_url):
+    context, page, erros = nova_pagina(browser, base_url, bar="citta")
     ok = len(erros) == 0
     registrar("Acessar com ?bar=citta carrega sem erros de JS", ok, f"erros={erros}")
     context.close()
 
 
-def test_isolamento_entre_bares(browser, arquivo_temp):
-    context, page, _ = nova_pagina(browser, arquivo_temp, bar="citta")
+def test_isolamento_entre_bares(browser, base_url):
+    context, page, _ = nova_pagina(browser, base_url, bar="citta")
     preencher_pedido(page, "PessoaDoCitta", "MusicaDoCitta")
     fila_citta = page.evaluate("fila.map(p => p.nome)")
     context.close()
 
-    context2, page2, _ = nova_pagina(browser, arquivo_temp, bar="outrobar")
+    context2, page2, _ = nova_pagina(browser, base_url, bar="outrobar")
     fila_outrobar = page2.evaluate("fila.map(p => p.nome)")
     context2.close()
 
@@ -119,8 +195,8 @@ def test_isolamento_entre_bares(browser, arquivo_temp):
                f"citta={fila_citta}, outrobar={fila_outrobar}")
 
 
-def test_prioridade_por_nome_e_mesa(browser, arquivo_temp):
-    context, page, erros = nova_pagina(browser, arquivo_temp)
+def test_prioridade_por_nome_e_mesa(browser, base_url):
+    context, page, erros = nova_pagina(browser, base_url)
     preencher_pedido(page, "Maria", "Musica1", mesa="5")
     preencher_pedido(page, "Maria Silva", "Musica2", mesa="5")
     preencher_pedido(page, "maria", "Musica3", mesa="5")
@@ -135,8 +211,8 @@ def test_prioridade_por_nome_e_mesa(browser, arquivo_temp):
     context.close()
 
 
-def test_pessoas_diferentes_mesas_diferentes_nao_se_confundem(browser, arquivo_temp):
-    context, page, erros = nova_pagina(browser, arquivo_temp)
+def test_pessoas_diferentes_mesas_diferentes_nao_se_confundem(browser, base_url):
+    context, page, erros = nova_pagina(browser, base_url)
     preencher_pedido(page, "Maria", "MusicaA", mesa="3")
     preencher_pedido(page, "Maria", "MusicaB", mesa="3")
     preencher_pedido(page, "Maria", "MusicaC", mesa="8")
@@ -151,11 +227,11 @@ def test_pessoas_diferentes_mesas_diferentes_nao_se_confundem(browser, arquivo_t
     context.close()
 
 
-def test_voto_nao_reconstroi_a_tela(browser, arquivo_temp):
+def test_voto_nao_reconstroi_a_tela(browser, base_url):
     """Este é o teste mais importante: replica o bug real de produção onde o
     Firebase reordena as chaves dos objetos, e isso fazia a tela toda
     piscar/recarregar a cada voto."""
-    context, page, erros = nova_pagina(browser, arquivo_temp)
+    context, page, erros = nova_pagina(browser, base_url)
     preencher_pedido(page, "Carlos", "MusicaTeste")
     pedido_id = page.evaluate("fila[0].id")
     page.evaluate(f"acaoProximo({pedido_id})")
@@ -192,8 +268,8 @@ def test_voto_nao_reconstroi_a_tela(browser, arquivo_temp):
     context.close()
 
 
-def test_admin_exige_login(browser, arquivo_temp):
-    context, page, erros = nova_pagina(browser, arquivo_temp)
+def test_admin_exige_login(browser, base_url):
+    context, page, erros = nova_pagina(browser, base_url)
     autenticado_antes = page.evaluate("isAdminAuthenticated()")
     page.evaluate("switchTab('admin')")
     page.wait_for_timeout(100)
@@ -204,8 +280,8 @@ def test_admin_exige_login(browser, arquivo_temp):
     context.close()
 
 
-def test_youtube_preenche_musica_e_libera_artista(browser, arquivo_temp):
-    context, page, erros = nova_pagina(browser, arquivo_temp)
+def test_youtube_preenche_musica_e_libera_artista(browser, base_url):
+    context, page, erros = nova_pagina(browser, base_url)
 
     def mock_youtube(route):
         route.fulfill(
@@ -232,8 +308,8 @@ def test_youtube_preenche_musica_e_libera_artista(browser, arquivo_temp):
     context.close()
 
 
-def test_media_de_avaliacoes(browser, arquivo_temp):
-    context, page, erros = nova_pagina(browser, arquivo_temp)
+def test_media_de_avaliacoes(browser, base_url):
+    context, page, erros = nova_pagina(browser, base_url)
     media = page.evaluate("mediaEVotos({a: 5, b: 4, c: 5, d: 3, e: 5}).media")
     votos = page.evaluate("mediaEVotos({a: 5, b: 4, c: 5, d: 3, e: 5}).votos")
     ok = media == 4.4 and votos == 5 and not erros
@@ -241,11 +317,11 @@ def test_media_de_avaliacoes(browser, arquivo_temp):
     context.close()
 
 
-def test_espera_longa_faz_pessoa_furar_a_fila(browser, arquivo_temp):
+def test_espera_longa_faz_pessoa_furar_a_fila(browser, base_url):
     """Regra pedida após teste com público real: quem já cantou não pode ficar
     preso no fim da fila pra sempre só porque gente nova continua chegando —
     com tempo de espera suficiente, ela volta a furar a frente."""
-    context, page, erros = nova_pagina(browser, arquivo_temp)
+    context, page, erros = nova_pagina(browser, base_url)
 
     preencher_pedido(page, "PessoaA", "MusicaA1")
     id_a = page.evaluate("fila[0].id")
@@ -278,12 +354,12 @@ def test_espera_longa_faz_pessoa_furar_a_fila(browser, arquivo_temp):
     context.close()
 
 
-def test_dois_pedidos_simultaneos_nao_se_perdem(browser, arquivo_temp):
+def test_dois_pedidos_simultaneos_nao_se_perdem(browser, base_url):
     """Regra crítica: reproduz o bug relatado de nomes "sumindo e reaparecendo".
     Causa era uma corrida de gravação — dois pedidos quase ao mesmo tempo podiam
     se sobrescrever. Usa um Firebase simulado que processa uma transação de
     cada vez (como o servidor real faz) pra provar que os dois sobrevivem."""
-    context, page, erros = nova_pagina(browser, arquivo_temp)
+    context, page, erros = nova_pagina(browser, base_url)
 
     page.evaluate("""
         window.__servidorFila = [];
@@ -326,12 +402,12 @@ def test_dois_pedidos_simultaneos_nao_se_perdem(browser, arquivo_temp):
     context.close()
 
 
-def test_meus_pedidos_posicao_e_cancelamento(browser, arquivo_temp):
+def test_meus_pedidos_posicao_e_cancelamento(browser, base_url):
     """Cartão 'Seus Pedidos': mostra a posição na fila e permite cancelar (com
     confirmação inline clara — 'Sim, cancelar' / 'Manter pedido' — em vez do
     confirm() nativo do navegador, que tinha texto ambíguo: ver bug relatado
     onde o botão 'Cancelar' do alerta padrão na verdade MANTINHA o pedido)."""
-    context, page, erros = nova_pagina(browser, arquivo_temp)
+    context, page, erros = nova_pagina(browser, base_url)
 
     page.evaluate("""
         fila.push({id: 111, nome: 'OutraPessoa', mesa: null, musica: 'MusicaOutra', artista: 'X', timestamp: Date.now() - 5000, vezesCantadas: 0, youtubeUrl: null});
@@ -369,10 +445,10 @@ def test_meus_pedidos_posicao_e_cancelamento(browser, arquivo_temp):
     context.close()
 
 
-def test_historico_paginado_no_cliente(browser, arquivo_temp):
+def test_historico_paginado_no_cliente(browser, base_url):
     """Página do cliente mostra só as últimas 12 músicas cantadas por padrão,
     com botão 'Ver mais' — a lista do painel do DJ continua sempre completa."""
-    context, page, erros = nova_pagina(browser, arquivo_temp)
+    context, page, erros = nova_pagina(browser, base_url)
 
     page.evaluate("""
         historico = [];
@@ -399,7 +475,7 @@ def test_historico_paginado_no_cliente(browser, arquivo_temp):
     context.close()
 
 
-def test_aviso_iphone_aparece_so_no_iphone(browser, arquivo_temp):
+def test_aviso_iphone_aparece_so_no_iphone(browser, base_url):
     """O aviso sobre a limitação de notificação no iPhone só aparece pra quem
     está realmente usando Safari em iPhone/iPad — não deve poluir a tela de
     quem está em qualquer outro navegador/aparelho."""
@@ -410,16 +486,18 @@ def test_aviso_iphone_aparece_so_no_iphone(browser, arquivo_temp):
     page_iphone = context_iphone.new_page()
     erros_iphone = []
     page_iphone.on("pageerror", lambda exc: erros_iphone.append(str(exc)))
-    page_iphone.goto(f"file://{arquivo_temp}?bar=citta")
+    page_iphone.goto(f"{base_url}/{ARQUIVO_INDEX}?bar=citta")
+    aguardar_tailwind(page_iphone)
     page_iphone.evaluate("localStorage.clear()")
     page_iphone.reload()
+    aguardar_tailwind(page_iphone)
     page_iphone.wait_for_timeout(200)
     page_iphone.click("#notif-toggle")
     page_iphone.wait_for_timeout(100)
     aparece_no_iphone = page_iphone.evaluate("!document.getElementById('aviso-iphone').classList.contains('hidden')")
     context_iphone.close()
 
-    context_normal, page_normal, erros_normal = nova_pagina(browser, arquivo_temp)
+    context_normal, page_normal, erros_normal = nova_pagina(browser, base_url)
     page_normal.click("#notif-toggle")
     page_normal.wait_for_timeout(100)
     nao_aparece_normal = page_normal.evaluate("document.getElementById('aviso-iphone').classList.contains('hidden')")
@@ -430,11 +508,11 @@ def test_aviso_iphone_aparece_so_no_iphone(browser, arquivo_temp):
                f"aparece_no_iphone={aparece_no_iphone}, escondido_em_navegador_normal={nao_aparece_normal}")
 
 
-def test_aviso_de_conexao_perdida_existe(browser, arquivo_temp):
+def test_aviso_de_conexao_perdida_existe(browser, base_url):
     """O banner de 'sem conexão' existe, começa escondido, e pode ser mostrado
     (a checagem completa de conectar/desconectar de verdade precisa de Firebase
     real — isso só confirma que a peça do quebra-cabeça está no lugar certo)."""
-    context, page, erros = nova_pagina(browser, arquivo_temp)
+    context, page, erros = nova_pagina(browser, base_url)
     escondido_normal = page.evaluate("document.getElementById('aviso-sem-conexao').classList.contains('hidden')")
     page.evaluate("document.getElementById('aviso-sem-conexao').classList.remove('hidden')")
     aparece_quando_forcado = page.evaluate("!document.getElementById('aviso-sem-conexao').classList.contains('hidden')")
@@ -444,9 +522,152 @@ def test_aviso_de_conexao_perdida_existe(browser, arquivo_temp):
     context.close()
 
 
+def test_modo_escuro_alterna_e_persiste(browser, base_url):
+    """O botão de modo escuro alterna a classe no <body>, muda o ícone (lua/sol),
+    e a escolha continua valendo depois de recarregar a página."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    inicio_claro = not page.evaluate("document.body.classList.contains('modo-escuro')")
+    page.click("#btn-toggle-tema")
+    page.wait_for_timeout(100)
+    ativou = page.evaluate("document.body.classList.contains('modo-escuro')")
+    icone_virou_sol = page.evaluate("document.getElementById('icone-tema').className.includes('fa-sun')")
+
+    page.reload()
+    page.wait_for_timeout(300)
+    persistiu = page.evaluate("document.body.classList.contains('modo-escuro')")
+
+    ok = inicio_claro and ativou and icone_virou_sol and persistiu and not erros
+    registrar("Modo escuro alterna, troca o ícone e persiste após recarregar", ok,
+               f"inicio_claro={inicio_claro}, ativou={ativou}, icone_sol={icone_virou_sol}, persistiu={persistiu}")
+    context.close()
+
+
+def test_protecao_contra_xss(browser, base_url):
+    """Nome, música e mesa digitados pelo cliente entram em vários lugares via
+    innerHTML (fila do DJ, próximos, já cantadas) — sem escapar, alguém poderia
+    digitar HTML/JavaScript malicioso nesses campos e rodar código na tela de
+    outras pessoas conectadas (XSS). Confirma que isso está bloqueado."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    disparou = {"sim": False}
+    page.on("dialog", lambda dialog: (disparou.__setitem__("sim", True), dialog.dismiss()))
+
+    if page.is_visible("#btn-nao-e-voce"):
+        page.click("#btn-nao-e-voce")
+    page.fill("#input-nome", "<img src=x onerror=alert(1)>")
+    page.fill("#input-mesa", '"><svg onload=alert(3)>')
+    page.fill("#input-musica", "<script>alert(2)</script>Musica")
+    page.fill("#input-artista", "X")
+    page.click("#btn-enviar")
+    page.wait_for_timeout(250)
+
+    tem_img_real = page.evaluate("document.querySelectorAll('#tabela-fila img').length > 0")
+    tem_svg_real = page.evaluate("document.querySelectorAll('#tabela-fila svg').length > 0")
+    texto_literal = page.evaluate("document.getElementById('tabela-fila').innerText.includes('<img')")
+
+    ok = (not disparou["sim"] and not tem_img_real and not tem_svg_real and texto_literal and not erros)
+    registrar("Nome/música/mesa maliciosos não executam código (proteção XSS)", ok,
+               f"script_disparou={disparou['sim']}, tag_img_real={tem_img_real}, "
+               f"tag_svg_real={tem_svg_real}, aparece_como_texto={texto_literal}")
+    context.close()
+
+
+def test_listeners_separados_por_pedaco(browser, base_url):
+    """Em vez de um listener só no nó inteiro do bar (que reenviava fila +
+    histórico + tudo mais toda vez que qualquer coisa mudasse), cada pedaço
+    (fila, apresentacaoAtual, contagem, manualFechada) tem seu próprio listener
+    em tempo real, e o histórico usa limitToFirst em vez de vir tudo de uma vez."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    caminhos = page.evaluate("""
+        (function() {
+            window.__caminhos = [];
+            useFirebase = true;
+            db = {
+                ref: function(path) {
+                    return {
+                        on: function(evento, cb) { window.__caminhos.push(path); cb({ val: () => null }); },
+                        limitToFirst: function(n) {
+                            return { on: function(evento, cb) {
+                                window.__caminhos.push(path + ' (limitToFirst ' + n + ')');
+                                cb({ val: () => null });
+                            }};
+                        },
+                        once: function() { return Promise.resolve({ val: () => ({}) }); }
+                    };
+                }
+            };
+            sincronizarComFirebase();
+            return window.__caminhos;
+        })()
+    """)
+
+    tem_fila_tempo_real = any(c.endswith("/fila") for c in caminhos)
+    tem_apresentacao_tempo_real = any(c.endswith("/apresentacaoAtual") for c in caminhos)
+    tem_contagem_tempo_real = any(c.endswith("/contagem") for c in caminhos)
+    historico_com_limite = any("historico" in c and "limitToFirst" in c for c in caminhos)
+    sem_listener_no_no_pai = not any(c.endswith("/karaoke") for c in caminhos)
+
+    ok = (tem_fila_tempo_real and tem_apresentacao_tempo_real and tem_contagem_tempo_real
+          and historico_com_limite and sem_listener_no_no_pai and not erros)
+    registrar("Listeners separados por pedaço (fila/apresentação/contagem em tempo real; histórico limitado)", ok,
+               f"caminhos={caminhos}")
+    context.close()
+
+
+def test_historico_completo_sob_demanda(browser, base_url):
+    """O histórico completo só é baixado quando alguém realmente pede pra ver
+    tudo (clica 'Ver mais') — antes disso, só os primeiros ~12 ficam carregados,
+    mesmo que existam muito mais no banco."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    page.evaluate("""
+        window.__buscouCompleto = false;
+        useFirebase = true;
+        const historicoCompleto20 = [];
+        for (let i = 0; i < 20; i++) {
+            historicoCompleto20.push({nome: 'P'+i, musica: 'M'+i, artista: 'X', horario: '20:00', mediaAvaliacao: 4, totalVotos: 1});
+        }
+        db = {
+            ref: function(path) {
+                return {
+                    limitToFirst: function(n) {
+                        return { on: function(evento, cb) { cb({ val: () => historicoCompleto20.slice(0, n) }); } };
+                    },
+                    once: function() {
+                        window.__buscouCompleto = true;
+                        return Promise.resolve({ val: () => historicoCompleto20 });
+                    },
+                    on: function(evento, cb) { cb({ val: () => null }); }
+                };
+            }
+        };
+        sincronizarComFirebase();
+    """)
+    page.wait_for_timeout(150)
+
+    tamanho_antes = page.evaluate("historico.length")
+    buscou_antes = page.evaluate("window.__buscouCompleto")
+
+    page.click("text=Ver mais")
+    page.wait_for_timeout(200)
+
+    tamanho_depois = page.evaluate("historico.length")
+    buscou_depois = page.evaluate("window.__buscouCompleto")
+
+    ok = (tamanho_antes <= 13 and not buscou_antes and tamanho_depois == 20 and buscou_depois and not erros)
+    registrar("Histórico completo só é buscado sob demanda (clicar 'Ver mais')", ok,
+               f"tamanho_antes={tamanho_antes}, buscou_antes={buscou_antes}, "
+               f"tamanho_depois={tamanho_depois}, buscou_depois={buscou_depois}")
+    context.close()
+
+
 # ---------------------------------------------------------------------------
 
 def main():
+    global ARQUIVO_INDEX
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--arquivo", default=None,
                          help="Caminho pro index.html a testar (padrão: o que está na mesma pasta que este script)")
@@ -457,32 +678,37 @@ def main():
         print(f"❌ Não encontrei o arquivo: {caminho_index}")
         sys.exit(2)
 
-    arquivo_temp = preparar_html_para_teste(caminho_index)
+    pasta = caminho_index.parent.resolve()
+    ARQUIVO_INDEX = caminho_index.name
 
-    print(f"Testando: {caminho_index}\n")
+    print(f"Testando: {caminho_index}")
+    print(f"Servindo {pasta} por HTTP local (não mais file://, pra ficar mais fiel à produção)\n")
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch()
+    with servidor_http(pasta) as base_url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
 
-        test_sem_bar_mostra_erro(browser, arquivo_temp)
-        test_bar_valido_carrega_sem_erros(browser, arquivo_temp)
-        test_isolamento_entre_bares(browser, arquivo_temp)
-        test_prioridade_por_nome_e_mesa(browser, arquivo_temp)
-        test_pessoas_diferentes_mesas_diferentes_nao_se_confundem(browser, arquivo_temp)
-        test_voto_nao_reconstroi_a_tela(browser, arquivo_temp)
-        test_admin_exige_login(browser, arquivo_temp)
-        test_youtube_preenche_musica_e_libera_artista(browser, arquivo_temp)
-        test_media_de_avaliacoes(browser, arquivo_temp)
-        test_espera_longa_faz_pessoa_furar_a_fila(browser, arquivo_temp)
-        test_dois_pedidos_simultaneos_nao_se_perdem(browser, arquivo_temp)
-        test_meus_pedidos_posicao_e_cancelamento(browser, arquivo_temp)
-        test_historico_paginado_no_cliente(browser, arquivo_temp)
-        test_aviso_iphone_aparece_so_no_iphone(browser, arquivo_temp)
-        test_aviso_de_conexao_perdida_existe(browser, arquivo_temp)
+            test_sem_bar_mostra_erro(browser, base_url)
+            test_bar_valido_carrega_sem_erros(browser, base_url)
+            test_isolamento_entre_bares(browser, base_url)
+            test_prioridade_por_nome_e_mesa(browser, base_url)
+            test_pessoas_diferentes_mesas_diferentes_nao_se_confundem(browser, base_url)
+            test_voto_nao_reconstroi_a_tela(browser, base_url)
+            test_admin_exige_login(browser, base_url)
+            test_youtube_preenche_musica_e_libera_artista(browser, base_url)
+            test_media_de_avaliacoes(browser, base_url)
+            test_espera_longa_faz_pessoa_furar_a_fila(browser, base_url)
+            test_dois_pedidos_simultaneos_nao_se_perdem(browser, base_url)
+            test_meus_pedidos_posicao_e_cancelamento(browser, base_url)
+            test_historico_paginado_no_cliente(browser, base_url)
+            test_aviso_iphone_aparece_so_no_iphone(browser, base_url)
+            test_aviso_de_conexao_perdida_existe(browser, base_url)
+            test_modo_escuro_alterna_e_persiste(browser, base_url)
+            test_protecao_contra_xss(browser, base_url)
+            test_listeners_separados_por_pedaco(browser, base_url)
+            test_historico_completo_sob_demanda(browser, base_url)
 
-        browser.close()
-
-    arquivo_temp.unlink(missing_ok=True)
+            browser.close()
 
     total = len(RESULTADOS)
     falhas = [r for r in RESULTADOS if not r[1]]
