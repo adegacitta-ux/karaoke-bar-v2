@@ -17,6 +17,61 @@
         .tab-content { display: none; }
         .tab-content.active { display: block; }
         .bg-gradient-custom { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+
+        /* --- MODO ESCURO ---
+           Em vez de reescrever a classe de cada elemento do arquivo, esse bloco
+           troca as cores automaticamente quando a página (ou algo dentro dela) tem
+           a classe "modo-escuro". Funciona porque um seletor com duas classes
+           (ex: ".modo-escuro .bg-white") tem prioridade maior que uma classe só
+           (".bg-white" do Tailwind), então ganha do CSS original sem precisar de
+           !important nem duplicar HTML. */
+        body.modo-escuro { background-color: #0f172a; color-scheme: dark; }
+        .modo-escuro .bg-gray-50 { background-color: #0f172a; }
+
+        .modo-escuro .bg-white,
+        .modo-escuro .bg-gray-100 { background-color: #1e293b; }
+        .modo-escuro .bg-gray-800 { background-color: #0b1220; }
+
+        .modo-escuro .bg-indigo-50 { background-color: #1e2a4a; }
+        .modo-escuro .bg-blue-50 { background-color: #17263f; }
+        .modo-escuro .bg-green-50 { background-color: #16261d; }
+        .modo-escuro .bg-red-50 { background-color: #2a1717; }
+        .modo-escuro .bg-yellow-50 { background-color: #2a2312; }
+        .modo-escuro .bg-indigo-100 { background-color: #263a63; }
+        .modo-escuro .bg-red-100 { background-color: #3a1f1f; }
+
+        .modo-escuro .text-gray-800,
+        .modo-escuro .text-gray-700 { color: #e5e7eb; }
+        .modo-escuro .text-gray-600,
+        .modo-escuro .text-gray-500 { color: #9ca3af; }
+        .modo-escuro .text-gray-400 { color: #6b7280; }
+        .modo-escuro .text-indigo-800,
+        .modo-escuro .text-indigo-700,
+        .modo-escuro .text-indigo-600,
+        .modo-escuro .text-indigo-500 { color: #a5b4fc; }
+
+        .modo-escuro .border-gray-100,
+        .modo-escuro .border-gray-200,
+        .modo-escuro .border-gray-300,
+        .modo-escuro .divide-gray-100 { border-color: #334155; }
+        .modo-escuro .border-gray-700 { border-color: #1e293b; }
+
+        /* Campos de texto/input — o navegador não segue Tailwind sozinho aqui */
+        .modo-escuro input[type="text"],
+        .modo-escuro textarea {
+            background-color: #1e293b;
+            color: #e5e7eb;
+            border-color: #334155;
+        }
+        .modo-escuro input::placeholder { color: #6b7280; }
+
+        /* Botão de alternância modo claro/escuro */
+        .toggle-tema-btn {
+            background: none; border: none; cursor: pointer; font-size: 18px;
+            color: #6b7280; padding: 6px 10px; border-radius: 8px;
+        }
+        .modo-escuro .toggle-tema-btn { color: #e5e7eb; }
+        .toggle-tema-btn:hover { background-color: rgba(107, 114, 128, 0.15); }
         .firebase-status { 
             position: fixed; 
             bottom: 20px; 
@@ -82,9 +137,12 @@
     <nav class="bg-white shadow-sm mb-4">
         <div class="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
             <h1 class="text-xl font-bold text-indigo-600"><span id="nome-do-bar">Karaokê Manager</span></h1>
-            <div class="flex space-x-2">
+            <div class="flex items-center space-x-2">
                 <button onclick="switchTab('cliente')" class="px-3 py-1 text-sm font-medium rounded-md hover:bg-gray-100">Pedir Música</button>
                 <button onclick="switchTab('admin')" class="px-3 py-1 text-sm font-medium rounded-md hover:bg-gray-100">Admin/DJ</button>
+                <button onclick="alternarModoEscuro()" id="btn-toggle-tema" class="toggle-tema-btn" title="Alternar modo escuro">
+                    <i class="fas fa-moon" id="icone-tema"></i>
+                </button>
             </div>
         </div>
     </nav>
@@ -475,6 +533,31 @@
             return `karaoke_${BAR_ID}_${nome}`;
         }
 
+        // --- MODO ESCURO ---
+        function aplicarModoEscuro(ativo) {
+            document.body.classList.toggle('modo-escuro', ativo);
+            const icone = document.getElementById('icone-tema');
+            if (icone) icone.className = ativo ? 'fas fa-sun' : 'fas fa-moon';
+        }
+
+        function alternarModoEscuro() {
+            const ativo = !document.body.classList.contains('modo-escuro');
+            aplicarModoEscuro(ativo);
+            localStorage.setItem(chaveLocal('modo_escuro'), ativo ? '1' : '0');
+        }
+
+        function iniciarModoEscuro() {
+            const salvo = localStorage.getItem(chaveLocal('modo_escuro'));
+            let ativo;
+            if (salvo !== null) {
+                ativo = salvo === '1'; // a pessoa já escolheu antes — respeita a escolha
+            } else {
+                // sem preferência salva ainda -> segue o que o celular/navegador já usa
+                ativo = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            }
+            aplicarModoEscuro(ativo);
+        }
+
         // E-mail do admin, nome do bar e cor — carregados do Firebase (config
         // pública, só leitura) em vez de escritos fixos no código.
         let ADMIN_EMAIL = null;
@@ -843,7 +926,7 @@
                         <div class="flex justify-between items-start gap-2">
                             <div class="min-w-0">
                                 <div class="text-sm font-semibold text-gray-800">${textoPosicao}</div>
-                                <div class="text-xs text-gray-500 truncate">${pedido.musica}</div>
+                                <div class="text-xs text-gray-500 truncate">${escaparHtml(pedido.musica)}</div>
                             </div>
                             <div id="acoes-pedido-${pedido.id}" class="flex-shrink-0">
                                 ${botaoCancelarHtml(pedido.id)}
@@ -875,12 +958,19 @@
 
             let html = itensParaMostrar.join('');
             if (temMais) {
+                // Só mostra a CONTAGEM exata de quantas faltam depois que a lista
+                // completa já foi carregada (ver carregarHistoricoCompleto) — antes
+                // disso, sabemos que "tem mais" (buscamos 1 a mais pra descobrir isso),
+                // mas não sabemos exatamente quantas, então o texto fica sem número.
+                const textoContagem = historicoCompletoCarregado
+                    ? ` (${_historicoItensHtml.length - LIMITE_HISTORICO_CLIENTE} restantes)`
+                    : '';
                 html += verTudoHistoricoCliente
                     ? `<li class="p-3 text-center">
                            <button onclick="toggleVerTudoHistorico()" class="text-sm text-indigo-600 hover:underline">Ver menos ↑</button>
                        </li>`
                     : `<li class="p-3 text-center">
-                           <button onclick="toggleVerTudoHistorico()" class="text-sm text-indigo-600 hover:underline">Ver mais (${_historicoItensHtml.length - LIMITE_HISTORICO_CLIENTE} restantes) ↓</button>
+                           <button onclick="toggleVerTudoHistorico()" class="text-sm text-indigo-600 hover:underline">Ver mais${textoContagem} ↓</button>
                        </li>`;
             }
             listaHistCliente.innerHTML = html;
@@ -888,6 +978,9 @@
 
         function toggleVerTudoHistorico() {
             verTudoHistoricoCliente = !verTudoHistoricoCliente;
+            if (verTudoHistoricoCliente) {
+                carregarHistoricoCompleto(); // busca tudo só agora que a pessoa realmente quer ver
+            }
             renderizarHistoricoCliente();
         }
 
@@ -1066,28 +1159,90 @@
             });
         }
 
+        // Em vez de um listener só no nó inteiro do bar (que reenviava fila +
+        // histórico + tudo mais pra cada cliente conectado toda vez que qualquer
+        // coisa mudasse — inclusive o histórico crescendo a noite toda), cada
+        // pedaço tem seu próprio listener:
+        //   - fila, apresentacaoAtual, manualFechada, contagem: tempo real, sempre
+        //     (são pequenos e mudam com frequência — inclusive contagem, que
+        //     precisa estar atualizada pra calcular a prioridade de um pedido novo)
+        //   - historico: só as últimas 12 em tempo real (cobre o uso normal); a
+        //     lista completa só é buscada sob demanda (ver carregarHistoricoCompleto)
         function sincronizarComFirebase() {
             if (!useFirebase || !db) return;
 
-            const ref = db.ref(caminhoBar());
-            ref.on('value', (snapshot) => {
+            db.ref(caminhoBar('fila')).on('value', (snapshot) => {
                 if (syncInProgress) return;
-                
-                const data = snapshot.val();
-                if (data) {
-                    fila = data.fila || [];
-                    historico = data.historico || [];
-                    contagemCantores = data.contagem || {};
-                    filaManualFechada = data.manualFechada || false;
-                    apresentacaoAtual = data.apresentacaoAtual || null;
+                fila = snapshot.val() || [];
+                atualizarUI();
+            }, (error) => tratarErroDeSincronizacao(error));
+
+            db.ref(caminhoBar('apresentacaoAtual')).on('value', (snapshot) => {
+                if (syncInProgress) return;
+                apresentacaoAtual = snapshot.val() || null;
+                atualizarUI();
+            }, (error) => tratarErroDeSincronizacao(error));
+
+            db.ref(caminhoBar('manualFechada')).on('value', (snapshot) => {
+                if (syncInProgress) return;
+                filaManualFechada = snapshot.val() || false;
+                atualizarUI();
+            }, (error) => tratarErroDeSincronizacao(error));
+
+            db.ref(caminhoBar('contagem')).on('value', (snapshot) => {
+                if (syncInProgress) return;
+                contagemCantores = snapshot.val() || {};
+            }, (error) => tratarErroDeSincronizacao(error));
+
+            // Nota: historico é salvo com o mais recente PRIMEIRO (acaoFinalizarApresentacao
+            // usa unshift), então os itens mais recentes ficam nos índices MAIS BAIXOS do
+            // array. Por isso usamos limitToFirst (pega os primeiros/mais novos) — usar
+            // limitToLast aqui pegaria justamente os mais ANTIGOS, ao contrário do que
+            // queremos pra essa lista "últimos cantados".
+            // Busca 1 item A MAIS do que o limite (13, não 12) — não é pra mostrar,
+            // é só pra saber se EXISTE mais coisa além dos 12, sem precisar baixar a
+            // lista inteira só pra descobrir isso (ver renderizarHistoricoCliente).
+            db.ref(caminhoBar('historico')).limitToFirst(LIMITE_HISTORICO_CLIENTE + 1).on('value', (snapshot) => {
+                if (syncInProgress || historicoCompletoCarregado) return; // não sobrescreve a lista completa já carregada
+                historico = objetoParaArray(snapshot.val());
+                atualizarUI();
+            }, (error) => tratarErroDeSincronizacao(error));
+
+            console.log('✅ Sincronização configurada (listeners separados por pedaço)');
+        }
+
+        function tratarErroDeSincronizacao(error) {
+            console.error('❌ Erro ao sincronizar:', error);
+            updateFirebaseStatus(false);
+        }
+
+        // O histórico é salvo como array (ver salvarNoFirebase), mas o Firebase entrega
+        // resultados de limitToFirst como OBJETO com chaves numéricas quando a fila
+        // original tem mais itens do que o limite — isso converte de volta pra array,
+        // preservando a ordem (mais recente primeiro, ver limitToFirst acima).
+        function objetoParaArray(valor) {
+            if (!valor) return [];
+            if (Array.isArray(valor)) return valor;
+            return Object.keys(valor).sort((a, b) => Number(a) - Number(b)).map(k => valor[k]);
+        }
+
+        // Busca a lista COMPLETA do histórico (sem limite) — chamado só quando alguém
+        // realmente precisa ver tudo: o DJ abrindo o painel, ou o cliente clicando em
+        // "Ver mais". Depois disso, o listener limitado (últimas 12) para de
+        // sobrescrever, porque a lista completa já cobre esse caso.
+        let historicoCompletoCarregado = false;
+        let buscandoHistoricoCompleto = false;
+        function carregarHistoricoCompleto() {
+            if (!useFirebase || !db || historicoCompletoCarregado || buscandoHistoricoCompleto) return;
+            buscandoHistoricoCompleto = true;
+            db.ref(caminhoBar('historico')).once('value')
+                .then((snapshot) => {
+                    historico = objetoParaArray(snapshot.val());
+                    historicoCompletoCarregado = true;
                     atualizarUI();
-                    console.log('✅ Dados sincronizados do Firebase');
-                }
-            }, (error) => {
-                console.error('❌ Erro ao sincronizar:', error);
-                updateFirebaseStatus(false);
-                carregarDoLocalStorage();
-            });
+                })
+                .catch((error) => console.error('❌ Erro ao buscar histórico completo:', error))
+                .finally(() => { buscandoHistoricoCompleto = false; });
         }
 
         function salvarNoFirebase() {
@@ -1187,6 +1342,12 @@
             const statusEl = document.getElementById('firebase-status');
             if (statusEl) statusEl.classList.toggle('hidden', tabId !== 'admin');
 
+            // O DJ costuma precisar ver a noite inteira, não só as últimas 12 — busca
+            // a lista completa do histórico assim que ele abre o painel.
+            if (tabId === 'admin') {
+                carregarHistoricoCompleto();
+            }
+
             atualizarUI();
         }
 
@@ -1275,8 +1436,8 @@
                     card.innerHTML = `
                         <img src="${thumb}" class="w-20 h-14 object-cover rounded flex-shrink-0" alt="" />
                         <div class="min-w-0">
-                            <div class="text-sm font-semibold text-gray-800 line-clamp-2">${tituloEscapado(titulo)}</div>
-                            <div class="text-xs text-gray-400 mt-1">${tituloEscapado(canal)}</div>
+                            <div class="text-sm font-semibold text-gray-800 line-clamp-2">${escaparHtml(titulo)}</div>
+                            <div class="text-xs text-gray-400 mt-1">${escaparHtml(canal)}</div>
                         </div>
                     `;
                     card.onclick = () => selecionarVideoYoutube(videoId, titulo);
@@ -1293,11 +1454,24 @@
             }
         }
 
-        // Evita que o título do vídeo quebre o HTML se tiver caracteres especiais
-        function tituloEscapado(texto) {
+        // Escapa texto de qualquer campo digitado por usuário (nome, música, artista,
+        // mesa, etc.) antes de colocar dentro de innerHTML. Sem isso, alguém poderia
+        // digitar algo como <img src=x onerror=alert(1)> no campo "Nome" e esse código
+        // rodaria na tela do DJ e de outros clientes conectados (XSS).
+        function escaparHtml(texto) {
             const div = document.createElement('div');
-            div.textContent = texto || '';
+            div.textContent = (texto === null || texto === undefined) ? '' : String(texto);
             return div.innerHTML;
+        }
+
+        // Monta o link "Abrir no YouTube" só se a URL salva for realmente do YouTube —
+        // além de escapar (pra não quebrar o atributo href), isso barra alguém tentando
+        // salvar um link do tipo "javascript:..." em vez de um vídeo de verdade.
+        function linkYoutubeSeguro(url) {
+            if (!url || typeof url !== 'string') return '';
+            const ehUrlDoYoutube = /^https:\/\/(www\.)?(youtube\.com|youtu\.be)\//i.test(url);
+            if (!ehUrlDoYoutube) return '';
+            return `<a href="${escaparHtml(url)}" target="_blank" rel="noopener" title="Abrir no YouTube" class="ml-1 text-red-500 hover:text-red-700"><i class="fab fa-youtube"></i></a>`;
         }
 
         function selecionarVideoYoutube(videoId, titulo) {
@@ -1591,6 +1765,10 @@
                 contagemCantores = {};
                 filaManualFechada = false;
                 apresentacaoAtual = null;
+                // Depois do reset o histórico está vazio "de verdade" — marca como já
+                // carregado pra não deixar o listener limitado (últimas 12) tentar
+                // repopular com dado antigo se ele ainda não tiver recebido a mudança.
+                historicoCompletoCarregado = true;
                 salvarNoFirebase();
                 atualizarUI();
             }
@@ -1702,10 +1880,10 @@
                         tr.innerHTML = `
                             <td class="px-6 py-4 font-bold text-gray-400">${index + 1}</td>
                             <td class="px-6 py-4 font-semibold text-gray-800">
-                                ${pedido.nome}
-                                ${pedido.mesa ? `<div class="text-xs text-gray-400 mt-1">Mesa: ${pedido.mesa}</div>` : ''}
+                                ${escaparHtml(pedido.nome)}
+                                ${pedido.mesa ? `<div class="text-xs text-gray-400 mt-1">Mesa: ${escaparHtml(pedido.mesa)}</div>` : ''}
                             </td>
-                            <td class="px-6 py-4 text-gray-600">${pedido.musica} ${pedido.artista ? `<br> <span class="text-xs text-gray-400">${pedido.artista}</span>` : ''} ${pedido.youtubeUrl ? `<a href="${pedido.youtubeUrl}" target="_blank" rel="noopener" title="Abrir no YouTube" class="ml-1 text-red-500 hover:text-red-700"><i class="fab fa-youtube"></i></a>` : ''}</td>
+                            <td class="px-6 py-4 text-gray-600">${escaparHtml(pedido.musica)} ${pedido.artista ? `<br> <span class="text-xs text-gray-400">${escaparHtml(pedido.artista)}</span>` : ''} ${linkYoutubeSeguro(pedido.youtubeUrl)}</td>
                             <td class="px-6 py-4">
                                 <span class="px-2 py-1 bg-gray-100 rounded text-xs font-bold">${pedido.vezesCantadas}x</span>
                             </td>
@@ -1741,8 +1919,8 @@
                             li.className = 'p-4 flex justify-between items-center';
                             li.innerHTML = `
                                 <div>
-                                    <div class="font-bold text-gray-800">${i + 1}. ${p.nome}</div>
-                                    <div class="text-sm text-gray-500">${formatarMusicaArtista(p.musica, p.artista)}${p.mesa ? ` <span class="mx-2">| Mesa: ${p.mesa}</span>` : ''}</div>
+                                    <div class="font-bold text-gray-800">${i + 1}. ${escaparHtml(p.nome)}</div>
+                                    <div class="text-sm text-gray-500">${formatarMusicaArtista(escaparHtml(p.musica), escaparHtml(p.artista))}${p.mesa ? ` <span class="mx-2">| Mesa: ${escaparHtml(p.mesa)}</span>` : ''}</div>
                                 </div>
                                 <div class="text-xs text-gray-400 font-bold">${p.vezesCantadas}x</div>
                             `;
@@ -1771,13 +1949,13 @@
                         return `
                             <li class="p-4 flex justify-between items-center">
                                 <div>
-                                    <span class="font-bold text-gray-700">${item.nome}</span>
-                                    ${item.mesa ? `<span class="text-gray-500 mx-2">| Mesa: ${item.mesa}</span>` : ''}
+                                    <span class="font-bold text-gray-700">${escaparHtml(item.nome)}</span>
+                                    ${item.mesa ? `<span class="text-gray-500 mx-2">| Mesa: ${escaparHtml(item.mesa)}</span>` : ''}
                                     <span class="text-gray-500 mx-2">cantou</span>
-                                    <span class="text-indigo-600 font-medium">${item.musica}</span>
+                                    <span class="text-indigo-600 font-medium">${escaparHtml(item.musica)}</span>
                                     ${avaliacaoHtml}
                                 </div>
-                                <span class="text-xs text-gray-400">${item.horario}</span>
+                                <span class="text-xs text-gray-400">${escaparHtml(item.horario)}</span>
                             </li>`;
                     });
                 }
@@ -1880,6 +2058,7 @@
         
         // Inicializar
         window.addEventListener('load', () => {
+            iniciarModoEscuro(); // independe de ter bar ou não — já deixa a tela no tom certo
             if (!BAR_ID) {
                 mostrarErroSemBar();
                 return; // não continua tentando mexer em elementos que acabaram de sumir
