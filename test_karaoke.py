@@ -547,16 +547,37 @@ def test_protecao_contra_xss(browser, base_url):
     """Nome, música e mesa digitados pelo cliente entram em vários lugares via
     innerHTML (fila do DJ, próximos, já cantadas) — sem escapar, alguém poderia
     digitar HTML/JavaScript malicioso nesses campos e rodar código na tela de
-    outras pessoas conectadas (XSS). Confirma que isso está bloqueado."""
+    outras pessoas conectadas (XSS). Confirma que isso está bloqueado.
+
+    Mesa usa validação de formato (só letras/números/hífen) que já barra
+    qualquer caractere de HTML antes mesmo de chegar no escape — por isso o
+    payload malicioso de mesa é testado separadamente (deve ser REJEITADO pela
+    validação, nem chegar a ser enviado). Nome e música não têm essa restrição
+    de formato (afinal um nome ou música pode ter praticamente qualquer
+    caractere), então neles o que protege é o escape de HTML mesmo — é isso que
+    o envio principal deste teste continua cobrindo."""
     context, page, erros = nova_pagina(browser, base_url)
 
     disparou = {"sim": False}
     page.on("dialog", lambda dialog: (disparou.__setitem__("sim", True), dialog.dismiss()))
 
+    # Mesa com payload malicioso -> a validação de formato deve rejeitar,
+    # impedindo o envio do formulário inteiro
     if page.is_visible("#btn-nao-e-voce"):
         page.click("#btn-nao-e-voce")
-    page.fill("#input-nome", "<img src=x onerror=alert(1)>")
+    page.fill("#input-nome", "Pessoa Teste")
     page.fill("#input-mesa", '"><svg onload=alert(3)>')
+    page.fill("#input-musica", "Musica Teste")
+    page.fill("#input-artista", "X")
+    page.click("#btn-enviar")
+    page.wait_for_timeout(150)
+    mesa_invalida_bloqueou_envio = page.evaluate("fila.length === 0")
+    mesa_mostra_erro = page.evaluate("!document.getElementById('erro-mesa').classList.contains('hidden')")
+
+    # Nome e música com payload malicioso, mesa válida -> deve enviar
+    # normalmente, mas o conteúdo malicioso precisa aparecer ESCAPADO na tela
+    page.fill("#input-mesa", "12")
+    page.fill("#input-nome", "<img src=x onerror=alert(1)>")
     page.fill("#input-musica", "<script>alert(2)</script>Musica")
     page.fill("#input-artista", "X")
     page.click("#btn-enviar")
@@ -566,8 +587,10 @@ def test_protecao_contra_xss(browser, base_url):
     tem_svg_real = page.evaluate("document.querySelectorAll('#tabela-fila svg').length > 0")
     texto_literal = page.evaluate("document.getElementById('tabela-fila').innerText.includes('<img')")
 
-    ok = (not disparou["sim"] and not tem_img_real and not tem_svg_real and texto_literal and not erros)
+    ok = (mesa_invalida_bloqueou_envio and mesa_mostra_erro
+          and not disparou["sim"] and not tem_img_real and not tem_svg_real and texto_literal and not erros)
     registrar("Nome/música/mesa maliciosos não executam código (proteção XSS)", ok,
+               f"mesa_invalida_bloqueada={mesa_invalida_bloqueou_envio}, mesa_mostra_erro={mesa_mostra_erro}, "
                f"script_disparou={disparou['sim']}, tag_img_real={tem_img_real}, "
                f"tag_svg_real={tem_svg_real}, aparece_como_texto={texto_literal}")
     context.close()
@@ -663,6 +686,83 @@ def test_historico_completo_sob_demanda(browser, base_url):
     context.close()
 
 
+def test_validacao_de_formulario(browser, base_url):
+    """Nome vazio, música vazia e mesa em formato inválido devem ser bloqueados
+    no envio, com mensagem de erro clara — e o formulário deve aceitar
+    normalmente quando os campos estão certos.
+
+    Usa clique disparado via JS (element.click()) em vez do clique por
+    coordenada do Playwright — neste ambiente de teste sem o Tailwind CDN
+    carregado (ver aguardar_tailwind), o layout sem CSS de espaçamento pode
+    deslocar alguns pixels quando uma mensagem de erro aparece, e o clique por
+    coordenada às vezes "erra" o botão por uma fração de pixel nesse instante.
+    Isso é uma instabilidade do ambiente de teste sem CSS real, não um bug do
+    app — clique via JS não depende de coordenada na tela."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    def clicar_enviar():
+        page.evaluate("document.getElementById('btn-enviar').click()")
+
+    # Envio com nome e música vazios -> bloqueado, com erro visível
+    page.fill("#input-nome", "")
+    page.fill("#input-musica", "")
+    page.fill("#input-artista", "X")
+    clicar_enviar()
+    page.wait_for_timeout(150)
+    bloqueado_por_campos_vazios = page.evaluate("fila.length === 0")
+    erro_nome_visivel = page.evaluate("!document.getElementById('erro-nome').classList.contains('hidden')")
+    erro_musica_visivel = page.evaluate("!document.getElementById('erro-musica').classList.contains('hidden')")
+
+    # Mesa com formato inválido (símbolos não permitidos) -> bloqueado
+    page.fill("#input-nome", "Pessoa")
+    page.fill("#input-mesa", "mesa@123!")
+    page.fill("#input-musica", "Musica")
+    clicar_enviar()
+    page.wait_for_timeout(150)
+    bloqueado_por_mesa_invalida = page.evaluate("fila.length === 0")
+
+    # Tudo certo -> envia normalmente
+    page.fill("#input-mesa", "12")
+    clicar_enviar()
+    page.wait_for_timeout(150)
+    enviou_com_dados_validos = page.evaluate("fila.length === 1")
+
+    ok = (bloqueado_por_campos_vazios and erro_nome_visivel and erro_musica_visivel
+          and bloqueado_por_mesa_invalida and enviou_com_dados_validos and not erros)
+    registrar("Formulário valida nome/música/mesa antes de enviar", ok,
+               f"bloqueado_campos_vazios={bloqueado_por_campos_vazios}, erro_nome_visivel={erro_nome_visivel}, "
+               f"erro_musica_visivel={erro_musica_visivel}, bloqueado_mesa_invalida={bloqueado_por_mesa_invalida}, "
+               f"enviou_valido={enviou_com_dados_validos}")
+    context.close()
+
+
+def test_acessibilidade_basica(browser, base_url):
+    """Labels associados aos campos (via for/id), ícones decorativos marcados
+    como aria-hidden, e áreas dinâmicas com aria-live — checagens estruturais
+    básicas de acessibilidade."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    labels_associados = page.evaluate("""
+        () => {
+            const campos = ['input-nome', 'input-mesa', 'input-musica', 'input-artista'];
+            return campos.every(id => document.querySelector(`label[for="${id}"]`) !== null);
+        }
+    """)
+    tem_icones_aria_hidden = page.evaluate("document.querySelectorAll('i[aria-hidden=\"true\"]').length > 0")
+    feedback_tem_aria_live = page.evaluate("document.getElementById('feedback-sucesso').getAttribute('aria-live') === 'polite'")
+    abas_tem_role_tabpanel = page.evaluate("""
+        document.getElementById('cliente').getAttribute('role') === 'tabpanel' &&
+        document.getElementById('admin').getAttribute('role') === 'tabpanel'
+    """)
+
+    ok = (labels_associados and tem_icones_aria_hidden and feedback_tem_aria_live
+          and abas_tem_role_tabpanel and not erros)
+    registrar("Estrutura básica de acessibilidade presente (labels, aria-hidden, aria-live, tabpanel)", ok,
+               f"labels_associados={labels_associados}, icones_aria_hidden={tem_icones_aria_hidden}, "
+               f"feedback_aria_live={feedback_tem_aria_live}, abas_tabpanel={abas_tem_role_tabpanel}")
+    context.close()
+
+
 # ---------------------------------------------------------------------------
 
 def main():
@@ -707,6 +807,8 @@ def main():
             test_protecao_contra_xss(browser, base_url)
             test_listeners_separados_por_pedaco(browser, base_url)
             test_historico_completo_sob_demanda(browser, base_url)
+            test_validacao_de_formulario(browser, base_url)
+            test_acessibilidade_basica(browser, base_url)
 
             browser.close()
 
