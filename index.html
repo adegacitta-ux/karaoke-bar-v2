@@ -114,20 +114,20 @@
 
     <!-- Status Firebase — visível só na aba Admin/DJ, ver switchTab() -->
     <div class="firebase-status firebase-disconnected hidden" id="firebase-status">
-        <i class="fas fa-circle mr-2" style="animation: pulse 1s infinite;"></i>
+        <i class="fas fa-circle mr-2" style="animation: pulse 1s infinite;" aria-hidden="true"></i>
         <span id="status-text">Conectando ao Firebase...</span>
     </div>
 
     <!-- Aviso de conexão perdida — visível pra todo mundo (cliente e DJ), só quando
          a conexão em tempo real cai de verdade (ver monitorarConexaoReal) -->
-    <div id="aviso-sem-conexao" class="hidden bg-red-600 text-white text-sm font-medium text-center py-2 px-4">
-        <i class="fas fa-exclamation-triangle mr-2"></i>Sem conexão no momento — seu pedido pode não salvar até a internet voltar. Aguarde um instante.
+    <div id="aviso-sem-conexao" class="hidden bg-red-600 text-white text-sm font-medium text-center py-2 px-4" role="alert" aria-live="assertive">
+        <i class="fas fa-exclamation-triangle mr-2" aria-hidden="true"></i>Sem conexão no momento — seu pedido pode não salvar até a internet voltar. Aguarde um instante.
     </div>
 
     <!-- Banner "É a sua vez" -->
-    <div id="minha-vez-banner" class="hidden fixed top-0 inset-x-0 z-50 bg-gradient-custom text-white px-4 py-4 shadow-lg flex items-center justify-between gap-3" style="animation: pulse-banner 1.5s infinite;">
+    <div id="minha-vez-banner" class="hidden fixed top-0 inset-x-0 z-50 bg-gradient-custom text-white px-4 py-4 shadow-lg flex items-center justify-between gap-3" style="animation: pulse-banner 1.5s infinite;" role="alert" aria-live="assertive">
         <div class="flex items-center gap-3">
-            <i class="fas fa-microphone text-2xl"></i>
+            <i class="fas fa-microphone text-2xl" aria-hidden="true"></i>
             <span class="font-bold text-lg" id="minha-vez-texto">Prepare-se! Você é o próximo a cantar.</span>
         </div>
         <button onclick="document.getElementById('minha-vez-banner').classList.add('hidden')" class="text-white text-xl leading-none px-2" aria-label="Fechar aviso">&times;</button>
@@ -137,11 +137,11 @@
     <nav class="bg-white shadow-sm mb-4">
         <div class="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
             <h1 class="text-xl font-bold text-indigo-600"><span id="nome-do-bar">Karaokê Manager</span></h1>
-            <div class="flex items-center space-x-2">
-                <button onclick="switchTab('cliente')" class="px-3 py-1 text-sm font-medium rounded-md hover:bg-gray-100">Pedir Música</button>
-                <button onclick="switchTab('admin')" class="px-3 py-1 text-sm font-medium rounded-md hover:bg-gray-100">Admin/DJ</button>
-                <button onclick="alternarModoEscuro()" id="btn-toggle-tema" class="toggle-tema-btn" title="Alternar modo escuro">
-                    <i class="fas fa-moon" id="icone-tema"></i>
+            <div class="flex items-center space-x-2" role="tablist" aria-label="Navegação principal">
+                <button onclick="switchTab('cliente')" id="tab-cliente" role="tab" aria-selected="true" aria-controls="cliente" class="px-3 py-1 text-sm font-medium rounded-md hover:bg-gray-100">Pedir Música</button>
+                <button onclick="switchTab('admin')" id="tab-admin" role="tab" aria-selected="false" aria-controls="admin" class="px-3 py-1 text-sm font-medium rounded-md hover:bg-gray-100">Admin/DJ</button>
+                <button onclick="alternarModoEscuro()" id="btn-toggle-tema" class="toggle-tema-btn" title="Alternar modo escuro" aria-label="Alternar modo escuro" aria-pressed="false">
+                    <i class="fas fa-moon" id="icone-tema" aria-hidden="true"></i>
                 </button>
             </div>
         </div>
@@ -150,14 +150,14 @@
     <main class="max-w-5xl mx-auto px-4 pb-12">
 
         <!-- INTERFACE DO CLIENTE -->
-        <section id="cliente" class="tab-content active">
+        <section id="cliente" class="tab-content active" role="tabpanel" aria-labelledby="tab-cliente">
             <div class="max-w-md mx-auto space-y-6">
 
                 <!-- SEUS PEDIDOS — só aparece se este dispositivo tiver pedido(s) na fila -->
                 <div id="secao-meus-pedidos" class="hidden bg-white rounded-2xl shadow-xl overflow-hidden border-2 border-indigo-300">
                     <div class="p-4">
                         <h3 class="font-bold text-gray-800 mb-3 flex items-center gap-2">
-                            <i class="fas fa-user-circle text-indigo-500"></i> Seus Pedidos
+                            <i class="fas fa-user-circle text-indigo-500" aria-hidden="true"></i> Seus Pedidos
                         </h3>
                         <ul id="lista-meus-pedidos" class="space-y-2">
                             <!-- Inserido via JS -->
@@ -174,59 +174,63 @@
                     <div class="p-6">
                         <!-- Alerta de Fila Encerrada -->
                         <div id="msg-encerrado" class="hidden mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 font-semibold text-center">
-                            <i class="fas fa-clock mr-2"></i> Fila encerrada para esta noite. Já atingimos o limite de músicas que conseguimos tocar até as 23h! Obrigado.
+                            <i class="fas fa-clock mr-2" aria-hidden="true"></i> Fila encerrada para esta noite. Já atingimos o limite de músicas que conseguimos tocar até as 23h! Obrigado.
                         </div>
 
                         <!-- Info de Tempo -->
                         <div class="mb-4 flex justify-between items-center bg-indigo-50 p-3 rounded-lg text-indigo-800 text-sm font-medium">
-                            <span><i class="fas fa-hourglass-half mr-2"></i>Espera estimada:</span>
+                            <span><i class="fas fa-hourglass-half mr-2" aria-hidden="true"></i>Espera estimada:</span>
                             <span id="cliente-tempo-espera">0 min</span>
                         </div>
 
                         <!-- Toggle de Notificação -->
                         <label class="mb-1 flex items-center justify-between bg-yellow-50 border border-yellow-200 p-3 rounded-lg text-sm cursor-pointer select-none">
-                            <span class="text-gray-700"><i class="fas fa-bell mr-2 text-yellow-600"></i>Avisar quando for minha vez</span>
+                            <span class="text-gray-700"><i class="fas fa-bell mr-2 text-yellow-600" aria-hidden="true"></i>Avisar quando for minha vez</span>
                             <input type="checkbox" id="notif-toggle" class="w-5 h-5 accent-indigo-600" />
                         </label>
                         <p id="aviso-iphone" class="hidden -mt-1 mb-4 text-xs text-gray-400 px-1">
-                            <i class="fas fa-info-circle mr-1"></i>No iPhone, esse aviso funciona melhor com a aba aberta e a tela ligada — a notificação do sistema só chega direitinho se você adicionar este site à tela de início (compartilhar → "Adicionar à Tela de Início").
+                            <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>No iPhone, esse aviso funciona melhor com a aba aberta e a tela ligada — a notificação do sistema só chega direitinho se você adicionar este site à tela de início (compartilhar → "Adicionar à Tela de Início").
                         </p>
                         <p id="notif-status" class="hidden -mt-4 mb-6 text-xs text-gray-500"></p>
 
-                        <form id="form-pedido" class="space-y-4">
+                        <form id="form-pedido" class="space-y-4" novalidate>
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1 flex justify-between items-center">
+                                <label for="input-nome" class="block text-sm font-medium text-gray-700 mb-1 flex justify-between items-center">
                                     <span>Seu Nome / Apelido</span>
                                     <button type="button" id="btn-nao-e-voce" class="text-xs font-normal text-indigo-500 hover:underline hidden">Não é você? Trocar</button>
                                 </label>
-                                <input type="text" id="input-nome" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                                <input type="text" id="input-nome" required maxlength="50" aria-describedby="erro-nome" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                                <p id="erro-nome" class="hidden text-xs text-red-600 mt-1" role="alert"></p>
                             </div>
 
                             <!-- NOVO CAMPO: Número da Mesa -->
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Número da Mesa (opcional)</label>
-                                <input type="text" id="input-mesa" placeholder="Ex: 12" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                                <label for="input-mesa" class="block text-sm font-medium text-gray-700 mb-1">Número da Mesa (opcional)</label>
+                                <input type="text" id="input-mesa" placeholder="Ex: 12" maxlength="20" aria-describedby="erro-mesa" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                                <p id="erro-mesa" class="hidden text-xs text-red-600 mt-1" role="alert"></p>
                             </div>
 
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Nome da Música</label>
-                                <input type="text" id="input-musica" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
-                                <button type="button" id="btn-abrir-youtube" onclick="abrirModalYoutube()" class="mt-2 flex items-center gap-2 text-sm font-semibold text-red-600 border border-red-200 rounded-lg px-3 py-2 hover:bg-red-50 transition-colors">
-                                    <i class="fab fa-youtube text-lg"></i> YouTube
+                                <label for="input-musica" class="block text-sm font-medium text-gray-700 mb-1">Nome da Música</label>
+                                <input type="text" id="input-musica" required maxlength="100" aria-describedby="erro-musica" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                                <p id="erro-musica" class="hidden text-xs text-red-600 mt-1" role="alert"></p>
+                                <button type="button" id="btn-abrir-youtube" onclick="abrirModalYoutube()" aria-label="Buscar o karaokê dessa música no YouTube" class="mt-2 flex items-center gap-2 text-sm font-semibold text-red-600 border border-red-200 rounded-lg px-3 py-2 hover:bg-red-50 transition-colors">
+                                    <i class="fab fa-youtube text-lg" aria-hidden="true"></i> YouTube
                                 </button>
-                                <p class="text-xs text-gray-400 mt-1"><i class="fas fa-lightbulb mr-1"></i>Busque o karaokê da música no YouTube</p>
+                                <p class="text-xs text-gray-400 mt-1"><i class="fas fa-lightbulb mr-1" aria-hidden="true"></i>Busque o karaokê da música no YouTube</p>
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Artista <span id="artista-opcional-tag" class="hidden text-gray-400 font-normal">(opcional — já veio do YouTube)</span></label>
-                                <input type="text" id="input-artista" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                                <label for="input-artista" class="block text-sm font-medium text-gray-700 mb-1">Artista <span id="artista-opcional-tag" class="hidden text-gray-400 font-normal">(opcional — já veio do YouTube)</span></label>
+                                <input type="text" id="input-artista" required maxlength="100" aria-describedby="erro-artista" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                                <p id="erro-artista" class="hidden text-xs text-red-600 mt-1" role="alert"></p>
                             </div>
                             <button type="submit" id="btn-enviar" class="w-full bg-gradient-custom text-white font-bold py-3 rounded-lg shadow-lg hover:opacity-90 transition-all">
                                 ENVIAR PEDIDO
                             </button>
                         </form>
 
-                        <div id="feedback-sucesso" class="hidden mt-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 text-center animate-bounce">
-                            <i class="fas fa-check-circle mr-2"></i> Pedido enviado para a fila!
+                        <div id="feedback-sucesso" class="hidden mt-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 text-center animate-bounce" role="status" aria-live="polite">
+                            <i class="fas fa-check-circle mr-2" aria-hidden="true"></i> Pedido enviado para a fila!
                         </div>
 
                         <div class="mt-6 text-center space-x-4">
@@ -245,7 +249,7 @@
 
                     <div class="p-6">
                         <div id="avaliar-sem-apresentacao" class="hidden p-8 text-center text-gray-400">
-                            <i class="fas fa-microphone-slash text-4xl mb-3 block"></i>
+                            <i class="fas fa-microphone-slash text-4xl mb-3 block" aria-hidden="true"></i>
                             Ninguém está cantando no momento.
                         </div>
 
@@ -257,11 +261,11 @@
                             </div>
 
                             <div class="star-rating my-6" id="avaliar-estrelas">
-                                <i class="fas fa-star" data-nota="1"></i>
-                                <i class="fas fa-star" data-nota="2"></i>
-                                <i class="fas fa-star" data-nota="3"></i>
-                                <i class="fas fa-star" data-nota="4"></i>
-                                <i class="fas fa-star" data-nota="5"></i>
+                                <i class="fas fa-star" data-nota="1" aria-hidden="true"></i>
+                                <i class="fas fa-star" data-nota="2" aria-hidden="true"></i>
+                                <i class="fas fa-star" data-nota="3" aria-hidden="true"></i>
+                                <i class="fas fa-star" data-nota="4" aria-hidden="true"></i>
+                                <i class="fas fa-star" data-nota="5" aria-hidden="true"></i>
                             </div>
 
                             <div class="text-center text-sm text-gray-600" id="avaliar-status"></div>
@@ -294,7 +298,7 @@
                                 <!-- Inserido via JS -->
                             </ul>
                             <div id="proximos-vazio" class="p-12 text-center text-gray-400">
-                                <i class="fas fa-music text-4xl mb-3 block"></i>
+                                <i class="fas fa-music text-4xl mb-3 block" aria-hidden="true"></i>
                                 Nenhuma música na fila no momento.
                             </div>
                         </div>
@@ -322,7 +326,7 @@
         </section>
 
         <!-- INTERFACE DO ADMIN/DJ -->
-        <section id="admin" class="tab-content">
+        <section id="admin" class="tab-content" role="tabpanel" aria-labelledby="tab-admin">
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
                 <!-- Coluna da Esquerda: Status e Controles -->
@@ -340,17 +344,17 @@
                             </div>
                             <div class="pt-4">
                                 <button id="btn-toggle-fila" onclick="toggleFilaManual()" class="w-full py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 border-2 border-red-600 text-red-600 hover:bg-red-50">
-                                    <i class="fas fa-lock"></i> <span>Fechar Fila Manualmente</span>
+                                    <i class="fas fa-lock" aria-hidden="true"></i> <span>Fechar Fila Manualmente</span>
                                 </button>
                             </div>
                             <div>
                                 <button onclick="window.open('display.html?bar=' + encodeURIComponent(BAR_ID), '_blank')" class="w-full py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 bg-gradient-custom text-white hover:opacity-90">
-                                    <i class="fas fa-tv"></i> <span>Abrir Telão</span>
+                                    <i class="fas fa-tv" aria-hidden="true"></i> <span>Abrir Telão</span>
                                 </button>
                             </div>
                             <div>
                                 <button onclick="sairDoAdmin()" class="w-full py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 border border-gray-200 text-gray-500 hover:bg-gray-50">
-                                    <i class="fas fa-sign-out-alt"></i> <span>Sair</span>
+                                    <i class="fas fa-sign-out-alt" aria-hidden="true"></i> <span>Sair</span>
                                 </button>
                             </div>
                         </div>
@@ -370,7 +374,7 @@
 
                     <div id="admin-apresentacao-atual" class="hidden bg-white rounded-2xl shadow-md border-2 border-indigo-300 overflow-hidden">
                         <div class="bg-gradient-custom px-6 py-4 flex justify-between items-center text-white">
-                            <h3 class="font-bold"><i class="fas fa-microphone mr-2"></i>Cantando Agora</h3>
+                            <h3 class="font-bold"><i class="fas fa-microphone mr-2" aria-hidden="true"></i>Cantando Agora</h3>
                         </div>
                         <div class="p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                             <div>
@@ -381,11 +385,11 @@
                                     <span class="text-gray-500 ml-1" id="admin-ap-media-texto">Sem avaliações ainda</span>
                                 </div>
                                 <a id="admin-ap-youtube-link" href="#" target="_blank" rel="noopener" class="hidden mt-2 inline-flex items-center gap-2 text-sm font-semibold text-red-600 border border-red-200 rounded-lg px-3 py-1.5 hover:bg-red-50 transition-colors">
-                                    <i class="fab fa-youtube"></i> Abrir Karaokê no YouTube
+                                    <i class="fab fa-youtube" aria-hidden="true"></i> Abrir Karaokê no YouTube
                                 </a>
                             </div>
                             <button onclick="acaoFinalizarApresentacao()" class="bg-green-600 hover:bg-green-700 text-white font-semibold px-5 py-2 rounded-lg whitespace-nowrap">
-                                <i class="fas fa-flag-checkered mr-2"></i>Finalizar Apresentação
+                                <i class="fas fa-flag-checkered mr-2" aria-hidden="true"></i>Finalizar Apresentação
                             </button>
                         </div>
                     </div>
@@ -411,7 +415,7 @@
                                 </tbody>
                             </table>
                             <div id="fila-vazia" class="p-12 text-center text-gray-400">
-                                <i class="fas fa-music text-4xl mb-3 block"></i>
+                                <i class="fas fa-music text-4xl mb-3 block" aria-hidden="true"></i>
                                 Ninguém na fila no momento.
                             </div>
                         </div>
@@ -461,22 +465,22 @@
         <div class="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-xl p-6 max-h-[85vh] flex flex-col">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
-                    <i class="fab fa-youtube text-red-600"></i> Buscar Karaokê no YouTube
+                    <i class="fab fa-youtube text-red-600" aria-hidden="true"></i> Buscar Karaokê no YouTube
                 </h3>
                 <button type="button" onclick="fecharModalYoutube()" class="text-gray-400 hover:text-gray-600 text-xl">
-                    <i class="fas fa-times"></i>
+                    <i class="fas fa-times" aria-hidden="true"></i>
                 </button>
             </div>
 
             <div class="flex gap-2 mb-3">
                 <input type="text" id="youtube-busca-input" placeholder="Digite o nome da música... (ex: Evidências)" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
                 <button type="button" onclick="buscarNoYoutube()" class="bg-red-100 text-red-600 px-4 rounded-lg hover:bg-red-200 transition-colors">
-                    <i class="fas fa-search"></i>
+                    <i class="fas fa-search" aria-hidden="true"></i>
                 </button>
             </div>
 
             <div class="bg-blue-50 border border-blue-100 text-blue-700 text-xs rounded-lg p-3 mb-4">
-                <i class="fas fa-lightbulb mr-1"></i>
+                <i class="fas fa-lightbulb mr-1" aria-hidden="true"></i>
                 <strong>Dica:</strong> Escreva apenas o nome da música. A busca automática procura por karaokês e playbacks no YouTube.
             </div>
 
@@ -538,6 +542,8 @@
             document.body.classList.toggle('modo-escuro', ativo);
             const icone = document.getElementById('icone-tema');
             if (icone) icone.className = ativo ? 'fas fa-sun' : 'fas fa-moon';
+            const botao = document.getElementById('btn-toggle-tema');
+            if (botao) botao.setAttribute('aria-pressed', ativo ? 'true' : 'false');
         }
 
         function alternarModoEscuro() {
@@ -759,6 +765,85 @@
             return artista && artista.trim() ? `${musica} — ${artista}` : musica;
         }
 
+        // --- VALIDAÇÃO DO FORMULÁRIO ---
+        // Cada validador devolve { valido, mensagem } — a mensagem só é usada quando
+        // valido é false. Os campos "opcionais" (mesa) só falham se preenchidos errado,
+        // nunca por estarem vazios.
+        const VALIDADORES = {
+            nome: (valor) => {
+                const v = (valor || '').trim();
+                if (v.length === 0) return { valido: false, mensagem: 'Digite seu nome ou apelido.' };
+                if (v.length > 50) return { valido: false, mensagem: 'Nome muito longo (máximo 50 caracteres).' };
+                return { valido: true };
+            },
+            mesa: (valor) => {
+                const v = (valor || '').trim();
+                if (v.length === 0) return { valido: true }; // campo opcional
+                if (v.length > 20) return { valido: false, mensagem: 'Número da mesa muito longo.' };
+                if (!/^[a-zA-Z0-9\-\s]+$/.test(v)) return { valido: false, mensagem: 'Use só letras, números e hífen.' };
+                return { valido: true };
+            },
+            musica: (valor) => {
+                const v = (valor || '').trim();
+                if (v.length === 0) return { valido: false, mensagem: 'Digite o nome da música.' };
+                if (v.length > 100) return { valido: false, mensagem: 'Nome da música muito longo (máximo 100 caracteres).' };
+                return { valido: true };
+            },
+            artista: (valor, campoObrigatorio) => {
+                const v = (valor || '').trim();
+                if (campoObrigatorio && v.length === 0) return { valido: false, mensagem: 'Digite o nome do artista (ou busque a música no YouTube).' };
+                if (v.length > 100) return { valido: false, mensagem: 'Nome do artista muito longo (máximo 100 caracteres).' };
+                return { valido: true };
+            }
+        };
+
+        // Mostra/some a mensagem de erro de um campo, e marca aria-invalid pra quem
+        // usa leitor de tela — sem isso, a pessoa só veria a borda vermelha (se tivesse),
+        // sem entender qual é o problema.
+        function aplicarResultadoValidacao(idCampo, idErro, resultado) {
+            const input = document.getElementById(idCampo);
+            const erroEl = document.getElementById(idErro);
+            if (!input || !erroEl) return resultado.valido;
+
+            if (resultado.valido) {
+                input.classList.remove('border-red-500');
+                input.removeAttribute('aria-invalid');
+                erroEl.classList.add('hidden');
+                erroEl.innerText = '';
+            } else {
+                input.classList.add('border-red-500');
+                input.setAttribute('aria-invalid', 'true');
+                erroEl.innerText = resultado.mensagem;
+                erroEl.classList.remove('hidden');
+            }
+            return resultado.valido;
+        }
+
+        function validarCampoNome() {
+            return aplicarResultadoValidacao('input-nome', 'erro-nome', VALIDADORES.nome(document.getElementById('input-nome').value));
+        }
+        function validarCampoMesa() {
+            return aplicarResultadoValidacao('input-mesa', 'erro-mesa', VALIDADORES.mesa(document.getElementById('input-mesa').value));
+        }
+        function validarCampoMusica() {
+            return aplicarResultadoValidacao('input-musica', 'erro-musica', VALIDADORES.musica(document.getElementById('input-musica').value));
+        }
+        function validarCampoArtista() {
+            const obrigatorio = document.getElementById('input-artista').required;
+            return aplicarResultadoValidacao('input-artista', 'erro-artista', VALIDADORES.artista(document.getElementById('input-artista').value, obrigatorio));
+        }
+
+        // Valida tudo de uma vez (chamado no envio do formulário) — devolve true só
+        // se todos os campos estiverem OK. Sempre roda os 4, mesmo que o primeiro já
+        // falhe, pra pessoa ver todos os erros de uma vez em vez de um por um.
+        function validarFormularioPedido() {
+            const nomeOk = validarCampoNome();
+            const mesaOk = validarCampoMesa();
+            const musicaOk = validarCampoMusica();
+            const artistaOk = validarCampoArtista();
+            return nomeOk && mesaOk && musicaOk && artistaOk;
+        }
+
         function obterChaveNome(nomeCompleto, mesa) {
             const primeiroNome = (nomeCompleto || '')
                 .trim()
@@ -910,7 +995,7 @@
             if (meuEmAndamento) {
                 html += `
                     <li class="p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
-                        <i class="fas fa-microphone-alt text-green-600"></i>
+                        <i class="fas fa-microphone-alt text-green-600" aria-hidden="true"></i>
                         <span class="text-sm font-semibold text-green-700">🎤 É a sua vez agora! ${meuEmAndamento.musica}</span>
                     </li>`;
             }
@@ -987,7 +1072,7 @@
         function botaoCancelarHtml(id) {
             return `
                 <button onclick="pedirConfirmacaoCancelamento(${id})" class="text-xs text-red-500 hover:text-red-700 hover:underline whitespace-nowrap">
-                    <i class="fas fa-times mr-1"></i>Cancelar
+                    <i class="fas fa-times mr-1" aria-hidden="true"></i>Cancelar
                 </button>`;
         }
 
@@ -1337,6 +1422,13 @@
             const el = document.getElementById(tabId);
             if (el) el.classList.add('active');
 
+            // Mantém aria-selected sincronizado com a aba ativa — sem isso, quem usa
+            // leitor de tela não sabe qual das duas abas está sendo exibida
+            const tabCliente = document.getElementById('tab-cliente');
+            const tabAdmin = document.getElementById('tab-admin');
+            if (tabCliente) tabCliente.setAttribute('aria-selected', tabId === 'cliente' ? 'true' : 'false');
+            if (tabAdmin) tabAdmin.setAttribute('aria-selected', tabId === 'admin' ? 'true' : 'false');
+
             // O indicador "Conectado ao Firebase" é informação técnica — só interessa
             // pro DJ (pra saber se pode confiar na fila em tempo real), não pro cliente.
             const statusEl = document.getElementById('firebase-status');
@@ -1391,7 +1483,7 @@
 
             resultadosDiv.innerHTML = `
                 <div class="text-center text-gray-400 py-8">
-                    <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                    <i class="fas fa-spinner fa-spin text-2xl mb-2" aria-hidden="true"></i>
                     <div class="text-sm">Buscando...</div>
                 </div>
             `;
@@ -1406,7 +1498,7 @@
                     console.error('Erro YouTube API:', dados.error);
                     resultadosDiv.innerHTML = `
                         <div class="text-center text-red-500 py-8 text-sm">
-                            <i class="fas fa-exclamation-triangle text-xl mb-2 block"></i>
+                            <i class="fas fa-exclamation-triangle text-xl mb-2 block" aria-hidden="true"></i>
                             Não foi possível buscar agora. Tente digitar o nome da música direto no campo.
                         </div>
                     `;
@@ -1447,7 +1539,7 @@
                 console.error('Erro ao buscar no YouTube:', err);
                 resultadosDiv.innerHTML = `
                     <div class="text-center text-red-500 py-8 text-sm">
-                        <i class="fas fa-exclamation-triangle text-xl mb-2 block"></i>
+                        <i class="fas fa-exclamation-triangle text-xl mb-2 block" aria-hidden="true"></i>
                         Erro de conexão. Tente digitar o nome da música direto no campo.
                     </div>
                 `;
@@ -1471,7 +1563,7 @@
             if (!url || typeof url !== 'string') return '';
             const ehUrlDoYoutube = /^https:\/\/(www\.)?(youtube\.com|youtu\.be)\//i.test(url);
             if (!ehUrlDoYoutube) return '';
-            return `<a href="${escaparHtml(url)}" target="_blank" rel="noopener" title="Abrir no YouTube" class="ml-1 text-red-500 hover:text-red-700"><i class="fab fa-youtube"></i></a>`;
+            return `<a href="${escaparHtml(url)}" target="_blank" rel="noopener" title="Abrir no YouTube" class="ml-1 text-red-500 hover:text-red-700"><i class="fab fa-youtube" aria-hidden="true"></i></a>`;
         }
 
         function selecionarVideoYoutube(videoId, titulo) {
@@ -1504,6 +1596,14 @@
             
             if (isFilaBloqueada()) {
                 alert("Fila encerrada!");
+                return;
+            }
+
+            if (!validarFormularioPedido()) {
+                // Leva o foco pro primeiro campo com problema, em vez de só mostrar
+                // as mensagens de erro e deixar a pessoa procurar qual campo está errado
+                const primeiroCampoComErro = document.querySelector('#form-pedido [aria-invalid="true"]');
+                if (primeiroCampoComErro) primeiroCampoComErro.focus();
                 return;
             }
 
@@ -1605,6 +1705,10 @@
             document.getElementById('artista-opcional-tag').classList.add('hidden');
             document.getElementById('input-musica').focus();
             youtubeUrlSelecionada = null;
+            // Os campos foram limpos/reenviados com sucesso — some com qualquer
+            // mensagem de erro que ainda estivesse visível de uma tentativa anterior
+            aplicarResultadoValidacao('input-musica', 'erro-musica', { valido: true });
+            aplicarResultadoValidacao('input-artista', 'erro-artista', { valido: true });
             const feedback = document.getElementById('feedback-sucesso');
             feedback.classList.remove('hidden');
             setTimeout(() => feedback.classList.add('hidden'), 3000);
@@ -1829,10 +1933,10 @@
             
             const btnToggle = document.getElementById('btn-toggle-fila');
             if (filaManualFechada) {
-                btnToggle.innerHTML = '<i class="fas fa-unlock"></i> <span>Abrir Fila</span>';
+                btnToggle.innerHTML = '<i class="fas fa-unlock" aria-hidden="true"></i> <span>Abrir Fila</span>';
                 btnToggle.className = "w-full py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 border-2 border-green-600 text-green-600 hover:bg-green-50";
             } else {
-                btnToggle.innerHTML = '<i class="fas fa-lock"></i> <span>Fechar Fila Manualmente</span>';
+                btnToggle.innerHTML = '<i class="fas fa-lock" aria-hidden="true"></i> <span>Fechar Fila Manualmente</span>';
                 btnToggle.className = "w-full py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 border-2 border-red-600 text-red-600 hover:bg-red-50";
             }
 
@@ -1889,13 +1993,13 @@
                             </td>
                             <td class="px-6 py-4 text-right space-x-2">
                                 <button onclick="acaoProximo(${pedido.id})" class="text-green-600 hover:bg-green-50 p-2 rounded-full" title="Chamar Próximo">
-                                    <i class="fas fa-play"></i>
+                                    <i class="fas fa-play" aria-hidden="true"></i>
                                 </button>
                                 <button onclick="acaoPular(${pedido.id})" class="text-orange-500 hover:bg-orange-50 p-2 rounded-full" title="Pular Vez">
-                                    <i class="fas fa-forward"></i>
+                                    <i class="fas fa-forward" aria-hidden="true"></i>
                                 </button>
                                 <button onclick="acaoRemover(${pedido.id})" class="text-red-600 hover:bg-red-50 p-2 rounded-full" title="Remover">
-                                    <i class="fas fa-trash"></i>
+                                    <i class="fas fa-trash" aria-hidden="true"></i>
                                 </button>
                             </td>
                         `;
@@ -2004,12 +2108,12 @@
 
         // Renderiza estrelas compactas (cheia/meia/vazia) a partir de uma média
         function renderMiniEstrelas(media) {
-            if (media === null || typeof media === 'undefined') return '<i class="far fa-star"></i>'.repeat(5);
+            if (media === null || typeof media === 'undefined') return '<i class="far fa-star" aria-hidden="true"></i>'.repeat(5);
             let html = '';
             for (let i = 1; i <= 5; i++) {
-                if (media >= i - 0.25) html += '<i class="fas fa-star"></i>';
-                else if (media >= i - 0.75) html += '<i class="fas fa-star-half-alt"></i>';
-                else html += '<i class="far fa-star"></i>';
+                if (media >= i - 0.25) html += '<i class="fas fa-star" aria-hidden="true"></i>';
+                else if (media >= i - 0.75) html += '<i class="fas fa-star-half-alt" aria-hidden="true"></i>';
+                else html += '<i class="far fa-star" aria-hidden="true"></i>';
             }
             return html;
         }
@@ -2066,6 +2170,13 @@
             preencherDadosLembrados();
             initFirebase();
             atualizarUI();
+
+            // Valida cada campo quando a pessoa sai dele (blur) — feedback no momento
+            // certo, sem ficar mostrando "campo obrigatório" antes mesmo dela digitar
+            document.getElementById('input-nome').addEventListener('blur', validarCampoNome);
+            document.getElementById('input-mesa').addEventListener('blur', validarCampoMesa);
+            document.getElementById('input-musica').addEventListener('blur', validarCampoMusica);
+            document.getElementById('input-artista').addEventListener('blur', validarCampoArtista);
         });
     </script>
 </body>
