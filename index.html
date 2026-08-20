@@ -131,7 +131,7 @@
             <i class="fas fa-microphone text-2xl" aria-hidden="true"></i>
             <span class="font-bold text-lg" id="minha-vez-texto">Prepare-se! Você é o próximo a cantar.</span>
         </div>
-        <button onclick="document.getElementById('minha-vez-banner').classList.add('hidden')" class="text-white text-xl leading-none px-2" aria-label="Fechar aviso">&times;</button>
+        <button type="button" onclick="document.getElementById('minha-vez-banner').classList.add('hidden')" class="text-white text-xl leading-none px-2" aria-label="Fechar aviso">&times;</button>
     </div>
 
     <!-- Header / Navegação Simples para o Protótipo -->
@@ -139,9 +139,9 @@
         <div class="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
             <h1 class="text-xl font-bold text-indigo-600"><span id="nome-do-bar">Karaokê Manager</span></h1>
             <div class="flex items-center space-x-2" role="tablist" aria-label="Navegação principal">
-                <button onclick="switchTab('cliente')" id="tab-cliente" role="tab" aria-selected="true" aria-controls="cliente" class="px-3 py-1 text-sm font-medium rounded-md hover:bg-gray-100">Pedir Música</button>
-                <button onclick="switchTab('admin')" id="tab-admin" role="tab" aria-selected="false" aria-controls="admin" class="px-3 py-1 text-sm font-medium rounded-md hover:bg-gray-100">Admin/DJ</button>
-                <button onclick="alternarModoEscuro()" id="btn-toggle-tema" class="toggle-tema-btn" title="Alternar modo escuro" aria-label="Alternar modo escuro" aria-pressed="false">
+                <button type="button" onclick="switchTab('cliente')" id="tab-cliente" role="tab" aria-selected="true" aria-controls="cliente" class="px-3 py-1 text-sm font-medium rounded-md hover:bg-gray-100">Pedir Música</button>
+                <button type="button" onclick="switchTab('admin')" id="tab-admin" role="tab" aria-selected="false" aria-controls="admin" class="px-3 py-1 text-sm font-medium rounded-md hover:bg-gray-100">Admin/DJ</button>
+                <button type="button" onclick="alternarModoEscuro()" id="btn-toggle-tema" class="toggle-tema-btn" title="Alternar modo escuro" aria-label="Alternar modo escuro" aria-pressed="false">
                     <i class="fas fa-moon" id="icone-tema" aria-hidden="true"></i>
                 </button>
             </div>
@@ -345,17 +345,17 @@
                                 <span id="admin-tempo-espera" class="font-bold text-orange-600">0 min</span>
                             </div>
                             <div class="pt-4">
-                                <button id="btn-toggle-fila" onclick="toggleFilaManual()" class="w-full py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 border-2 border-red-600 text-red-600 hover:bg-red-50">
+                                <button type="button" id="btn-toggle-fila" onclick="toggleFilaManual()" class="w-full py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 border-2 border-red-600 text-red-600 hover:bg-red-50">
                                     <i class="fas fa-lock" aria-hidden="true"></i> <span>Fechar Fila Manualmente</span>
                                 </button>
                             </div>
                             <div>
-                                <button onclick="window.open('display.html?bar=' + encodeURIComponent(BAR_ID), '_blank')" class="w-full py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 bg-gradient-custom text-white hover:opacity-90">
+                                <button type="button" onclick="window.open('display.html?bar=' + encodeURIComponent(BAR_ID), '_blank')" class="w-full py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 bg-gradient-custom text-white hover:opacity-90">
                                     <i class="fas fa-tv" aria-hidden="true"></i> <span>Abrir Telão</span>
                                 </button>
                             </div>
                             <div>
-                                <button onclick="sairDoAdmin()" class="w-full py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 border border-gray-200 text-gray-500 hover:bg-gray-50">
+                                <button type="button" onclick="sairDoAdmin()" class="w-full py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 border border-gray-200 text-gray-500 hover:bg-gray-50">
                                     <i class="fas fa-sign-out-alt" aria-hidden="true"></i> <span>Sair</span>
                                 </button>
                             </div>
@@ -365,7 +365,7 @@
                     <div class="bg-gray-800 p-6 rounded-2xl shadow-md text-white">
                         <h3 class="text-lg font-bold mb-4 border-b border-gray-700 pb-2">Configurações</h3>
                         <p class="text-xs text-gray-400 mb-4">A fila prioriza automaticamente quem cantou menos vezes. Em caso de empate, vale a ordem de chegada.</p>
-                        <button onclick="resetarNoite()" class="w-full bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg text-sm font-medium transition-colors">
+                        <button type="button" onclick="resetarNoite()" class="w-full bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg text-sm font-medium transition-colors">
                             LIMPAR TODOS OS DADOS DA NOITE
                         </button>
                     </div>
@@ -390,7 +390,7 @@
                                     <i class="fab fa-youtube" aria-hidden="true"></i> Abrir Karaokê no YouTube
                                 </a>
                             </div>
-                            <button onclick="acaoFinalizarApresentacao()" class="bg-green-600 hover:bg-green-700 text-white font-semibold px-5 py-2 rounded-lg whitespace-nowrap">
+                            <button type="button" onclick="acaoFinalizarApresentacao()" class="bg-green-600 hover:bg-green-700 text-white font-semibold px-5 py-2 rounded-lg whitespace-nowrap">
                                 <i class="fas fa-flag-checkered mr-2" aria-hidden="true"></i>Finalizar Apresentação
                             </button>
                         </div>
@@ -513,7 +513,7 @@
         <div class="glass max-w-md w-full rounded-2xl shadow-xl p-6">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-lg font-bold text-gray-800">Acesso Admin/DJ</h3>
-                <button id="admin-auth-cancel" class="text-gray-500 hover:text-gray-700">Cancelar</button>
+                <button type="button" id="admin-auth-cancel" class="text-gray-500 hover:text-gray-700">Cancelar</button>
             </div>
 
             <form id="admin-auth-form" class="space-y-4">
@@ -537,14 +537,15 @@
                 <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
                     <i class="fab fa-youtube text-red-600" aria-hidden="true"></i> Buscar Karaokê no YouTube
                 </h3>
-                <button type="button" onclick="fecharModalYoutube()" class="text-gray-400 hover:text-gray-600 text-xl">
+                <button type="button" onclick="fecharModalYoutube()" class="text-gray-400 hover:text-gray-600 text-xl" aria-label="Fechar busca do YouTube">
                     <i class="fas fa-times" aria-hidden="true"></i>
                 </button>
             </div>
 
             <div class="flex gap-2 mb-3">
+                <label for="youtube-busca-input" class="sr-only">Nome da música</label>
                 <input type="text" id="youtube-busca-input" placeholder="Digite o nome da música... (ex: Evidências)" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
-                <button type="button" onclick="buscarNoYoutube()" class="bg-red-100 text-red-600 px-4 rounded-lg hover:bg-red-200 transition-colors">
+                <button type="button" onclick="buscarNoYoutube()" class="bg-red-100 text-red-600 px-4 rounded-lg hover:bg-red-200 transition-colors" aria-label="Buscar">
                     <i class="fas fa-search" aria-hidden="true"></i>
                 </button>
             </div>
@@ -1149,10 +1150,10 @@
                     : '';
                 html += verTudoHistoricoCliente
                     ? `<li class="p-3 text-center">
-                           <button onclick="toggleVerTudoHistorico()" class="text-sm text-indigo-600 hover:underline">Ver menos ↑</button>
+                           <button type="button" onclick="toggleVerTudoHistorico()" class="text-sm text-indigo-600 hover:underline">Ver menos ↑</button>
                        </li>`
                     : `<li class="p-3 text-center">
-                           <button onclick="toggleVerTudoHistorico()" class="text-sm text-indigo-600 hover:underline">Ver mais${textoContagem} ↓</button>
+                           <button type="button" onclick="toggleVerTudoHistorico()" class="text-sm text-indigo-600 hover:underline">Ver mais${textoContagem} ↓</button>
                        </li>`;
             }
             listaHistCliente.innerHTML = html;
@@ -1299,7 +1300,7 @@
 
         function botaoCancelarHtml(id) {
             return `
-                <button onclick="pedirConfirmacaoCancelamento(${id})" class="text-xs text-red-500 hover:text-red-700 hover:underline whitespace-nowrap">
+                <button type="button" onclick="pedirConfirmacaoCancelamento(${id})" class="text-xs text-red-500 hover:text-red-700 hover:underline whitespace-nowrap">
                     <i class="fas fa-times mr-1" aria-hidden="true"></i>Cancelar
                 </button>`;
         }
@@ -1315,10 +1316,10 @@
                 <div class="flex flex-col items-end gap-1">
                     <span class="text-xs text-gray-500">Remover esse pedido da fila?</span>
                     <div class="flex gap-3">
-                        <button onclick="cancelarMeuPedido(${id})" class="text-xs font-bold text-red-600 hover:underline whitespace-nowrap">
+                        <button type="button" onclick="cancelarMeuPedido(${id})" class="text-xs font-bold text-red-600 hover:underline whitespace-nowrap">
                             Sim, cancelar
                         </button>
-                        <button onclick="atualizarMeusPedidos()" class="text-xs font-semibold text-gray-600 hover:underline whitespace-nowrap">
+                        <button type="button" onclick="atualizarMeusPedidos()" class="text-xs font-semibold text-gray-600 hover:underline whitespace-nowrap">
                             Manter pedido
                         </button>
                     </div>
@@ -2220,13 +2221,13 @@
                                 <span class="px-2 py-1 bg-gray-100 rounded text-xs font-bold">${pedido.vezesCantadas}x</span>
                             </td>
                             <td class="px-6 py-4 text-right space-x-2">
-                                <button onclick="acaoProximo(${pedido.id})" class="text-green-600 hover:bg-green-50 p-2 rounded-full" title="Chamar Próximo">
+                                <button type="button" onclick="acaoProximo(${pedido.id})" class="text-green-600 hover:bg-green-50 p-2 rounded-full" title="Chamar Próximo">
                                     <i class="fas fa-play" aria-hidden="true"></i>
                                 </button>
-                                <button onclick="acaoPular(${pedido.id})" class="text-orange-500 hover:bg-orange-50 p-2 rounded-full" title="Pular Vez">
+                                <button type="button" onclick="acaoPular(${pedido.id})" class="text-orange-500 hover:bg-orange-50 p-2 rounded-full" title="Pular Vez">
                                     <i class="fas fa-forward" aria-hidden="true"></i>
                                 </button>
-                                <button onclick="acaoRemover(${pedido.id})" class="text-red-600 hover:bg-red-50 p-2 rounded-full" title="Remover">
+                                <button type="button" onclick="acaoRemover(${pedido.id})" class="text-red-600 hover:bg-red-50 p-2 rounded-full" title="Remover">
                                     <i class="fas fa-trash" aria-hidden="true"></i>
                                 </button>
                             </td>
