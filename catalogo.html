@@ -22,10 +22,13 @@
         }
 
         /* Cabeçalho de cada letra também fica "grudado" enquanto rola, como nos
-           contatos do celular */
+           contatos do celular. O "top" é calculado em JS (ver ajustarAlturaIndice)
+           porque o índice A-Z quebra em mais de uma linha em telas estreitas — um
+           valor fixo aqui fazia o nome da música ficar embaixo do índice quando ele
+           tinha 2+ linhas. */
         .cabecalho-letra {
             position: sticky;
-            top: 52px;
+            top: var(--altura-indice-letras, 52px);
             z-index: 5;
         }
 
@@ -191,6 +194,18 @@
             return grupos;
         }
 
+        // Mede a altura real do índice A-Z (que pode quebrar em 2+ linhas em telas
+        // estreitas) e guarda numa variável CSS, usada pelo "top" do .cabecalho-letra
+        // — sem isso, o cabeçalho de letra ficava sobrepondo o nome da música quando
+        // o índice tinha mais de uma linha.
+        function ajustarAlturaIndice() {
+            const indice = document.getElementById('indice-letras');
+            if (!indice) return;
+            const margemInferior = parseFloat(getComputedStyle(indice).marginBottom) || 0;
+            const altura = indice.offsetHeight + margemInferior;
+            document.documentElement.style.setProperty('--altura-indice-letras', `${altura}px`);
+        }
+
         function renderizarCatalogo() {
             const grupos = agruparPorLetra();
             const letrasComMusica = ALFABETO.filter(l => grupos[l]);
@@ -244,6 +259,8 @@
             }
             document.getElementById('link-voltar').href = 'index.html?bar=' + encodeURIComponent(BAR_ID);
             renderizarCatalogo();
+            ajustarAlturaIndice();
+            window.addEventListener('resize', ajustarAlturaIndice);
         });
     </script>
 </body>
