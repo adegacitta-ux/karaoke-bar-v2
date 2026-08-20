@@ -1852,13 +1852,23 @@
             function montarNovoPedido() {
                 const key = obterChaveNome(nome, mesa);
                 const prioridadeCalculada = contagemCantores[key] || 0;
+                const agora = new Date().getTime();
                 return {
                     id: Date.now() + Math.floor(Math.random() * 1000), // evita colisão se dois pedidos vierem no mesmo milissegundo
                     nome: nome,
                     mesa: mesa || null,
                     musica: musica,
                     artista: artista,
-                    timestamp: new Date().getTime(),
+                    // "timestamp" é a hora em que a música foi PEDIDA — nunca muda depois
+                    // disso, é o que o relatório de horário de pico usa. Já
+                    // "timestampFila" é o "relógio de espera" da fila (usado pra
+                    // calcular prioridade) e É alterado quando o DJ usa "Pular Vez"
+                    // (ver acaoPular) — se os dois fossem o mesmo campo, pular a vez de
+                    // alguém reescrevia a hora do pedido dela com a hora atual,
+                    // fazendo o relatório mostrar a hora que ela cantou em vez da hora
+                    // que ela pediu.
+                    timestamp: agora,
+                    timestampFila: agora,
                     vezesCantadas: prioridadeCalculada,
                     youtubeUrl: youtubeUrlDoPedido
                 };
@@ -1974,20 +1984,24 @@
         // quantas vezes a pessoa já cantou, e vai descontando conforme o tempo de espera
         // desse pedido específico passa. Quanto MENOR o número, mais cedo ela canta.
         function calcularPrioridadeEfetiva(pedido) {
-            const minutosEsperando = (Date.now() - pedido.timestamp) / 60000;
+            // "timestampFila" é o relógio de espera da fila (reiniciado pelo "Pular
+            // Vez" — ver acaoPular); o "|| pedido.timestamp" é só compatibilidade com
+            // pedidos que já estavam na fila antes desse campo existir.
+            const referencia = pedido.timestampFila || pedido.timestamp;
+            const minutosEsperando = (Date.now() - referencia) / 60000;
             return pedido.vezesCantadas - (minutosEsperando / MINUTOS_PARA_PERDOAR_UMA_VEZ_CANTADA);
         }
 
         function ordenarFila() {
             // Regra: menos vezes cantadas primeiro — mas o "peso" de já ter cantado
             // vai diminuindo com o tempo de espera (ver calcularPrioridadeEfetiva).
-            // Em empate, ordem de chegada (timestamp).
+            // Em empate, ordem de chegada na fila (timestampFila).
             fila.sort((a, b) => {
                 const diferenca = calcularPrioridadeEfetiva(a) - calcularPrioridadeEfetiva(b);
                 if (Math.abs(diferenca) > 0.0001) {
                     return diferenca;
                 }
-                return a.timestamp - b.timestamp;
+                return (a.timestampFila || a.timestamp) - (b.timestampFila || b.timestamp);
             });
         }
 
@@ -2078,7 +2092,9 @@
         function acaoPular(id) {
             const index = fila.findIndex(p => p.id === id);
             if (index !== -1) {
-                fila[index].timestamp = Date.now();
+                // Só reinicia o relógio de espera da fila — "timestamp" (hora do
+                // pedido, usada no relatório de horário de pico) fica intocado.
+                fila[index].timestampFila = Date.now();
                 ordenarFila();
                 salvarNoFirebase();
                 atualizarUI();
