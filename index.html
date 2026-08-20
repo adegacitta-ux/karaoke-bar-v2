@@ -2016,12 +2016,26 @@
             if (index !== -1) {
                 const pedido = fila.splice(index, 1)[0];
 
-                // Inicia a apresentação (ainda não conta como cantada nem entra no histórico)
+                // Inicia a apresentação (ainda não entra no histórico, isso só
+                // acontece ao finalizar — ver acaoFinalizarApresentacao)
                 apresentacaoAtual = {
                     ...pedido,
                     avaliacoes: {},
                     iniciadoEm: new Date().toISOString()
                 };
+
+                // Já conta essa apresentação como "cantada" pra prioridade da fila
+                // assim que ela COMEÇA, não só quando termina — sem isso, se essa
+                // mesma pessoa tivesse outras músicas pedidas, elas continuavam com
+                // prioridade desatualizada (mais alta do que deveriam) até o DJ
+                // clicar em "Finalizar Apresentação", que podia demorar.
+                const key = obterChaveNome(pedido.nome, pedido.mesa);
+                contagemCantores[key] = (contagemCantores[key] || 0) + 1;
+                fila.forEach(p => {
+                    if (obterChaveNome(p.nome, p.mesa) === key) {
+                        p.vezesCantadas = contagemCantores[key];
+                    }
+                });
 
                 ordenarFila();
                 salvarNoFirebase();
@@ -2029,15 +2043,13 @@
             }
         }
 
-        // Encerra a apresentação atual: registra no histórico com a média de avaliações
-        // e incrementa o contador de vezes cantadas do cantor.
+        // Encerra a apresentação atual: registra no histórico com a média de
+        // avaliações. O contador de vezes cantadas já foi incrementado quando a
+        // apresentação começou (ver acaoProximo).
         function acaoFinalizarApresentacao() {
             if (!apresentacaoAtual) return;
 
             const pedido = apresentacaoAtual;
-            const key = obterChaveNome(pedido.nome, pedido.mesa);
-            contagemCantores[key] = (contagemCantores[key] || 0) + 1;
-
             const { media, votos } = mediaEVotos(pedido.avaliacoes);
 
             historico.unshift({
@@ -2045,13 +2057,6 @@
                 horario: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
                 mediaAvaliacao: media,
                 totalVotos: votos
-            });
-
-            // Atualiza o contador de quem ainda está na fila
-            fila.forEach(p => {
-                if (obterChaveNome(p.nome, p.mesa) === key) {
-                    p.vezesCantadas = contagemCantores[key];
-                }
             });
 
             apresentacaoAtual = null;
