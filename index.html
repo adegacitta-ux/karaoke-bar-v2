@@ -1801,4 +1801,612 @@
             // não faz sentido obrigar a pessoa a digitar o artista de novo.
             const inputArtista = document.getElementById('input-artista');
             inputArtista.required = false;
-            document.getElementById('artista-opcional-tag'
+            document.getElementById('artista-opcional-tag').classList.remove('hidden');
+
+            fecharModalYoutube();
+        }
+
+        // Se a pessoa mudar o nome da música manualmente depois de ter escolhido um vídeo,
+        // desfazemos a associação (senão o pedido levaria o link errado) e o artista volta a
+        // ser obrigatório, já que não veio mais automaticamente do YouTube.
+        // Obs: setar .value por JS (como acima) não dispara este evento — só digitação real do usuário.
+        document.getElementById('input-musica').addEventListener('input', () => {
+            youtubeUrlSelecionada = null;
+            document.getElementById('input-artista').required = true;
+            document.getElementById('artista-opcional-tag').classList.add('hidden');
+        });
+
+        // --- LÓGICA PRINCIPAL ---
+
+        function adicionarPedido(e) {
+            e.preventDefault();
+            
+            if (isFilaBloqueada()) {
+                alert("Fila encerrada!");
+                return;
+            }
+
+            if (!validarFormularioPedido()) {
+                // Leva o foco pro primeiro campo com problema, em vez de só mostrar
+                // as mensagens de erro e deixar a pessoa procurar qual campo está errado
+                const primeiroCampoComErro = document.querySelector('#form-pedido [aria-invalid="true"]');
+                if (primeiroCampoComErro) primeiroCampoComErro.focus();
+                return;
+            }
+
+            const nome = document.getElementById('input-nome').value.trim();
+            const mesa = document.getElementById('input-mesa').value.trim();
+            const musica = document.getElementById('input-musica').value.trim();
+            const artista = document.getElementById('input-artista').value.trim();
+            const youtubeUrlDoPedido = youtubeUrlSelecionada || null;
+
+            const btnEnviar = document.getElementById('btn-enviar');
+            if (btnEnviar) { btnEnviar.disabled = true; }
+
+            // Monta o pedido dentro da transação (não fora), porque precisa saber a
+            // prioridade calculada em cima do estado MAIS ATUAL da fila no servidor —
+            // não da cópia que este celular tem localmente, que pode estar um pouco
+            // desatualizada se outra pessoa mandou pedido ao mesmo tempo.
+            function montarNovoPedido() {
+                const key = obterChaveNome(nome, mesa);
+                const prioridadeCalculada = contagemCantores[key] || 0;
+                return {
+                    id: Date.now() + Math.floor(Math.random() * 1000), // evita colisão se dois pedidos vierem no mesmo milissegundo
+                    nome: nome,
+                    mesa: mesa || null,
+                    musica: musica,
+                    artista: artista,
+                    timestamp: new Date().getTime(),
+                    vezesCantadas: prioridadeCalculada,
+                    youtubeUrl: youtubeUrlDoPedido
+                };
+            }
+
+            if (useFirebase && db) {
+                // TRANSAÇÃO: o Firebase entrega o valor mais recente do servidor pra essa
+                // função, a gente devolve a fila já com o pedido novo dentro, e se OUTRO
+                // pedido tiver sido salvo bem nesse meio-tempo, o Firebase roda a função nA
+                // NOVO com o dado mais fresco de novo — automaticamente, sem perder nada.
+                // Isso é o que evita a corrida de gravação (dois pedidos simultâneos
+                // apagando um ao outro), que estava fazendo nomes sumirem/reaparecerem.
+                let ultimoPedidoCriado = null;
+                db.ref(caminhoBar('fila')).transaction((filaAtualDoServidor) => {
+                    const listaAtual = filaAtualDoServidor || [];
+                    ultimoPedidoCriado = montarNovoPedido();
+                    return [...listaAtual, ultimoPedidoCriado];
+                }, (error, comprometido, snapshot) => {
+                    if (error) {
+                        console.error('❌ Erro na transação ao adicionar pedido:', error);
+                        alert('Não deu pra enviar seu pedido agora. Tente de novo em alguns segundos.');
+                        if (btnEnviar) { btnEnviar.disabled = false; }
+                        return;
+                    }
+                    if (!comprometido) {
+                        // Não deveria acontecer (a função sempre retorna um valor), mas por
+                        // segurança avisa em vez de deixar o botão travado silenciosamente
+                        if (btnEnviar) { btnEnviar.disabled = false; }
+                        return;
+                    }
+
+                    fila = snapshot.val() || [];
+                    ordenarFila();
+
+                    // Sempre associa o pedido a este dispositivo — é o que permite mostrar
+                    // "sua posição na fila" e o botão de cancelar, independente de a pessoa
+                    // ter ativado o aviso sonoro/notificação ou não.
+                    if (ultimoPedidoCriado) {
+                        registrarMeuPedido(ultimoPedidoCriado.id);
+                    }
+
+                    atualizarUI();
+                    finalizarEnvioPedido(nome, mesa, btnEnviar);
+                });
+            } else {
+                // Sem Firebase (modo offline/local) não existe risco de dois dispositivos
+                // gravando ao mesmo tempo — pode adicionar direto.
+                const novoPedido = montarNovoPedido();
+                fila.push(novoPedido);
+                ordenarFila();
+
+                registrarMeuPedido(novoPedido.id);
+
+                salvarNoLocalStorage();
+                atualizarUI();
+                finalizarEnvioPedido(nome, mesa, btnEnviar);
+            }
+        }
+
+        // Parte final do envio do pedido — comum aos dois caminhos (com ou sem Firebase)
+        function finalizarEnvioPedido(nome, mesa, btnEnviar) {
+            if (btnEnviar) { btnEnviar.disabled = false; }
+
+            // Lembra o nome e a mesa neste navegador, para não precisar digitar de novo da próxima vez
+            localStorage.setItem(chaveLocal('cliente_nome'), nome);
+            localStorage.setItem(chaveLocal('cliente_mesa'), mesa || '');
+            document.getElementById('btn-nao-e-voce').classList.remove('hidden');
+
+            // Feedback visual — limpa só música/artista; nome e mesa continuam preenchidos
+            document.getElementById('input-musica').value = '';
+            document.getElementById('input-artista').value = '';
+            document.getElementById('input-artista').required = true;
+            document.getElementById('artista-opcional-tag').classList.add('hidden');
+            document.getElementById('input-musica').focus();
+            youtubeUrlSelecionada = null;
+            // Os campos foram limpos/reenviados com sucesso — some com qualquer
+            // mensagem de erro que ainda estivesse visível de uma tentativa anterior
+            aplicarResultadoValidacao('input-musica', 'erro-musica', { valido: true });
+            aplicarResultadoValidacao('input-artista', 'erro-artista', { valido: true });
+            const feedback = document.getElementById('feedback-sucesso');
+            feedback.classList.remove('hidden');
+            setTimeout(() => feedback.classList.add('hidden'), 3000);
+        }
+
+        // Preenche nome/mesa automaticamente se o navegador já tiver essa informação salva
+        function preencherDadosLembrados() {
+            const nomeSalvo = localStorage.getItem(chaveLocal('cliente_nome'));
+            const mesaSalva = localStorage.getItem(chaveLocal('cliente_mesa'));
+            if (nomeSalvo) {
+                document.getElementById('input-nome').value = nomeSalvo;
+                document.getElementById('btn-nao-e-voce').classList.remove('hidden');
+            }
+            if (mesaSalva) document.getElementById('input-mesa').value = mesaSalva;
+        }
+
+        // Limpa o nome/mesa lembrados neste navegador (ex: outra pessoa vai pedir no mesmo celular)
+        function esquecerDadosLembrados() {
+            localStorage.removeItem(chaveLocal('cliente_nome'));
+            localStorage.removeItem(chaveLocal('cliente_mesa'));
+            document.getElementById('input-nome').value = '';
+            document.getElementById('input-mesa').value = '';
+            document.getElementById('btn-nao-e-voce').classList.add('hidden');
+            document.getElementById('input-nome').focus();
+        }
+
+        // A cada X minutos esperando, "perdoa" uma vez cantada anteriormente na hora de
+        // ordenar a fila — assim quem já cantou não fica preso atrás de gente nova pra
+        // sempre; com tempo suficiente de espera, ela volta a furar a frente. Ajuste esse
+        // número se quiser que a fila "perdoe" mais rápido ou mais devagar.
+        const MINUTOS_PARA_PERDOAR_UMA_VEZ_CANTADA = 25;
+
+        // Calcula a prioridade "de verdade" de um pedido NESTE momento: começa igual a
+        // quantas vezes a pessoa já cantou, e vai descontando conforme o tempo de espera
+        // desse pedido específico passa. Quanto MENOR o número, mais cedo ela canta.
+        function calcularPrioridadeEfetiva(pedido) {
+            const minutosEsperando = (Date.now() - pedido.timestamp) / 60000;
+            return pedido.vezesCantadas - (minutosEsperando / MINUTOS_PARA_PERDOAR_UMA_VEZ_CANTADA);
+        }
+
+        function ordenarFila() {
+            // Regra: menos vezes cantadas primeiro — mas o "peso" de já ter cantado
+            // vai diminuindo com o tempo de espera (ver calcularPrioridadeEfetiva).
+            // Em empate, ordem de chegada (timestamp).
+            fila.sort((a, b) => {
+                const diferenca = calcularPrioridadeEfetiva(a) - calcularPrioridadeEfetiva(b);
+                if (Math.abs(diferenca) > 0.0001) {
+                    return diferenca;
+                }
+                return a.timestamp - b.timestamp;
+            });
+        }
+
+        // Ações do DJ
+        function acaoProximo(id) {
+            if (apresentacaoAtual) {
+                alert('Já existe uma apresentação em andamento. Finalize-a antes de chamar o próximo.');
+                return;
+            }
+
+            const index = fila.findIndex(p => p.id === id);
+            if (index !== -1) {
+                const pedido = fila.splice(index, 1)[0];
+
+                // Inicia a apresentação (ainda não conta como cantada nem entra no histórico)
+                apresentacaoAtual = {
+                    ...pedido,
+                    avaliacoes: {},
+                    iniciadoEm: new Date().toISOString()
+                };
+
+                ordenarFila();
+                salvarNoFirebase();
+                atualizarUI();
+            }
+        }
+
+        // Encerra a apresentação atual: registra no histórico com a média de avaliações
+        // e incrementa o contador de vezes cantadas do cantor.
+        function acaoFinalizarApresentacao() {
+            if (!apresentacaoAtual) return;
+
+            const pedido = apresentacaoAtual;
+            const key = obterChaveNome(pedido.nome, pedido.mesa);
+            contagemCantores[key] = (contagemCantores[key] || 0) + 1;
+
+            const { media, votos } = mediaEVotos(pedido.avaliacoes);
+
+            historico.unshift({
+                ...pedido,
+                horario: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                mediaAvaliacao: media,
+                totalVotos: votos
+            });
+
+            // Atualiza o contador de quem ainda está na fila
+            fila.forEach(p => {
+                if (obterChaveNome(p.nome, p.mesa) === key) {
+                    p.vezesCantadas = contagemCantores[key];
+                }
+            });
+
+            apresentacaoAtual = null;
+
+            ordenarFila();
+            salvarNoFirebase();
+            atualizarUI();
+        }
+
+        // Registra (ou atualiza) o voto do dispositivo atual para a apresentação em andamento
+        function avaliarApresentacao(nota) {
+            if (!apresentacaoAtual) return;
+            nota = Math.max(1, Math.min(5, Number(nota)));
+
+            if (!apresentacaoAtual.avaliacoes) apresentacaoAtual.avaliacoes = {};
+            apresentacaoAtual.avaliacoes[getVotanteId()] = nota;
+
+            // Grava só o voto específico (não o objeto "karaoke" inteiro de novo).
+            // Isso evita que cada voto reenvie fila + histórico completos pra todo mundo,
+            // o que estava deixando a tela do DJ "travando/recarregando" a cada voto.
+            if (useFirebase && db && apresentacaoAtual.id) {
+                db.ref(caminhoBar(`apresentacaoAtual/avaliacoes/${getVotanteId()}`)).set(nota, (error) => {
+                    if (error) console.error('❌ Erro ao salvar voto:', error);
+                });
+            } else {
+                salvarNoLocalStorage();
+            }
+
+            atualizarUI();
+        }
+
+        function acaoRemover(id) {
+            fila = fila.filter(p => p.id !== id);
+            salvarNoFirebase();
+            atualizarUI();
+        }
+
+        function acaoPular(id) {
+            const index = fila.findIndex(p => p.id === id);
+            if (index !== -1) {
+                fila[index].timestamp = Date.now();
+                ordenarFila();
+                salvarNoFirebase();
+                atualizarUI();
+            }
+        }
+
+        function toggleFilaManual() {
+            filaManualFechada = !filaManualFechada;
+            salvarNoFirebase();
+            atualizarUI();
+        }
+
+        function resetarNoite() {
+            if(confirm("Tem certeza que deseja apagar todos os dados da noite?")) {
+                fila = [];
+                historico = [];
+                contagemCantores = {};
+                filaManualFechada = false;
+                apresentacaoAtual = null;
+                // Depois do reset o histórico está vazio "de verdade" — marca como já
+                // carregado pra não deixar o listener limitado (últimas 12) tentar
+                // repopular com dado antigo se ele ainda não tiver recebido a mudança.
+                historicoCompletoCarregado = true;
+                salvarNoFirebase();
+                atualizarUI();
+            }
+        }
+
+        // --- CÁLCULOS DE TEMPO E BLOQUEIO ---
+
+        function calcularTempoEstimado() {
+            return fila.length * TEMPO_MEDIO_MUSICA;
+        }
+
+        function isFilaBloqueada() {
+            if (filaManualFechada) return true;
+
+            const agora = new Date();
+            const minutosEstimados = calcularTempoEstimado();
+            const previsaoTermino = new Date(agora.getTime() + minutosEstimados * 60000);
+            
+            const [horaLimite, minLimite] = HORARIO_LIMITE.split(':').map(Number);
+            const dataLimite = new Date();
+            dataLimite.setHours(horaLimite, minLimite, 0, 0);
+
+            return previsaoTermino >= dataLimite;
+        }
+
+        // --- ATUALIZAÇÃO DA INTERFACE ---
+
+        function atualizarUI() {
+            // Reordena a cada atualização de tela — é o que faz quem está esperando
+            // subir na fila sozinho com o tempo, mesmo sem nenhuma ação nova acontecer
+            // (novo pedido, voto, etc). Só reordena a lista local pra exibição — não
+            // salva essa reordenação no Firebase, todo mundo calcula a mesma ordem
+            // sozinho a partir dos mesmos dados (vezesCantadas + horário do pedido).
+            ordenarFila();
+
+            const tempoEstimado = calcularTempoEstimado();
+            const bloqueada = isFilaBloqueada();
+
+            verificarMinhaVez();
+            atualizarMeusPedidos();
+
+            // UI Cliente
+            document.getElementById('cliente-tempo-espera').innerText = `${tempoEstimado} min`;
+            const form = document.getElementById('form-pedido');
+            const msgEncerrado = document.getElementById('msg-encerrado');
+            
+            if (bloqueada) {
+                form.classList.add('opacity-20', 'pointer-events-none');
+                msgEncerrado.classList.remove('hidden');
+            } else {
+                form.classList.remove('opacity-20', 'pointer-events-none');
+                msgEncerrado.classList.add('hidden');
+            }
+
+            // UI Admin
+            document.getElementById('admin-total-fila').innerText = fila.length;
+            document.getElementById('admin-tempo-espera').innerText = `${tempoEstimado} min`;
+            
+            const btnToggle = document.getElementById('btn-toggle-fila');
+            if (filaManualFechada) {
+                btnToggle.innerHTML = '<i class="fas fa-unlock" aria-hidden="true"></i> <span>Abrir Fila</span>';
+                btnToggle.className = "w-full py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 border-2 border-green-600 text-green-600 hover:bg-green-50";
+            } else {
+                btnToggle.innerHTML = '<i class="fas fa-lock" aria-hidden="true"></i> <span>Fechar Fila Manualmente</span>';
+                btnToggle.className = "w-full py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 border-2 border-red-600 text-red-600 hover:bg-red-50";
+            }
+
+            // Card "Cantando Agora" (Admin)
+            const cardAp = document.getElementById('admin-apresentacao-atual');
+            if (apresentacaoAtual) {
+                cardAp.classList.remove('hidden');
+                document.getElementById('admin-ap-nome').innerText = apresentacaoAtual.nome + (apresentacaoAtual.mesa ? ` (Mesa ${apresentacaoAtual.mesa})` : '');
+                document.getElementById('admin-ap-musica').innerText = formatarMusicaArtista(apresentacaoAtual.musica, apresentacaoAtual.artista);
+                const { media, votos } = mediaEVotos(apresentacaoAtual.avaliacoes);
+                document.getElementById('admin-ap-estrelas').innerHTML = renderMiniEstrelas(media);
+                document.getElementById('admin-ap-media-texto').innerText = media !== null
+                    ? `${media.toFixed(1)} (${votos} ${votos === 1 ? 'voto' : 'votos'})`
+                    : 'Sem avaliações ainda';
+
+                const linkYt = document.getElementById('admin-ap-youtube-link');
+                if (apresentacaoAtual.youtubeUrl) {
+                    linkYt.href = apresentacaoAtual.youtubeUrl;
+                    linkYt.classList.remove('hidden');
+                } else {
+                    linkYt.classList.add('hidden');
+                }
+            } else {
+                cardAp.classList.add('hidden');
+            }
+
+            // Tabela da Fila — só reconstrói o HTML se a fila realmente mudou.
+            // Isso evita "piscar"/travar a tela do DJ toda vez que alguém vota
+            // (um voto muda só a avaliação da apresentação atual, não a fila).
+            const filaHashAtual = stringifyOrdenado(fila);
+            if (filaHashAtual !== _ultimaFilaHash) {
+                _ultimaFilaHash = filaHashAtual;
+
+                const tabela = document.getElementById('tabela-fila');
+                const filaVazia = document.getElementById('fila-vazia');
+                tabela.innerHTML = '';
+                
+                if (fila.length === 0) {
+                    filaVazia.classList.remove('hidden');
+                } else {
+                    filaVazia.classList.add('hidden');
+                    fila.forEach((pedido, index) => {
+                        const tr = document.createElement('tr');
+                        tr.className = "hover:bg-gray-50 transition-colors";
+                        tr.innerHTML = `
+                            <td class="px-6 py-4 font-bold text-gray-400">${index + 1}</td>
+                            <td class="px-6 py-4 font-semibold text-gray-800">
+                                ${escaparHtml(pedido.nome)}
+                                ${pedido.mesa ? `<div class="text-xs text-gray-400 mt-1">Mesa: ${escaparHtml(pedido.mesa)}</div>` : ''}
+                            </td>
+                            <td class="px-6 py-4 text-gray-600">${escaparHtml(pedido.musica)} ${pedido.artista ? `<br> <span class="text-xs text-gray-400">${escaparHtml(pedido.artista)}</span>` : ''} ${linkYoutubeSeguro(pedido.youtubeUrl)}</td>
+                            <td class="px-6 py-4">
+                                <span class="px-2 py-1 bg-gray-100 rounded text-xs font-bold">${pedido.vezesCantadas}x</span>
+                            </td>
+                            <td class="px-6 py-4 text-right space-x-2">
+                                <button onclick="acaoProximo(${pedido.id})" class="text-green-600 hover:bg-green-50 p-2 rounded-full" title="Chamar Próximo">
+                                    <i class="fas fa-play" aria-hidden="true"></i>
+                                </button>
+                                <button onclick="acaoPular(${pedido.id})" class="text-orange-500 hover:bg-orange-50 p-2 rounded-full" title="Pular Vez">
+                                    <i class="fas fa-forward" aria-hidden="true"></i>
+                                </button>
+                                <button onclick="acaoRemover(${pedido.id})" class="text-red-600 hover:bg-red-50 p-2 rounded-full" title="Remover">
+                                    <i class="fas fa-trash" aria-hidden="true"></i>
+                                </button>
+                            </td>
+                        `;
+                        tabela.appendChild(tr);
+                    });
+                }
+
+                // --- Atualizar aba "Próximos" para clientes (também só muda quando a fila muda) ---
+                const proximosList = document.getElementById('proximos-list');
+                const proximosVazio = document.getElementById('proximos-vazio');
+                if (proximosList) {
+                    proximosList.innerHTML = '';
+                    if (fila.length === 0) {
+                        proximosVazio.classList.remove('hidden');
+                    } else {
+                        proximosVazio.classList.add('hidden');
+                        const limit = Math.min(10, fila.length);
+                        for (let i = 0; i < limit; i++) {
+                            const p = fila[i];
+                            const li = document.createElement('li');
+                            li.className = 'p-4 flex justify-between items-center';
+                            li.innerHTML = `
+                                <div>
+                                    <div class="font-bold text-gray-800">${i + 1}. ${escaparHtml(p.nome)}</div>
+                                    <div class="text-sm text-gray-500">${formatarMusicaArtista(escaparHtml(p.musica), escaparHtml(p.artista))}${p.mesa ? ` <span class="mx-2">| Mesa: ${escaparHtml(p.mesa)}</span>` : ''}</div>
+                                </div>
+                                <div class="text-xs text-gray-400 font-bold">${p.vezesCantadas}x</div>
+                            `;
+                            proximosList.appendChild(li);
+                        }
+                    }
+                }
+            }
+
+            // Lista de Histórico — mesma lógica: só reconstrói quando o histórico muda de verdade.
+            // Alimenta duas listas com o mesmo conteúdo: uma no painel do DJ (sempre
+            // completa — o DJ costuma precisar ver tudo), outra na página do cliente
+            // (limitada às últimas 12 por padrão, com botão "Ver mais" — sem isso, numa
+            // noite cheia essa lista ficava enorme e obrigava rolar demais no celular).
+            const historicoHashAtual = stringifyOrdenado(historico);
+            if (historicoHashAtual !== _ultimoHistoricoHash) {
+                _ultimoHistoricoHash = historicoHashAtual;
+
+                if (historico.length === 0) {
+                    _historicoItensHtml = [];
+                } else {
+                    _historicoItensHtml = historico.map(item => {
+                        const avaliacaoHtml = (typeof item.mediaAvaliacao === 'number')
+                            ? `<div class="text-xs mt-1"><span class="mini-stars">${renderMiniEstrelas(item.mediaAvaliacao)}</span> <span class="text-gray-400">${item.mediaAvaliacao.toFixed(1)} (${item.totalVotos} ${item.totalVotos === 1 ? 'voto' : 'votos'})</span></div>`
+                            : `<div class="text-xs mt-1 text-gray-400 italic">Sem avaliações</div>`;
+                        return `
+                            <li class="p-4 flex justify-between items-center">
+                                <div>
+                                    <span class="font-bold text-gray-700">${escaparHtml(item.nome)}</span>
+                                    ${item.mesa ? `<span class="text-gray-500 mx-2">| Mesa: ${escaparHtml(item.mesa)}</span>` : ''}
+                                    <span class="text-gray-500 mx-2">cantou</span>
+                                    <span class="text-indigo-600 font-medium">${escaparHtml(item.musica)}</span>
+                                    ${avaliacaoHtml}
+                                </div>
+                                <span class="text-xs text-gray-400">${escaparHtml(item.horario)}</span>
+                            </li>`;
+                    });
+                }
+
+                const listaHist = document.getElementById('lista-historico');
+                if (listaHist) {
+                    listaHist.innerHTML = _historicoItensHtml.length === 0
+                        ? '<li class="p-4 text-center text-gray-400 italic">Nenhuma música cantada ainda.</li>'
+                        : _historicoItensHtml.join('');
+                }
+
+                renderizarHistoricoCliente();
+                atualizarRelatorios();
+            }
+
+            // --- Atualizar aba "Avaliar" ---
+            const semApresentacao = document.getElementById('avaliar-sem-apresentacao');
+            const avaliarConteudo = document.getElementById('avaliar-conteudo');
+            if (semApresentacao && avaliarConteudo) {
+                if (!apresentacaoAtual) {
+                    semApresentacao.classList.remove('hidden');
+                    avaliarConteudo.classList.add('hidden');
+                } else {
+                    semApresentacao.classList.add('hidden');
+                    avaliarConteudo.classList.remove('hidden');
+
+                    document.getElementById('avaliar-nome').innerText = apresentacaoAtual.nome;
+                    document.getElementById('avaliar-musica').innerText = formatarMusicaArtista(apresentacaoAtual.musica, apresentacaoAtual.artista);
+
+                    const { media, votos } = mediaEVotos(apresentacaoAtual.avaliacoes);
+                    document.getElementById('avaliar-media').innerText = media !== null ? media.toFixed(1) : '-';
+                    document.getElementById('avaliar-votos').innerText = votos;
+
+                    const votanteId = getVotanteId();
+                    const notaDoUsuario = (apresentacaoAtual.avaliacoes || {})[votanteId] || 0;
+                    const statusEl = document.getElementById('avaliar-status');
+                    statusEl.innerText = notaDoUsuario ? `Você votou ${notaDoUsuario}★. Pode alterar seu voto se quiser.` : 'Toque em uma estrela para votar.';
+
+                    const estrelas = document.querySelectorAll('#avaliar-estrelas i');
+                    estrelas.forEach(estrela => {
+                        const nota = Number(estrela.dataset.nota);
+                        estrela.classList.toggle('selected', nota <= notaDoUsuario);
+                    });
+                }
+            }
+        }
+
+        // Renderiza estrelas compactas (cheia/meia/vazia) a partir de uma média
+        function renderMiniEstrelas(media) {
+            if (media === null || typeof media === 'undefined') return '<i class="far fa-star" aria-hidden="true"></i>'.repeat(5);
+            let html = '';
+            for (let i = 1; i <= 5; i++) {
+                if (media >= i - 0.25) html += '<i class="fas fa-star" aria-hidden="true"></i>';
+                else if (media >= i - 0.75) html += '<i class="fas fa-star-half-alt" aria-hidden="true"></i>';
+                else html += '<i class="far fa-star" aria-hidden="true"></i>';
+            }
+            return html;
+        }
+
+        // Inicialización
+        document.getElementById('form-pedido').addEventListener('submit', adicionarPedido);
+        
+        // Conectar eventos do modal
+        document.getElementById('admin-auth-form').addEventListener('submit', handleAdminAuthSubmit);
+        document.getElementById('admin-auth-cancel').addEventListener('click', cancelAdminAuth);
+        document.getElementById('admin-auth-cancel-2').addEventListener('click', cancelAdminAuth);
+        document.getElementById('admin-auth-modal').addEventListener('click', function(e) {
+            // fechar se clicar fora do conteúdo
+            if (e.target === this) cancelAdminAuth();
+        });
+
+        // Clique nas estrelas de avaliação (delegação de evento)
+        document.getElementById('avaliar-estrelas').addEventListener('click', function(e) {
+            const estrela = e.target.closest('i[data-nota]');
+            if (!estrela) return;
+            avaliarApresentacao(estrela.dataset.nota);
+        });
+
+        document.getElementById('btn-nao-e-voce').addEventListener('click', esquecerDadosLembrados);
+
+        // Toggle "Avisar quando for minha vez"
+        const notifToggle = document.getElementById('notif-toggle');
+        notifToggle.checked = notifAtiva();
+        if (notifToggle.checked && ehIphoneForaDoModoApp()) {
+            document.getElementById('aviso-iphone').classList.remove('hidden');
+        }
+        notifToggle.addEventListener('change', function() {
+            localStorage.setItem(chaveLocal('notif_ativo'), this.checked ? '1' : '0');
+            if (this.checked) {
+                pedirPermissaoNotificacao();
+                document.getElementById('aviso-iphone').classList.toggle('hidden', !ehIphoneForaDoModoApp());
+            } else {
+                document.getElementById('notif-status').classList.add('hidden');
+                document.getElementById('aviso-iphone').classList.add('hidden');
+            }
+        });
+
+        // Loop de atualização (fallback — a sincronização real acontece via listener em tempo
+        // real do Firebase; isso aqui é só uma rede de segurança, a cada 10s)
+        setInterval(atualizarUI, 10000);
+        
+        // Inicializar
+        window.addEventListener('load', () => {
+            iniciarModoEscuro(); // independe de ter bar ou não — já deixa a tela no tom certo
+            if (!BAR_ID) {
+                mostrarErroSemBar();
+                return; // não continua tentando mexer em elementos que acabaram de sumir
+            }
+            preencherDadosLembrados();
+            preencherDoCatalogoSeVeioDeLa(); // se a pessoa veio da página catalogo.html com uma música escolhida
+            initFirebase();
+            atualizarUI();
+
+            // Valida cada campo quando a pessoa sai dele (blur) — feedback no momento
+            // certo, sem ficar mostrando "campo obrigatório" antes mesmo dela digitar
+            document.getElementById('input-nome').addEventListener('blur', validarCampoNome);
+            document.getElementById('input-mesa').addEventListener('blur', validarCampoMesa);
+            document.getElementById('input-musica').addEventListener('blur', validarCampoMusica);
+            document.getElementById('input-artista').addEventListener('blur', validarCampoArtista);
+        });
+    </script>
+</body>
+</html>
