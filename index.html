@@ -156,9 +156,9 @@
                 <!-- SEUS PEDIDOS — só aparece se este dispositivo tiver pedido(s) na fila -->
                 <div id="secao-meus-pedidos" class="hidden bg-white rounded-2xl shadow-xl overflow-hidden border-2 border-indigo-300">
                     <div class="p-4">
-                        <h3 class="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                        <h2 class="font-bold text-gray-800 mb-3 flex items-center gap-2">
                             <i class="fas fa-user-circle text-indigo-500" aria-hidden="true"></i> Seus Pedidos
-                        </h3>
+                        </h2>
                         <ul id="lista-meus-pedidos" class="space-y-2">
                             <!-- Inserido via JS -->
                         </ul>
@@ -195,10 +195,10 @@
 
                         <form id="form-pedido" class="space-y-4" novalidate>
                             <div>
-                                <label for="input-nome" class="block text-sm font-medium text-gray-700 mb-1 flex justify-between items-center">
-                                    <span>Seu Nome / Apelido</span>
+                                <div class="mb-1 flex justify-between items-center">
+                                    <label for="input-nome" class="block text-sm font-medium text-gray-700">Seu Nome / Apelido</label>
                                     <button type="button" id="btn-nao-e-voce" class="text-xs font-normal text-indigo-500 hover:underline hidden">Não é você? Trocar</button>
-                                </label>
+                                </div>
                                 <input type="text" id="input-nome" required maxlength="50" aria-describedby="erro-nome" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
                                 <p id="erro-nome" class="hidden text-xs text-red-600 mt-1" role="alert"></p>
                             </div>
