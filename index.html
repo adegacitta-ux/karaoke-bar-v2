@@ -234,9 +234,32 @@
                         </div>
 
                         <div class="mt-6 text-center space-x-4">
+                            <a href="#secao-catalogo" class="text-sm text-indigo-600 hover:underline">Ver catálogo de músicas ↓</a>
                             <a href="#secao-proximos" class="text-sm text-indigo-600 hover:underline">Ver a ordem e próximos cantores ↓</a>
                             <a href="#secao-ja-cantadas" class="text-sm text-indigo-600 hover:underline">Ver quem já cantou ↓</a>
                         </div>
+                    </div>
+                </div>
+
+                <!-- CATÁLOGO DE MÚSICAS -->
+                <div id="secao-catalogo" class="bg-white rounded-2xl shadow-xl overflow-hidden scroll-mt-4">
+                    <div class="bg-gradient-custom p-6 text-white text-center">
+                        <h2 class="text-2xl font-bold">Catálogo de Músicas</h2>
+                        <p class="opacity-90 text-sm">Sem ideia do que cantar? Escolha aqui — é só clicar!</p>
+                    </div>
+
+                    <div class="p-6">
+                        <label for="catalogo-busca" class="sr-only">Buscar no catálogo</label>
+                        <input type="text" id="catalogo-busca" placeholder="Buscar música ou artista..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 mb-3" />
+
+                        <div id="catalogo-generos" class="flex flex-wrap gap-2 mb-4" role="group" aria-label="Filtrar por gênero">
+                            <!-- Inserido via JS -->
+                        </div>
+
+                        <ul id="catalogo-lista" class="space-y-2 max-h-80 overflow-y-auto">
+                            <!-- Inserido via JS -->
+                        </ul>
+                        <p id="catalogo-vazio" class="hidden text-center text-gray-400 py-6 text-sm">Nenhuma música encontrada com essa busca.</p>
                     </div>
                 </div>
 
@@ -911,6 +934,130 @@
             const artistaOk = validarCampoArtista();
             return nomeOk && mesaOk && musicaOk && artistaOk;
         }
+
+        // --- CATÁLOGO DE MÚSICAS ---
+        // Lista fixa de sugestões pra quem não sabe o que cantar. Não é uma lista de
+        // links do YouTube — é só "nome da música + artista" pra preencher o
+        // formulário; a pessoa ainda pode usar o botão do YouTube normalmente depois
+        // se quiser um vídeo de karaokê específico.
+        const CATALOGO_MUSICAS = [
+            { musica: "Evidências", artista: "Chitãozinho & Xororó", genero: "Sertanejo" },
+            { musica: "Ai Se Eu Te Pego", artista: "Michel Teló", genero: "Sertanejo" },
+            { musica: "Modo Avião", artista: "Marília Mendonça", genero: "Sertanejo" },
+            { musica: "Deixa Eu Te Amar", artista: "Henrique & Juliano", genero: "Sertanejo" },
+            { musica: "Fico Assim Sem Você", artista: "Claudinho & Buchecha", genero: "Pop" },
+            { musica: "Cheia de Manias", artista: "Raça Negra", genero: "Pagode" },
+            { musica: "É o Amor", artista: "Zeca Pagodinho", genero: "Pagode" },
+            { musica: "Deixa a Vida Me Levar", artista: "Zeca Pagodinho", genero: "Pagode" },
+            { musica: "Vou Festejar", artista: "Beth Carvalho", genero: "Samba" },
+            { musica: "Águas de Março", artista: "Tom Jobim", genero: "MPB" },
+            { musica: "Como Nossos Pais", artista: "Elis Regina", genero: "MPB" },
+            { musica: "Trem Bala", artista: "Ana Vilela", genero: "MPB" },
+            { musica: "O Que Será (À Flor da Pele)", artista: "Chico Buarque", genero: "MPB" },
+            { musica: "Garota de Ipanema", artista: "Tom Jobim", genero: "MPB" },
+            { musica: "Tempo Perdido", artista: "Legião Urbana", genero: "Rock Nacional" },
+            { musica: "Pais e Filhos", artista: "Legião Urbana", genero: "Rock Nacional" },
+            { musica: "Meninos e Meninas", artista: "Skank", genero: "Rock Nacional" },
+            { musica: "Metamorfose Ambulante", artista: "Raul Seixas", genero: "Rock Nacional" },
+            { musica: "Ouro de Tolo", artista: "Raul Seixas", genero: "Rock Nacional" },
+            { musica: "Asa Branca", artista: "Luiz Gonzaga", genero: "Forró" },
+            { musica: "Numb", artista: "Linkin Park", genero: "Rock" },
+            { musica: "Zombie", artista: "The Cranberries", genero: "Rock" },
+            { musica: "Wonderwall", artista: "Oasis", genero: "Rock" },
+            { musica: "Don't Stop Believin'", artista: "Journey", genero: "Rock" },
+            { musica: "Someone Like You", artista: "Adele", genero: "Pop" },
+            { musica: "My Heart Will Go On", artista: "Celine Dion", genero: "Pop" },
+            { musica: "I Want It That Way", artista: "Backstreet Boys", genero: "Pop" },
+            { musica: "Livin' la Vida Loca", artista: "Ricky Martin", genero: "Pop" },
+            { musica: "Total Eclipse of the Heart", artista: "Bonnie Tyler", genero: "Pop" },
+            { musica: "Dancing Queen", artista: "ABBA", genero: "Pop" }
+        ];
+
+        let generoSelecionado = null; // null = todos os gêneros
+
+        function generosDisponiveis() {
+            return [...new Set(CATALOGO_MUSICAS.map(m => m.genero))].sort();
+        }
+
+        function renderizarFiltrosDeGenero() {
+            const container = document.getElementById('catalogo-generos');
+            const generos = generosDisponiveis();
+            const botaoTodos = `<button type="button" onclick="filtrarCatalogoPorGenero(null)" class="px-3 py-1 rounded-full text-xs font-semibold border ${generoSelecionado === null ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}">Todos</button>`;
+            const botoesGenero = generos.map(g =>
+                `<button type="button" onclick="filtrarCatalogoPorGenero('${g.replace(/'/g, "\\'")}')" class="px-3 py-1 rounded-full text-xs font-semibold border ${generoSelecionado === g ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}">${escaparHtml(g)}</button>`
+            ).join('');
+            container.innerHTML = botaoTodos + botoesGenero;
+        }
+
+        function filtrarCatalogoPorGenero(genero) {
+            generoSelecionado = genero;
+            renderizarFiltrosDeGenero();
+            renderizarCatalogo();
+        }
+
+        // Remove acentos e deixa minúsculo — usado na busca do catálogo pra "evidencias"
+        // encontrar "Evidências" mesmo sem a pessoa digitar o acento certinho
+        function normalizarBusca(texto) {
+            return (texto || '')
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '');
+        }
+
+        function renderizarCatalogo() {
+            const termoBusca = normalizarBusca((document.getElementById('catalogo-busca').value || '').trim());
+            const lista = document.getElementById('catalogo-lista');
+            const vazio = document.getElementById('catalogo-vazio');
+
+            const filtradas = CATALOGO_MUSICAS.filter((item, indice) => {
+                const bateGenero = !generoSelecionado || item.genero === generoSelecionado;
+                const bateBusca = !termoBusca ||
+                    normalizarBusca(item.musica).includes(termoBusca) ||
+                    normalizarBusca(item.artista).includes(termoBusca);
+                return bateGenero && bateBusca;
+            }).map(item => ({ ...item, indiceOriginal: CATALOGO_MUSICAS.indexOf(item) }));
+
+            if (filtradas.length === 0) {
+                lista.innerHTML = '';
+                vazio.classList.remove('hidden');
+                return;
+            }
+            vazio.classList.add('hidden');
+
+            lista.innerHTML = filtradas.map(item => `
+                <li>
+                    <button type="button" onclick="selecionarDoCatalogo(${item.indiceOriginal})" class="w-full flex items-center justify-between gap-3 p-3 rounded-lg border border-gray-100 hover:bg-indigo-50 hover:border-indigo-200 transition-colors text-left">
+                        <div class="min-w-0">
+                            <div class="font-semibold text-gray-800 truncate">${escaparHtml(item.musica)}</div>
+                            <div class="text-xs text-gray-500 truncate">${escaparHtml(item.artista)} <span class="ml-1 text-gray-300">•</span> <span class="text-gray-400">${escaparHtml(item.genero)}</span></div>
+                        </div>
+                        <span class="flex-shrink-0 text-xs font-semibold text-indigo-600 whitespace-nowrap"><i class="fas fa-plus mr-1" aria-hidden="true"></i>Pedir</span>
+                    </button>
+                </li>
+            `).join('');
+        }
+
+        // Preenche o formulário com a música escolhida no catálogo e leva o foco pro
+        // topo — a pessoa só confirma o nome dela e envia. Como já sabemos o artista
+        // (vem do próprio catálogo), o campo Artista fica preenchido e continua
+        // obrigatório normalmente (diferente do fluxo do YouTube, onde às vezes não
+        // dá pra saber o artista de antemão).
+        function selecionarDoCatalogo(indice) {
+            const item = CATALOGO_MUSICAS[indice];
+            if (!item) return;
+
+            document.getElementById('input-musica').value = item.musica;
+            document.getElementById('input-artista').value = item.artista;
+            youtubeUrlSelecionada = null; // essa música não veio de um vídeo específico do YouTube
+
+            validarCampoMusica();
+            validarCampoArtista();
+
+            document.getElementById('input-nome').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            document.getElementById('input-nome').focus();
+        }
+
+        document.getElementById('catalogo-busca').addEventListener('input', renderizarCatalogo);
 
         function obterChaveNome(nomeCompleto, mesa) {
             const primeiroNome = (nomeCompleto || '')
@@ -1621,763 +1768,4 @@
             const el = document.getElementById(tabId);
             if (el) el.classList.add('active');
 
-            // Mantém aria-selected sincronizado com a aba ativa — sem isso, quem usa
-            // leitor de tela não sabe qual das duas abas está sendo exibida
-            const tabCliente = document.getElementById('tab-cliente');
-            const tabAdmin = document.getElementById('tab-admin');
-            if (tabCliente) tabCliente.setAttribute('aria-selected', tabId === 'cliente' ? 'true' : 'false');
-            if (tabAdmin) tabAdmin.setAttribute('aria-selected', tabId === 'admin' ? 'true' : 'false');
-
-            // O indicador "Conectado ao Firebase" é informação técnica — só interessa
-            // pro DJ (pra saber se pode confiar na fila em tempo real), não pro cliente.
-            const statusEl = document.getElementById('firebase-status');
-            if (statusEl) statusEl.classList.toggle('hidden', tabId !== 'admin');
-
-            // O DJ costuma precisar ver a noite inteira, não só as últimas 12 — busca
-            // a lista completa do histórico assim que ele abre o painel.
-            if (tabId === 'admin') {
-                carregarHistoricoCompleto();
-            }
-
-            atualizarUI();
-        }
-
-        // --- BUSCA DE KARAOKÊ NO YOUTUBE ---
-        // Guarda o vídeo escolhido pelo cliente até ele enviar o pedido
-        let youtubeUrlSelecionada = null;
-
-        function abrirModalYoutube() {
-            const modal = document.getElementById('youtube-modal');
-            const buscaInput = document.getElementById('youtube-busca-input');
-            const musicaAtual = document.getElementById('input-musica').value.trim();
-
-            modal.classList.remove('hidden');
-            buscaInput.value = musicaAtual;
-            document.getElementById('youtube-resultados').innerHTML = '';
-            buscaInput.focus();
-
-            // Se já tem um nome de música digitado, busca automaticamente
-            if (musicaAtual) {
-                buscarNoYoutube();
-            }
-        }
-
-        function fecharModalYoutube() {
-            document.getElementById('youtube-modal').classList.add('hidden');
-        }
-
-        // Enter no campo de busca também dispara a pesquisa
-        document.getElementById('youtube-busca-input').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                buscarNoYoutube();
-            }
-        });
-
-        async function buscarNoYoutube() {
-            const query = document.getElementById('youtube-busca-input').value.trim();
-            const resultadosDiv = document.getElementById('youtube-resultados');
-
-            if (!query) return;
-
-            resultadosDiv.innerHTML = `
-                <div class="text-center text-gray-400 py-8">
-                    <i class="fas fa-spinner fa-spin text-2xl mb-2" aria-hidden="true"></i>
-                    <div class="text-sm">Buscando...</div>
-                </div>
-            `;
-
-            try {
-                const termoBusca = encodeURIComponent(`karaokê ${query}`);
-                const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=8&q=${termoBusca}&key=${YOUTUBE_API_KEY}`;
-                const resp = await fetch(url);
-                const dados = await resp.json();
-
-                if (dados.error) {
-                    console.error('Erro YouTube API:', dados.error);
-                    resultadosDiv.innerHTML = `
-                        <div class="text-center text-red-500 py-8 text-sm">
-                            <i class="fas fa-exclamation-triangle text-xl mb-2 block" aria-hidden="true"></i>
-                            Não foi possível buscar agora. Tente digitar o nome da música direto no campo.
-                        </div>
-                    `;
-                    return;
-                }
-
-                const itens = dados.items || [];
-                if (itens.length === 0) {
-                    resultadosDiv.innerHTML = `
-                        <div class="text-center text-gray-400 py-8 text-sm">
-                            Nenhum resultado encontrado. Tente outro nome.
-                        </div>
-                    `;
-                    return;
-                }
-
-                resultadosDiv.innerHTML = '';
-                itens.forEach(item => {
-                    const videoId = item.id.videoId;
-                    const titulo = item.snippet.title;
-                    const canal = item.snippet.channelTitle;
-                    const thumb = item.snippet.thumbnails?.default?.url || '';
-
-                    const card = document.createElement('button');
-                    card.type = 'button';
-                    card.className = 'w-full flex items-center gap-3 p-2 rounded-lg border border-gray-100 hover:bg-gray-50 hover:border-indigo-200 transition-colors text-left';
-                    card.innerHTML = `
-                        <img src="${thumb}" class="w-20 h-14 object-cover rounded flex-shrink-0" alt="" />
-                        <div class="min-w-0">
-                            <div class="text-sm font-semibold text-gray-800 line-clamp-2">${escaparHtml(titulo)}</div>
-                            <div class="text-xs text-gray-400 mt-1">${escaparHtml(canal)}</div>
-                        </div>
-                    `;
-                    card.onclick = () => selecionarVideoYoutube(videoId, titulo);
-                    resultadosDiv.appendChild(card);
-                });
-            } catch (err) {
-                console.error('Erro ao buscar no YouTube:', err);
-                resultadosDiv.innerHTML = `
-                    <div class="text-center text-red-500 py-8 text-sm">
-                        <i class="fas fa-exclamation-triangle text-xl mb-2 block" aria-hidden="true"></i>
-                        Erro de conexão. Tente digitar o nome da música direto no campo.
-                    </div>
-                `;
-            }
-        }
-
-        // Escapa texto de qualquer campo digitado por usuário (nome, música, artista,
-        // mesa, etc.) antes de colocar dentro de innerHTML. Sem isso, alguém poderia
-        // digitar algo como <img src=x onerror=alert(1)> no campo "Nome" e esse código
-        // rodaria na tela do DJ e de outros clientes conectados (XSS).
-        function escaparHtml(texto) {
-            const div = document.createElement('div');
-            div.textContent = (texto === null || texto === undefined) ? '' : String(texto);
-            return div.innerHTML;
-        }
-
-        // Monta o link "Abrir no YouTube" só se a URL salva for realmente do YouTube —
-        // além de escapar (pra não quebrar o atributo href), isso barra alguém tentando
-        // salvar um link do tipo "javascript:..." em vez de um vídeo de verdade.
-        function linkYoutubeSeguro(url) {
-            if (!url || typeof url !== 'string') return '';
-            const ehUrlDoYoutube = /^https:\/\/(www\.)?(youtube\.com|youtu\.be)\//i.test(url);
-            if (!ehUrlDoYoutube) return '';
-            return `<a href="${escaparHtml(url)}" target="_blank" rel="noopener" title="Abrir no YouTube" class="ml-1 text-red-500 hover:text-red-700"><i class="fab fa-youtube" aria-hidden="true"></i></a>`;
-        }
-
-        function selecionarVideoYoutube(videoId, titulo) {
-            youtubeUrlSelecionada = `https://www.youtube.com/watch?v=${videoId}`;
-            document.getElementById('input-musica').value = titulo;
-
-            // Quando a música vem do YouTube, o título já traz tudo (música + artista) —
-            // não faz sentido obrigar a pessoa a digitar o artista de novo.
-            const inputArtista = document.getElementById('input-artista');
-            inputArtista.required = false;
-            document.getElementById('artista-opcional-tag').classList.remove('hidden');
-
-            fecharModalYoutube();
-        }
-
-        // Se a pessoa mudar o nome da música manualmente depois de ter escolhido um vídeo,
-        // desfazemos a associação (senão o pedido levaria o link errado) e o artista volta a
-        // ser obrigatório, já que não veio mais automaticamente do YouTube.
-        // Obs: setar .value por JS (como acima) não dispara este evento — só digitação real do usuário.
-        document.getElementById('input-musica').addEventListener('input', () => {
-            youtubeUrlSelecionada = null;
-            document.getElementById('input-artista').required = true;
-            document.getElementById('artista-opcional-tag').classList.add('hidden');
-        });
-
-        // --- LÓGICA PRINCIPAL ---
-
-        function adicionarPedido(e) {
-            e.preventDefault();
-            
-            if (isFilaBloqueada()) {
-                alert("Fila encerrada!");
-                return;
-            }
-
-            if (!validarFormularioPedido()) {
-                // Leva o foco pro primeiro campo com problema, em vez de só mostrar
-                // as mensagens de erro e deixar a pessoa procurar qual campo está errado
-                const primeiroCampoComErro = document.querySelector('#form-pedido [aria-invalid="true"]');
-                if (primeiroCampoComErro) primeiroCampoComErro.focus();
-                return;
-            }
-
-            const nome = document.getElementById('input-nome').value.trim();
-            const mesa = document.getElementById('input-mesa').value.trim();
-            const musica = document.getElementById('input-musica').value.trim();
-            const artista = document.getElementById('input-artista').value.trim();
-            const youtubeUrlDoPedido = youtubeUrlSelecionada || null;
-
-            const btnEnviar = document.getElementById('btn-enviar');
-            if (btnEnviar) { btnEnviar.disabled = true; }
-
-            // Monta o pedido dentro da transação (não fora), porque precisa saber a
-            // prioridade calculada em cima do estado MAIS ATUAL da fila no servidor —
-            // não da cópia que este celular tem localmente, que pode estar um pouco
-            // desatualizada se outra pessoa mandou pedido ao mesmo tempo.
-            function montarNovoPedido() {
-                const key = obterChaveNome(nome, mesa);
-                const prioridadeCalculada = contagemCantores[key] || 0;
-                return {
-                    id: Date.now() + Math.floor(Math.random() * 1000), // evita colisão se dois pedidos vierem no mesmo milissegundo
-                    nome: nome,
-                    mesa: mesa || null,
-                    musica: musica,
-                    artista: artista,
-                    timestamp: new Date().getTime(),
-                    vezesCantadas: prioridadeCalculada,
-                    youtubeUrl: youtubeUrlDoPedido
-                };
-            }
-
-            if (useFirebase && db) {
-                // TRANSAÇÃO: o Firebase entrega o valor mais recente do servidor pra essa
-                // função, a gente devolve a fila já com o pedido novo dentro, e se OUTRO
-                // pedido tiver sido salvo bem nesse meio-tempo, o Firebase roda a função nA
-                // NOVO com o dado mais fresco de novo — automaticamente, sem perder nada.
-                // Isso é o que evita a corrida de gravação (dois pedidos simultâneos
-                // apagando um ao outro), que estava fazendo nomes sumirem/reaparecerem.
-                let ultimoPedidoCriado = null;
-                db.ref(caminhoBar('fila')).transaction((filaAtualDoServidor) => {
-                    const listaAtual = filaAtualDoServidor || [];
-                    ultimoPedidoCriado = montarNovoPedido();
-                    return [...listaAtual, ultimoPedidoCriado];
-                }, (error, comprometido, snapshot) => {
-                    if (error) {
-                        console.error('❌ Erro na transação ao adicionar pedido:', error);
-                        alert('Não deu pra enviar seu pedido agora. Tente de novo em alguns segundos.');
-                        if (btnEnviar) { btnEnviar.disabled = false; }
-                        return;
-                    }
-                    if (!comprometido) {
-                        // Não deveria acontecer (a função sempre retorna um valor), mas por
-                        // segurança avisa em vez de deixar o botão travado silenciosamente
-                        if (btnEnviar) { btnEnviar.disabled = false; }
-                        return;
-                    }
-
-                    fila = snapshot.val() || [];
-                    ordenarFila();
-
-                    // Sempre associa o pedido a este dispositivo — é o que permite mostrar
-                    // "sua posição na fila" e o botão de cancelar, independente de a pessoa
-                    // ter ativado o aviso sonoro/notificação ou não.
-                    if (ultimoPedidoCriado) {
-                        registrarMeuPedido(ultimoPedidoCriado.id);
-                    }
-
-                    atualizarUI();
-                    finalizarEnvioPedido(nome, mesa, btnEnviar);
-                });
-            } else {
-                // Sem Firebase (modo offline/local) não existe risco de dois dispositivos
-                // gravando ao mesmo tempo — pode adicionar direto.
-                const novoPedido = montarNovoPedido();
-                fila.push(novoPedido);
-                ordenarFila();
-
-                registrarMeuPedido(novoPedido.id);
-
-                salvarNoLocalStorage();
-                atualizarUI();
-                finalizarEnvioPedido(nome, mesa, btnEnviar);
-            }
-        }
-
-        // Parte final do envio do pedido — comum aos dois caminhos (com ou sem Firebase)
-        function finalizarEnvioPedido(nome, mesa, btnEnviar) {
-            if (btnEnviar) { btnEnviar.disabled = false; }
-
-            // Lembra o nome e a mesa neste navegador, para não precisar digitar de novo da próxima vez
-            localStorage.setItem(chaveLocal('cliente_nome'), nome);
-            localStorage.setItem(chaveLocal('cliente_mesa'), mesa || '');
-            document.getElementById('btn-nao-e-voce').classList.remove('hidden');
-
-            // Feedback visual — limpa só música/artista; nome e mesa continuam preenchidos
-            document.getElementById('input-musica').value = '';
-            document.getElementById('input-artista').value = '';
-            document.getElementById('input-artista').required = true;
-            document.getElementById('artista-opcional-tag').classList.add('hidden');
-            document.getElementById('input-musica').focus();
-            youtubeUrlSelecionada = null;
-            // Os campos foram limpos/reenviados com sucesso — some com qualquer
-            // mensagem de erro que ainda estivesse visível de uma tentativa anterior
-            aplicarResultadoValidacao('input-musica', 'erro-musica', { valido: true });
-            aplicarResultadoValidacao('input-artista', 'erro-artista', { valido: true });
-            const feedback = document.getElementById('feedback-sucesso');
-            feedback.classList.remove('hidden');
-            setTimeout(() => feedback.classList.add('hidden'), 3000);
-        }
-
-        // Preenche nome/mesa automaticamente se o navegador já tiver essa informação salva
-        function preencherDadosLembrados() {
-            const nomeSalvo = localStorage.getItem(chaveLocal('cliente_nome'));
-            const mesaSalva = localStorage.getItem(chaveLocal('cliente_mesa'));
-            if (nomeSalvo) {
-                document.getElementById('input-nome').value = nomeSalvo;
-                document.getElementById('btn-nao-e-voce').classList.remove('hidden');
-            }
-            if (mesaSalva) document.getElementById('input-mesa').value = mesaSalva;
-        }
-
-        // Limpa o nome/mesa lembrados neste navegador (ex: outra pessoa vai pedir no mesmo celular)
-        function esquecerDadosLembrados() {
-            localStorage.removeItem(chaveLocal('cliente_nome'));
-            localStorage.removeItem(chaveLocal('cliente_mesa'));
-            document.getElementById('input-nome').value = '';
-            document.getElementById('input-mesa').value = '';
-            document.getElementById('btn-nao-e-voce').classList.add('hidden');
-            document.getElementById('input-nome').focus();
-        }
-
-        // A cada X minutos esperando, "perdoa" uma vez cantada anteriormente na hora de
-        // ordenar a fila — assim quem já cantou não fica preso atrás de gente nova pra
-        // sempre; com tempo suficiente de espera, ela volta a furar a frente. Ajuste esse
-        // número se quiser que a fila "perdoe" mais rápido ou mais devagar.
-        const MINUTOS_PARA_PERDOAR_UMA_VEZ_CANTADA = 25;
-
-        // Calcula a prioridade "de verdade" de um pedido NESTE momento: começa igual a
-        // quantas vezes a pessoa já cantou, e vai descontando conforme o tempo de espera
-        // desse pedido específico passa. Quanto MENOR o número, mais cedo ela canta.
-        function calcularPrioridadeEfetiva(pedido) {
-            const minutosEsperando = (Date.now() - pedido.timestamp) / 60000;
-            return pedido.vezesCantadas - (minutosEsperando / MINUTOS_PARA_PERDOAR_UMA_VEZ_CANTADA);
-        }
-
-        function ordenarFila() {
-            // Regra: menos vezes cantadas primeiro — mas o "peso" de já ter cantado
-            // vai diminuindo com o tempo de espera (ver calcularPrioridadeEfetiva).
-            // Em empate, ordem de chegada (timestamp).
-            fila.sort((a, b) => {
-                const diferenca = calcularPrioridadeEfetiva(a) - calcularPrioridadeEfetiva(b);
-                if (Math.abs(diferenca) > 0.0001) {
-                    return diferenca;
-                }
-                return a.timestamp - b.timestamp;
-            });
-        }
-
-        // Ações do DJ
-        function acaoProximo(id) {
-            if (apresentacaoAtual) {
-                alert('Já existe uma apresentação em andamento. Finalize-a antes de chamar o próximo.');
-                return;
-            }
-
-            const index = fila.findIndex(p => p.id === id);
-            if (index !== -1) {
-                const pedido = fila.splice(index, 1)[0];
-
-                // Inicia a apresentação (ainda não conta como cantada nem entra no histórico)
-                apresentacaoAtual = {
-                    ...pedido,
-                    avaliacoes: {},
-                    iniciadoEm: new Date().toISOString()
-                };
-
-                ordenarFila();
-                salvarNoFirebase();
-                atualizarUI();
-            }
-        }
-
-        // Encerra a apresentação atual: registra no histórico com a média de avaliações
-        // e incrementa o contador de vezes cantadas do cantor.
-        function acaoFinalizarApresentacao() {
-            if (!apresentacaoAtual) return;
-
-            const pedido = apresentacaoAtual;
-            const key = obterChaveNome(pedido.nome, pedido.mesa);
-            contagemCantores[key] = (contagemCantores[key] || 0) + 1;
-
-            const { media, votos } = mediaEVotos(pedido.avaliacoes);
-
-            historico.unshift({
-                ...pedido,
-                horario: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-                mediaAvaliacao: media,
-                totalVotos: votos
-            });
-
-            // Atualiza o contador de quem ainda está na fila
-            fila.forEach(p => {
-                if (obterChaveNome(p.nome, p.mesa) === key) {
-                    p.vezesCantadas = contagemCantores[key];
-                }
-            });
-
-            apresentacaoAtual = null;
-
-            ordenarFila();
-            salvarNoFirebase();
-            atualizarUI();
-        }
-
-        // Registra (ou atualiza) o voto do dispositivo atual para a apresentação em andamento
-        function avaliarApresentacao(nota) {
-            if (!apresentacaoAtual) return;
-            nota = Math.max(1, Math.min(5, Number(nota)));
-
-            if (!apresentacaoAtual.avaliacoes) apresentacaoAtual.avaliacoes = {};
-            apresentacaoAtual.avaliacoes[getVotanteId()] = nota;
-
-            // Grava só o voto específico (não o objeto "karaoke" inteiro de novo).
-            // Isso evita que cada voto reenvie fila + histórico completos pra todo mundo,
-            // o que estava deixando a tela do DJ "travando/recarregando" a cada voto.
-            if (useFirebase && db && apresentacaoAtual.id) {
-                db.ref(caminhoBar(`apresentacaoAtual/avaliacoes/${getVotanteId()}`)).set(nota, (error) => {
-                    if (error) console.error('❌ Erro ao salvar voto:', error);
-                });
-            } else {
-                salvarNoLocalStorage();
-            }
-
-            atualizarUI();
-        }
-
-        function acaoRemover(id) {
-            fila = fila.filter(p => p.id !== id);
-            salvarNoFirebase();
-            atualizarUI();
-        }
-
-        function acaoPular(id) {
-            const index = fila.findIndex(p => p.id === id);
-            if (index !== -1) {
-                fila[index].timestamp = Date.now();
-                ordenarFila();
-                salvarNoFirebase();
-                atualizarUI();
-            }
-        }
-
-        function toggleFilaManual() {
-            filaManualFechada = !filaManualFechada;
-            salvarNoFirebase();
-            atualizarUI();
-        }
-
-        function resetarNoite() {
-            if(confirm("Tem certeza que deseja apagar todos os dados da noite?")) {
-                fila = [];
-                historico = [];
-                contagemCantores = {};
-                filaManualFechada = false;
-                apresentacaoAtual = null;
-                // Depois do reset o histórico está vazio "de verdade" — marca como já
-                // carregado pra não deixar o listener limitado (últimas 12) tentar
-                // repopular com dado antigo se ele ainda não tiver recebido a mudança.
-                historicoCompletoCarregado = true;
-                salvarNoFirebase();
-                atualizarUI();
-            }
-        }
-
-        // --- CÁLCULOS DE TEMPO E BLOQUEIO ---
-
-        function calcularTempoEstimado() {
-            return fila.length * TEMPO_MEDIO_MUSICA;
-        }
-
-        function isFilaBloqueada() {
-            if (filaManualFechada) return true;
-
-            const agora = new Date();
-            const minutosEstimados = calcularTempoEstimado();
-            const previsaoTermino = new Date(agora.getTime() + minutosEstimados * 60000);
-            
-            const [horaLimite, minLimite] = HORARIO_LIMITE.split(':').map(Number);
-            const dataLimite = new Date();
-            dataLimite.setHours(horaLimite, minLimite, 0, 0);
-
-            return previsaoTermino >= dataLimite;
-        }
-
-        // --- ATUALIZAÇÃO DA INTERFACE ---
-
-        function atualizarUI() {
-            // Reordena a cada atualização de tela — é o que faz quem está esperando
-            // subir na fila sozinho com o tempo, mesmo sem nenhuma ação nova acontecer
-            // (novo pedido, voto, etc). Só reordena a lista local pra exibição — não
-            // salva essa reordenação no Firebase, todo mundo calcula a mesma ordem
-            // sozinho a partir dos mesmos dados (vezesCantadas + horário do pedido).
-            ordenarFila();
-
-            const tempoEstimado = calcularTempoEstimado();
-            const bloqueada = isFilaBloqueada();
-
-            verificarMinhaVez();
-            atualizarMeusPedidos();
-
-            // UI Cliente
-            document.getElementById('cliente-tempo-espera').innerText = `${tempoEstimado} min`;
-            const form = document.getElementById('form-pedido');
-            const msgEncerrado = document.getElementById('msg-encerrado');
-            
-            if (bloqueada) {
-                form.classList.add('opacity-20', 'pointer-events-none');
-                msgEncerrado.classList.remove('hidden');
-            } else {
-                form.classList.remove('opacity-20', 'pointer-events-none');
-                msgEncerrado.classList.add('hidden');
-            }
-
-            // UI Admin
-            document.getElementById('admin-total-fila').innerText = fila.length;
-            document.getElementById('admin-tempo-espera').innerText = `${tempoEstimado} min`;
-            
-            const btnToggle = document.getElementById('btn-toggle-fila');
-            if (filaManualFechada) {
-                btnToggle.innerHTML = '<i class="fas fa-unlock" aria-hidden="true"></i> <span>Abrir Fila</span>';
-                btnToggle.className = "w-full py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 border-2 border-green-600 text-green-600 hover:bg-green-50";
-            } else {
-                btnToggle.innerHTML = '<i class="fas fa-lock" aria-hidden="true"></i> <span>Fechar Fila Manualmente</span>';
-                btnToggle.className = "w-full py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 border-2 border-red-600 text-red-600 hover:bg-red-50";
-            }
-
-            // Card "Cantando Agora" (Admin)
-            const cardAp = document.getElementById('admin-apresentacao-atual');
-            if (apresentacaoAtual) {
-                cardAp.classList.remove('hidden');
-                document.getElementById('admin-ap-nome').innerText = apresentacaoAtual.nome + (apresentacaoAtual.mesa ? ` (Mesa ${apresentacaoAtual.mesa})` : '');
-                document.getElementById('admin-ap-musica').innerText = formatarMusicaArtista(apresentacaoAtual.musica, apresentacaoAtual.artista);
-                const { media, votos } = mediaEVotos(apresentacaoAtual.avaliacoes);
-                document.getElementById('admin-ap-estrelas').innerHTML = renderMiniEstrelas(media);
-                document.getElementById('admin-ap-media-texto').innerText = media !== null
-                    ? `${media.toFixed(1)} (${votos} ${votos === 1 ? 'voto' : 'votos'})`
-                    : 'Sem avaliações ainda';
-
-                const linkYt = document.getElementById('admin-ap-youtube-link');
-                if (apresentacaoAtual.youtubeUrl) {
-                    linkYt.href = apresentacaoAtual.youtubeUrl;
-                    linkYt.classList.remove('hidden');
-                } else {
-                    linkYt.classList.add('hidden');
-                }
-            } else {
-                cardAp.classList.add('hidden');
-            }
-
-            // Tabela da Fila — só reconstrói o HTML se a fila realmente mudou.
-            // Isso evita "piscar"/travar a tela do DJ toda vez que alguém vota
-            // (um voto muda só a avaliação da apresentação atual, não a fila).
-            const filaHashAtual = stringifyOrdenado(fila);
-            if (filaHashAtual !== _ultimaFilaHash) {
-                _ultimaFilaHash = filaHashAtual;
-
-                const tabela = document.getElementById('tabela-fila');
-                const filaVazia = document.getElementById('fila-vazia');
-                tabela.innerHTML = '';
-                
-                if (fila.length === 0) {
-                    filaVazia.classList.remove('hidden');
-                } else {
-                    filaVazia.classList.add('hidden');
-                    fila.forEach((pedido, index) => {
-                        const tr = document.createElement('tr');
-                        tr.className = "hover:bg-gray-50 transition-colors";
-                        tr.innerHTML = `
-                            <td class="px-6 py-4 font-bold text-gray-400">${index + 1}</td>
-                            <td class="px-6 py-4 font-semibold text-gray-800">
-                                ${escaparHtml(pedido.nome)}
-                                ${pedido.mesa ? `<div class="text-xs text-gray-400 mt-1">Mesa: ${escaparHtml(pedido.mesa)}</div>` : ''}
-                            </td>
-                            <td class="px-6 py-4 text-gray-600">${escaparHtml(pedido.musica)} ${pedido.artista ? `<br> <span class="text-xs text-gray-400">${escaparHtml(pedido.artista)}</span>` : ''} ${linkYoutubeSeguro(pedido.youtubeUrl)}</td>
-                            <td class="px-6 py-4">
-                                <span class="px-2 py-1 bg-gray-100 rounded text-xs font-bold">${pedido.vezesCantadas}x</span>
-                            </td>
-                            <td class="px-6 py-4 text-right space-x-2">
-                                <button onclick="acaoProximo(${pedido.id})" class="text-green-600 hover:bg-green-50 p-2 rounded-full" title="Chamar Próximo">
-                                    <i class="fas fa-play" aria-hidden="true"></i>
-                                </button>
-                                <button onclick="acaoPular(${pedido.id})" class="text-orange-500 hover:bg-orange-50 p-2 rounded-full" title="Pular Vez">
-                                    <i class="fas fa-forward" aria-hidden="true"></i>
-                                </button>
-                                <button onclick="acaoRemover(${pedido.id})" class="text-red-600 hover:bg-red-50 p-2 rounded-full" title="Remover">
-                                    <i class="fas fa-trash" aria-hidden="true"></i>
-                                </button>
-                            </td>
-                        `;
-                        tabela.appendChild(tr);
-                    });
-                }
-
-                // --- Atualizar aba "Próximos" para clientes (também só muda quando a fila muda) ---
-                const proximosList = document.getElementById('proximos-list');
-                const proximosVazio = document.getElementById('proximos-vazio');
-                if (proximosList) {
-                    proximosList.innerHTML = '';
-                    if (fila.length === 0) {
-                        proximosVazio.classList.remove('hidden');
-                    } else {
-                        proximosVazio.classList.add('hidden');
-                        const limit = Math.min(10, fila.length);
-                        for (let i = 0; i < limit; i++) {
-                            const p = fila[i];
-                            const li = document.createElement('li');
-                            li.className = 'p-4 flex justify-between items-center';
-                            li.innerHTML = `
-                                <div>
-                                    <div class="font-bold text-gray-800">${i + 1}. ${escaparHtml(p.nome)}</div>
-                                    <div class="text-sm text-gray-500">${formatarMusicaArtista(escaparHtml(p.musica), escaparHtml(p.artista))}${p.mesa ? ` <span class="mx-2">| Mesa: ${escaparHtml(p.mesa)}</span>` : ''}</div>
-                                </div>
-                                <div class="text-xs text-gray-400 font-bold">${p.vezesCantadas}x</div>
-                            `;
-                            proximosList.appendChild(li);
-                        }
-                    }
-                }
-            }
-
-            // Lista de Histórico — mesma lógica: só reconstrói quando o histórico muda de verdade.
-            // Alimenta duas listas com o mesmo conteúdo: uma no painel do DJ (sempre
-            // completa — o DJ costuma precisar ver tudo), outra na página do cliente
-            // (limitada às últimas 12 por padrão, com botão "Ver mais" — sem isso, numa
-            // noite cheia essa lista ficava enorme e obrigava rolar demais no celular).
-            const historicoHashAtual = stringifyOrdenado(historico);
-            if (historicoHashAtual !== _ultimoHistoricoHash) {
-                _ultimoHistoricoHash = historicoHashAtual;
-
-                if (historico.length === 0) {
-                    _historicoItensHtml = [];
-                } else {
-                    _historicoItensHtml = historico.map(item => {
-                        const avaliacaoHtml = (typeof item.mediaAvaliacao === 'number')
-                            ? `<div class="text-xs mt-1"><span class="mini-stars">${renderMiniEstrelas(item.mediaAvaliacao)}</span> <span class="text-gray-400">${item.mediaAvaliacao.toFixed(1)} (${item.totalVotos} ${item.totalVotos === 1 ? 'voto' : 'votos'})</span></div>`
-                            : `<div class="text-xs mt-1 text-gray-400 italic">Sem avaliações</div>`;
-                        return `
-                            <li class="p-4 flex justify-between items-center">
-                                <div>
-                                    <span class="font-bold text-gray-700">${escaparHtml(item.nome)}</span>
-                                    ${item.mesa ? `<span class="text-gray-500 mx-2">| Mesa: ${escaparHtml(item.mesa)}</span>` : ''}
-                                    <span class="text-gray-500 mx-2">cantou</span>
-                                    <span class="text-indigo-600 font-medium">${escaparHtml(item.musica)}</span>
-                                    ${avaliacaoHtml}
-                                </div>
-                                <span class="text-xs text-gray-400">${escaparHtml(item.horario)}</span>
-                            </li>`;
-                    });
-                }
-
-                const listaHist = document.getElementById('lista-historico');
-                if (listaHist) {
-                    listaHist.innerHTML = _historicoItensHtml.length === 0
-                        ? '<li class="p-4 text-center text-gray-400 italic">Nenhuma música cantada ainda.</li>'
-                        : _historicoItensHtml.join('');
-                }
-
-                renderizarHistoricoCliente();
-                atualizarRelatorios();
-            }
-
-            // --- Atualizar aba "Avaliar" ---
-            const semApresentacao = document.getElementById('avaliar-sem-apresentacao');
-            const avaliarConteudo = document.getElementById('avaliar-conteudo');
-            if (semApresentacao && avaliarConteudo) {
-                if (!apresentacaoAtual) {
-                    semApresentacao.classList.remove('hidden');
-                    avaliarConteudo.classList.add('hidden');
-                } else {
-                    semApresentacao.classList.add('hidden');
-                    avaliarConteudo.classList.remove('hidden');
-
-                    document.getElementById('avaliar-nome').innerText = apresentacaoAtual.nome;
-                    document.getElementById('avaliar-musica').innerText = formatarMusicaArtista(apresentacaoAtual.musica, apresentacaoAtual.artista);
-
-                    const { media, votos } = mediaEVotos(apresentacaoAtual.avaliacoes);
-                    document.getElementById('avaliar-media').innerText = media !== null ? media.toFixed(1) : '-';
-                    document.getElementById('avaliar-votos').innerText = votos;
-
-                    const votanteId = getVotanteId();
-                    const notaDoUsuario = (apresentacaoAtual.avaliacoes || {})[votanteId] || 0;
-                    const statusEl = document.getElementById('avaliar-status');
-                    statusEl.innerText = notaDoUsuario ? `Você votou ${notaDoUsuario}★. Pode alterar seu voto se quiser.` : 'Toque em uma estrela para votar.';
-
-                    const estrelas = document.querySelectorAll('#avaliar-estrelas i');
-                    estrelas.forEach(estrela => {
-                        const nota = Number(estrela.dataset.nota);
-                        estrela.classList.toggle('selected', nota <= notaDoUsuario);
-                    });
-                }
-            }
-        }
-
-        // Renderiza estrelas compactas (cheia/meia/vazia) a partir de uma média
-        function renderMiniEstrelas(media) {
-            if (media === null || typeof media === 'undefined') return '<i class="far fa-star" aria-hidden="true"></i>'.repeat(5);
-            let html = '';
-            for (let i = 1; i <= 5; i++) {
-                if (media >= i - 0.25) html += '<i class="fas fa-star" aria-hidden="true"></i>';
-                else if (media >= i - 0.75) html += '<i class="fas fa-star-half-alt" aria-hidden="true"></i>';
-                else html += '<i class="far fa-star" aria-hidden="true"></i>';
-            }
-            return html;
-        }
-
-        // Inicialización
-        document.getElementById('form-pedido').addEventListener('submit', adicionarPedido);
-        
-        // Conectar eventos do modal
-        document.getElementById('admin-auth-form').addEventListener('submit', handleAdminAuthSubmit);
-        document.getElementById('admin-auth-cancel').addEventListener('click', cancelAdminAuth);
-        document.getElementById('admin-auth-cancel-2').addEventListener('click', cancelAdminAuth);
-        document.getElementById('admin-auth-modal').addEventListener('click', function(e) {
-            // fechar se clicar fora do conteúdo
-            if (e.target === this) cancelAdminAuth();
-        });
-
-        // Clique nas estrelas de avaliação (delegação de evento)
-        document.getElementById('avaliar-estrelas').addEventListener('click', function(e) {
-            const estrela = e.target.closest('i[data-nota]');
-            if (!estrela) return;
-            avaliarApresentacao(estrela.dataset.nota);
-        });
-
-        document.getElementById('btn-nao-e-voce').addEventListener('click', esquecerDadosLembrados);
-
-        // Toggle "Avisar quando for minha vez"
-        const notifToggle = document.getElementById('notif-toggle');
-        notifToggle.checked = notifAtiva();
-        if (notifToggle.checked && ehIphoneForaDoModoApp()) {
-            document.getElementById('aviso-iphone').classList.remove('hidden');
-        }
-        notifToggle.addEventListener('change', function() {
-            localStorage.setItem(chaveLocal('notif_ativo'), this.checked ? '1' : '0');
-            if (this.checked) {
-                pedirPermissaoNotificacao();
-                document.getElementById('aviso-iphone').classList.toggle('hidden', !ehIphoneForaDoModoApp());
-            } else {
-                document.getElementById('notif-status').classList.add('hidden');
-                document.getElementById('aviso-iphone').classList.add('hidden');
-            }
-        });
-
-        // Loop de atualização (fallback — a sincronização real acontece via listener em tempo
-        // real do Firebase; isso aqui é só uma rede de segurança, a cada 10s)
-        setInterval(atualizarUI, 10000);
-        
-        // Inicializar
-        window.addEventListener('load', () => {
-            iniciarModoEscuro(); // independe de ter bar ou não — já deixa a tela no tom certo
-            if (!BAR_ID) {
-                mostrarErroSemBar();
-                return; // não continua tentando mexer em elementos que acabaram de sumir
-            }
-            preencherDadosLembrados();
-            initFirebase();
-            atualizarUI();
-
-            // Valida cada campo quando a pessoa sai dele (blur) — feedback no momento
-            // certo, sem ficar mostrando "campo obrigatório" antes mesmo dela digitar
-            document.getElementById('input-nome').addEventListener('blur', validarCampoNome);
-            document.getElementById('input-mesa').addEventListener('blur', validarCampoMesa);
-            document.getElementById('input-musica').addEventListener('blur', validarCampoMusica);
-            document.getElementById('input-artista').addEventListener('blur', validarCampoArtista);
-        });
-    </script>
-</body>
-</html>
+            // Mantém ari
