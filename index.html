@@ -234,32 +234,10 @@
                         </div>
 
                         <div class="mt-6 text-center space-x-4">
-                            <a href="#secao-catalogo" class="text-sm text-indigo-600 hover:underline">Ver catálogo de músicas ↓</a>
+                            <a href="#" onclick="window.location.href='catalogo.html?bar=' + encodeURIComponent(BAR_ID); return false;" class="text-sm text-indigo-600 hover:underline">Não sabe o que cantar? Ver catálogo ↓</a>
                             <a href="#secao-proximos" class="text-sm text-indigo-600 hover:underline">Ver a ordem e próximos cantores ↓</a>
                             <a href="#secao-ja-cantadas" class="text-sm text-indigo-600 hover:underline">Ver quem já cantou ↓</a>
                         </div>
-                    </div>
-                </div>
-
-                <!-- CATÁLOGO DE MÚSICAS -->
-                <div id="secao-catalogo" class="bg-white rounded-2xl shadow-xl overflow-hidden scroll-mt-4">
-                    <div class="bg-gradient-custom p-6 text-white text-center">
-                        <h2 class="text-2xl font-bold">Catálogo de Músicas</h2>
-                        <p class="opacity-90 text-sm">Sem ideia do que cantar? Escolha aqui — é só clicar!</p>
-                    </div>
-
-                    <div class="p-6">
-                        <label for="catalogo-busca" class="sr-only">Buscar no catálogo</label>
-                        <input type="text" id="catalogo-busca" placeholder="Buscar música ou artista..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 mb-3" />
-
-                        <div id="catalogo-generos" class="flex flex-wrap gap-2 mb-4" role="group" aria-label="Filtrar por gênero">
-                            <!-- Inserido via JS -->
-                        </div>
-
-                        <ul id="catalogo-lista" class="space-y-2 max-h-80 overflow-y-auto">
-                            <!-- Inserido via JS -->
-                        </ul>
-                        <p id="catalogo-vazio" class="hidden text-center text-gray-400 py-6 text-sm">Nenhuma música encontrada com essa busca.</p>
                     </div>
                 </div>
 
@@ -935,129 +913,32 @@
             return nomeOk && mesaOk && musicaOk && artistaOk;
         }
 
-        // --- CATÁLOGO DE MÚSICAS ---
-        // Lista fixa de sugestões pra quem não sabe o que cantar. Não é uma lista de
-        // links do YouTube — é só "nome da música + artista" pra preencher o
-        // formulário; a pessoa ainda pode usar o botão do YouTube normalmente depois
-        // se quiser um vídeo de karaokê específico.
-        const CATALOGO_MUSICAS = [
-            { musica: "Evidências", artista: "Chitãozinho & Xororó", genero: "Sertanejo" },
-            { musica: "Ai Se Eu Te Pego", artista: "Michel Teló", genero: "Sertanejo" },
-            { musica: "Modo Avião", artista: "Marília Mendonça", genero: "Sertanejo" },
-            { musica: "Deixa Eu Te Amar", artista: "Henrique & Juliano", genero: "Sertanejo" },
-            { musica: "Fico Assim Sem Você", artista: "Claudinho & Buchecha", genero: "Pop" },
-            { musica: "Cheia de Manias", artista: "Raça Negra", genero: "Pagode" },
-            { musica: "É o Amor", artista: "Zeca Pagodinho", genero: "Pagode" },
-            { musica: "Deixa a Vida Me Levar", artista: "Zeca Pagodinho", genero: "Pagode" },
-            { musica: "Vou Festejar", artista: "Beth Carvalho", genero: "Samba" },
-            { musica: "Águas de Março", artista: "Tom Jobim", genero: "MPB" },
-            { musica: "Como Nossos Pais", artista: "Elis Regina", genero: "MPB" },
-            { musica: "Trem Bala", artista: "Ana Vilela", genero: "MPB" },
-            { musica: "O Que Será (À Flor da Pele)", artista: "Chico Buarque", genero: "MPB" },
-            { musica: "Garota de Ipanema", artista: "Tom Jobim", genero: "MPB" },
-            { musica: "Tempo Perdido", artista: "Legião Urbana", genero: "Rock Nacional" },
-            { musica: "Pais e Filhos", artista: "Legião Urbana", genero: "Rock Nacional" },
-            { musica: "Meninos e Meninas", artista: "Skank", genero: "Rock Nacional" },
-            { musica: "Metamorfose Ambulante", artista: "Raul Seixas", genero: "Rock Nacional" },
-            { musica: "Ouro de Tolo", artista: "Raul Seixas", genero: "Rock Nacional" },
-            { musica: "Asa Branca", artista: "Luiz Gonzaga", genero: "Forró" },
-            { musica: "Numb", artista: "Linkin Park", genero: "Rock" },
-            { musica: "Zombie", artista: "The Cranberries", genero: "Rock" },
-            { musica: "Wonderwall", artista: "Oasis", genero: "Rock" },
-            { musica: "Don't Stop Believin'", artista: "Journey", genero: "Rock" },
-            { musica: "Someone Like You", artista: "Adele", genero: "Pop" },
-            { musica: "My Heart Will Go On", artista: "Celine Dion", genero: "Pop" },
-            { musica: "I Want It That Way", artista: "Backstreet Boys", genero: "Pop" },
-            { musica: "Livin' la Vida Loca", artista: "Ricky Martin", genero: "Pop" },
-            { musica: "Total Eclipse of the Heart", artista: "Bonnie Tyler", genero: "Pop" },
-            { musica: "Dancing Queen", artista: "ABBA", genero: "Pop" }
-        ];
+        // O catálogo agora é uma página separada (catalogo.html) — quando a pessoa
+        // escolhe uma música lá, ela é trazida de volta pra cá com "musica" e
+        // "artista" na URL, e a gente só preenche o formulário com isso.
+        function preencherDoCatalogoSeVeioDeLa() {
+            const params = new URLSearchParams(window.location.search);
+            const musica = params.get('musica');
+            const artista = params.get('artista');
+            if (!musica) return;
 
-        let generoSelecionado = null; // null = todos os gêneros
-
-        function generosDisponiveis() {
-            return [...new Set(CATALOGO_MUSICAS.map(m => m.genero))].sort();
-        }
-
-        function renderizarFiltrosDeGenero() {
-            const container = document.getElementById('catalogo-generos');
-            const generos = generosDisponiveis();
-            const botaoTodos = `<button type="button" onclick="filtrarCatalogoPorGenero(null)" class="px-3 py-1 rounded-full text-xs font-semibold border ${generoSelecionado === null ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}">Todos</button>`;
-            const botoesGenero = generos.map(g =>
-                `<button type="button" onclick="filtrarCatalogoPorGenero('${g.replace(/'/g, "\\'")}')" class="px-3 py-1 rounded-full text-xs font-semibold border ${generoSelecionado === g ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}">${escaparHtml(g)}</button>`
-            ).join('');
-            container.innerHTML = botaoTodos + botoesGenero;
-        }
-
-        function filtrarCatalogoPorGenero(genero) {
-            generoSelecionado = genero;
-            renderizarFiltrosDeGenero();
-            renderizarCatalogo();
-        }
-
-        // Remove acentos e deixa minúsculo — usado na busca do catálogo pra "evidencias"
-        // encontrar "Evidências" mesmo sem a pessoa digitar o acento certinho
-        function normalizarBusca(texto) {
-            return (texto || '')
-                .toLowerCase()
-                .normalize('NFD')
-                .replace(/[\u0300-\u036f]/g, '');
-        }
-
-        function renderizarCatalogo() {
-            const termoBusca = normalizarBusca((document.getElementById('catalogo-busca').value || '').trim());
-            const lista = document.getElementById('catalogo-lista');
-            const vazio = document.getElementById('catalogo-vazio');
-
-            const filtradas = CATALOGO_MUSICAS.filter((item, indice) => {
-                const bateGenero = !generoSelecionado || item.genero === generoSelecionado;
-                const bateBusca = !termoBusca ||
-                    normalizarBusca(item.musica).includes(termoBusca) ||
-                    normalizarBusca(item.artista).includes(termoBusca);
-                return bateGenero && bateBusca;
-            }).map(item => ({ ...item, indiceOriginal: CATALOGO_MUSICAS.indexOf(item) }));
-
-            if (filtradas.length === 0) {
-                lista.innerHTML = '';
-                vazio.classList.remove('hidden');
-                return;
-            }
-            vazio.classList.add('hidden');
-
-            lista.innerHTML = filtradas.map(item => `
-                <li>
-                    <button type="button" onclick="selecionarDoCatalogo(${item.indiceOriginal})" class="w-full flex items-center justify-between gap-3 p-3 rounded-lg border border-gray-100 hover:bg-indigo-50 hover:border-indigo-200 transition-colors text-left">
-                        <div class="min-w-0">
-                            <div class="font-semibold text-gray-800 truncate">${escaparHtml(item.musica)}</div>
-                            <div class="text-xs text-gray-500 truncate">${escaparHtml(item.artista)} <span class="ml-1 text-gray-300">•</span> <span class="text-gray-400">${escaparHtml(item.genero)}</span></div>
-                        </div>
-                        <span class="flex-shrink-0 text-xs font-semibold text-indigo-600 whitespace-nowrap"><i class="fas fa-plus mr-1" aria-hidden="true"></i>Pedir</span>
-                    </button>
-                </li>
-            `).join('');
-        }
-
-        // Preenche o formulário com a música escolhida no catálogo e leva o foco pro
-        // topo — a pessoa só confirma o nome dela e envia. Como já sabemos o artista
-        // (vem do próprio catálogo), o campo Artista fica preenchido e continua
-        // obrigatório normalmente (diferente do fluxo do YouTube, onde às vezes não
-        // dá pra saber o artista de antemão).
-        function selecionarDoCatalogo(indice) {
-            const item = CATALOGO_MUSICAS[indice];
-            if (!item) return;
-
-            document.getElementById('input-musica').value = item.musica;
-            document.getElementById('input-artista').value = item.artista;
-            youtubeUrlSelecionada = null; // essa música não veio de um vídeo específico do YouTube
+            document.getElementById('input-musica').value = musica;
+            if (artista) document.getElementById('input-artista').value = artista;
+            youtubeUrlSelecionada = null; // não veio de um vídeo específico do YouTube
 
             validarCampoMusica();
             validarCampoArtista();
 
+            // Limpa "musica"/"artista" da URL depois de usar, pra não preencher nada
+            // de novo se a pessoa recarregar a página por engano
+            params.delete('musica');
+            params.delete('artista');
+            const novaUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+            window.history.replaceState({}, '', novaUrl);
+
             document.getElementById('input-nome').scrollIntoView({ behavior: 'smooth', block: 'center' });
             document.getElementById('input-nome').focus();
         }
-
-        document.getElementById('catalogo-busca').addEventListener('input', renderizarCatalogo);
 
         function obterChaveNome(nomeCompleto, mesa) {
             const primeiroNome = (nomeCompleto || '')
@@ -1768,4 +1649,156 @@
             const el = document.getElementById(tabId);
             if (el) el.classList.add('active');
 
-            // Mantém ari
+            // Mantém aria-selected sincronizado com a aba ativa — sem isso, quem usa
+            // leitor de tela não sabe qual das duas abas está sendo exibida
+            const tabCliente = document.getElementById('tab-cliente');
+            const tabAdmin = document.getElementById('tab-admin');
+            if (tabCliente) tabCliente.setAttribute('aria-selected', tabId === 'cliente' ? 'true' : 'false');
+            if (tabAdmin) tabAdmin.setAttribute('aria-selected', tabId === 'admin' ? 'true' : 'false');
+
+            // O indicador "Conectado ao Firebase" é informação técnica — só interessa
+            // pro DJ (pra saber se pode confiar na fila em tempo real), não pro cliente.
+            const statusEl = document.getElementById('firebase-status');
+            if (statusEl) statusEl.classList.toggle('hidden', tabId !== 'admin');
+
+            // O DJ costuma precisar ver a noite inteira, não só as últimas 12 — busca
+            // a lista completa do histórico assim que ele abre o painel.
+            if (tabId === 'admin') {
+                carregarHistoricoCompleto();
+            }
+
+            atualizarUI();
+        }
+
+        // --- BUSCA DE KARAOKÊ NO YOUTUBE ---
+        // Guarda o vídeo escolhido pelo cliente até ele enviar o pedido
+        let youtubeUrlSelecionada = null;
+
+        function abrirModalYoutube() {
+            const modal = document.getElementById('youtube-modal');
+            const buscaInput = document.getElementById('youtube-busca-input');
+            const musicaAtual = document.getElementById('input-musica').value.trim();
+
+            modal.classList.remove('hidden');
+            buscaInput.value = musicaAtual;
+            document.getElementById('youtube-resultados').innerHTML = '';
+            buscaInput.focus();
+
+            // Se já tem um nome de música digitado, busca automaticamente
+            if (musicaAtual) {
+                buscarNoYoutube();
+            }
+        }
+
+        function fecharModalYoutube() {
+            document.getElementById('youtube-modal').classList.add('hidden');
+        }
+
+        // Enter no campo de busca também dispara a pesquisa
+        document.getElementById('youtube-busca-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                buscarNoYoutube();
+            }
+        });
+
+        async function buscarNoYoutube() {
+            const query = document.getElementById('youtube-busca-input').value.trim();
+            const resultadosDiv = document.getElementById('youtube-resultados');
+
+            if (!query) return;
+
+            resultadosDiv.innerHTML = `
+                <div class="text-center text-gray-400 py-8">
+                    <i class="fas fa-spinner fa-spin text-2xl mb-2" aria-hidden="true"></i>
+                    <div class="text-sm">Buscando...</div>
+                </div>
+            `;
+
+            try {
+                const termoBusca = encodeURIComponent(`karaokê ${query}`);
+                const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=8&q=${termoBusca}&key=${YOUTUBE_API_KEY}`;
+                const resp = await fetch(url);
+                const dados = await resp.json();
+
+                if (dados.error) {
+                    console.error('Erro YouTube API:', dados.error);
+                    resultadosDiv.innerHTML = `
+                        <div class="text-center text-red-500 py-8 text-sm">
+                            <i class="fas fa-exclamation-triangle text-xl mb-2 block" aria-hidden="true"></i>
+                            Não foi possível buscar agora. Tente digitar o nome da música direto no campo.
+                        </div>
+                    `;
+                    return;
+                }
+
+                const itens = dados.items || [];
+                if (itens.length === 0) {
+                    resultadosDiv.innerHTML = `
+                        <div class="text-center text-gray-400 py-8 text-sm">
+                            Nenhum resultado encontrado. Tente outro nome.
+                        </div>
+                    `;
+                    return;
+                }
+
+                resultadosDiv.innerHTML = '';
+                itens.forEach(item => {
+                    const videoId = item.id.videoId;
+                    const titulo = item.snippet.title;
+                    const canal = item.snippet.channelTitle;
+                    const thumb = item.snippet.thumbnails?.default?.url || '';
+
+                    const card = document.createElement('button');
+                    card.type = 'button';
+                    card.className = 'w-full flex items-center gap-3 p-2 rounded-lg border border-gray-100 hover:bg-gray-50 hover:border-indigo-200 transition-colors text-left';
+                    card.innerHTML = `
+                        <img src="${thumb}" class="w-20 h-14 object-cover rounded flex-shrink-0" alt="" />
+                        <div class="min-w-0">
+                            <div class="text-sm font-semibold text-gray-800 line-clamp-2">${escaparHtml(titulo)}</div>
+                            <div class="text-xs text-gray-400 mt-1">${escaparHtml(canal)}</div>
+                        </div>
+                    `;
+                    card.onclick = () => selecionarVideoYoutube(videoId, titulo);
+                    resultadosDiv.appendChild(card);
+                });
+            } catch (err) {
+                console.error('Erro ao buscar no YouTube:', err);
+                resultadosDiv.innerHTML = `
+                    <div class="text-center text-red-500 py-8 text-sm">
+                        <i class="fas fa-exclamation-triangle text-xl mb-2 block" aria-hidden="true"></i>
+                        Erro de conexão. Tente digitar o nome da música direto no campo.
+                    </div>
+                `;
+            }
+        }
+
+        // Escapa texto de qualquer campo digitado por usuário (nome, música, artista,
+        // mesa, etc.) antes de colocar dentro de innerHTML. Sem isso, alguém poderia
+        // digitar algo como <img src=x onerror=alert(1)> no campo "Nome" e esse código
+        // rodaria na tela do DJ e de outros clientes conectados (XSS).
+        function escaparHtml(texto) {
+            const div = document.createElement('div');
+            div.textContent = (texto === null || texto === undefined) ? '' : String(texto);
+            return div.innerHTML;
+        }
+
+        // Monta o link "Abrir no YouTube" só se a URL salva for realmente do YouTube —
+        // além de escapar (pra não quebrar o atributo href), isso barra alguém tentando
+        // salvar um link do tipo "javascript:..." em vez de um vídeo de verdade.
+        function linkYoutubeSeguro(url) {
+            if (!url || typeof url !== 'string') return '';
+            const ehUrlDoYoutube = /^https:\/\/(www\.)?(youtube\.com|youtu\.be)\//i.test(url);
+            if (!ehUrlDoYoutube) return '';
+            return `<a href="${escaparHtml(url)}" target="_blank" rel="noopener" title="Abrir no YouTube" class="ml-1 text-red-500 hover:text-red-700"><i class="fab fa-youtube" aria-hidden="true"></i></a>`;
+        }
+
+        function selecionarVideoYoutube(videoId, titulo) {
+            youtubeUrlSelecionada = `https://www.youtube.com/watch?v=${videoId}`;
+            document.getElementById('input-musica').value = titulo;
+
+            // Quando a música vem do YouTube, o título já traz tudo (música + artista) —
+            // não faz sentido obrigar a pessoa a digitar o artista de novo.
+            const inputArtista = document.getElementById('input-artista');
+            inputArtista.required = false;
+            document.getElementById('artista-opcional-tag'
