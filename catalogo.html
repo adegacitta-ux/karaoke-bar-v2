@@ -109,10 +109,19 @@
         function alternarModoEscuro() {
             const ativo = !document.body.classList.contains('modo-escuro');
             aplicarModoEscuro(ativo);
-            localStorage.setItem(chaveLocal('modo_escuro'), ativo ? '1' : '0');
+            try {
+                localStorage.setItem(chaveLocal('modo_escuro'), ativo ? '1' : '0');
+            } catch (e) {
+                console.warn('⚠️ Não foi possível lembrar a preferência de tema:', e);
+            }
         }
         function iniciarModoEscuro() {
-            const salvo = localStorage.getItem(chaveLocal('modo_escuro'));
+            let salvo = null;
+            try {
+                salvo = localStorage.getItem(chaveLocal('modo_escuro'));
+            } catch (e) {
+                console.warn('⚠️ Não foi possível ler a preferência de tema salva:', e);
+            }
             const ativo = salvo !== null
                 ? salvo === '1'
                 : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);

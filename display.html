@@ -586,12 +586,23 @@
                 firebaseConnected = true;
                 console.log('✅ Firebase inicializado en display.html');
                 atualizarDisplay();
-                
+
                 // Sincronizar cada cambio en tiempo real
                 const ref = db.ref(caminhoBar());
                 ref.on('value', (snapshot) => {
                     console.log('📡 Datos actualizados en tiempo real');
                     atualizarDisplayWithData(snapshot.val());
+                });
+
+                // Mesmo esquema do index.html (monitorarConexaoReal): ".info/connected"
+                // é o jeito oficial do Firebase de saber se ESTE dispositivo está
+                // realmente conectado em tempo real — sem isso, o badge "Conectado ao
+                // Firebase" ficava preso mostrando verde pra sempre (era fixo no CSS),
+                // mesmo com a internet caída, e a equipe do bar não tinha como saber
+                // que o telão parou de atualizar.
+                db.ref('.info/connected').on('value', (snapshot) => {
+                    firebaseConnected = snapshot.val() === true;
+                    atualizarStatusFirebaseDisplay(firebaseConnected);
                 });
 
                 // Rede de segurança: além do tempo real, força uma checagem a cada 5s.
@@ -601,6 +612,20 @@
             } catch (error) {
                 console.error('❌ Error Firebase:', error);
                 firebaseConnected = false;
+            }
+        }
+
+        // Atualiza o badge "Conectado ao Firebase" (texto + cor de fundo) de forma
+        // honesta — precisa refletir a conexão de verdade, não ficar fixo em verde.
+        function atualizarStatusFirebaseDisplay(connected) {
+            const statusText = document.getElementById('status-text');
+            const statusEl = document.getElementById('firebase-status');
+            if (connected) {
+                statusText.innerText = '🔥 Conectado ao Firebase';
+                statusEl.style.background = 'rgb(16, 185, 129)';
+            } else {
+                statusText.innerText = '⚠️ Sem conexão com o Firebase';
+                statusEl.style.background = 'rgb(220, 38, 38)';
             }
         }
 
@@ -633,12 +658,7 @@
             document.getElementById('mini-fila-lista').classList.add('hidden');
 
             // Actualizar status firebase badge
-            const statusText = document.getElementById('status-text');
-            if (firebaseConnected) {
-                statusText.innerText = '🔥 Conectado ao Firebase';
-            } else {
-                statusText.innerText = '⚠️ Offline';
-            }
+            atualizarStatusFirebaseDisplay(firebaseConnected);
 
             if (!data) {
                 document.getElementById('estado-inicial').classList.remove('hidden');
