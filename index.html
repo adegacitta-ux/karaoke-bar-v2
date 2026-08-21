@@ -943,11 +943,24 @@
         }
 
         function obterChaveNome(nomeCompleto, mesa) {
-            const primeiroNome = (nomeCompleto || '')
-                .trim()
-                .split(/\s+/)[0]                // pega só a primeira palavra
-                .toLowerCase()
-                .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // remove acentos (José -> jose)
+            // Duplas/grupos as vezes digitam mais de um nome separado por "/" (ex:
+            // "Karine / Amanda"). Cada nome vira uma "parte" (so o primeiro nome
+            // dela) e as partes sao ORDENADAS antes de montar a chave, entao a
+            // ordem digitada deixa de importar: "Karine / Amanda" numa vez e
+            // "Amanda / Karine" na proxima (mesma dupla) geram a mesma chave. Pra
+            // um nome so (sem "/"), o resultado e igual ao de antes: so a primeira
+            // palavra, sem acento.
+            const partes = (nomeCompleto || '')
+                .split('/')
+                .map(parte => parte
+                    .trim()
+                    .split(/\s+/)[0]                // pega so a primeira palavra dessa parte
+                    .toLowerCase()
+                    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove acentos
+                )
+                .filter(Boolean)
+                .sort();
+            const primeiroNome = partes.join('+');
 
             const mesaNormalizada = (mesa || '').toString().trim().toLowerCase();
             return mesaNormalizada ? `${primeiroNome}@mesa${mesaNormalizada}` : primeiroNome;
