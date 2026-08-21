@@ -619,12 +619,21 @@
 
         function alternarModoEscuro() {
             const ativo = !document.body.classList.contains('modo-escuro');
-            aplicarModoEscuro(ativo);
-            localStorage.setItem(chaveLocal('modo_escuro'), ativo ? '1' : '0');
+            aplicarModoEscuro(ativo); // aplica visualmente mesmo que salvar a preferência falhe
+            try {
+                localStorage.setItem(chaveLocal('modo_escuro'), ativo ? '1' : '0');
+            } catch (e) {
+                console.warn('⚠️ Não foi possível lembrar a preferência de tema:', e);
+            }
         }
 
         function iniciarModoEscuro() {
-            const salvo = localStorage.getItem(chaveLocal('modo_escuro'));
+            let salvo = null;
+            try {
+                salvo = localStorage.getItem(chaveLocal('modo_escuro'));
+            } catch (e) {
+                console.warn('⚠️ Não foi possível ler a preferência de tema salva:', e);
+            }
             let ativo;
             if (salvo !== null) {
                 ativo = salvo === '1'; // a pessoa já escolheu antes — respeita a escolha
@@ -792,14 +801,25 @@
         let verTudoHistoricoCliente = false;
         const LIMITE_HISTORICO_CLIENTE = 12;
 
-        // Identificador anônimo do dispositivo, usado para permitir 1 voto por pessoa/dispositivo
+        // Identificador anônimo do dispositivo, usado para permitir 1 voto por pessoa/dispositivo.
+        // Se o localStorage falhar (modo privado do Safari, por exemplo), ainda gera um
+        // id válido pra sessão atual — só não vai lembrar entre visitas, mas o voto
+        // continua funcionando em vez de travar a função inteira.
+        let _votanteIdDeSessao = null;
         function getVotanteId() {
-            let vid = localStorage.getItem(chaveLocal('votante_id'));
-            if (!vid) {
-                vid = 'v-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
-                localStorage.setItem(chaveLocal('votante_id'), vid);
+            try {
+                let vid = localStorage.getItem(chaveLocal('votante_id'));
+                if (!vid) {
+                    vid = 'v-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+                    localStorage.setItem(chaveLocal('votante_id'), vid);
+                }
+                return vid;
+            } catch (e) {
+                if (!_votanteIdDeSessao) {
+                    _votanteIdDeSessao = 'v-sessao-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+                }
+                return _votanteIdDeSessao;
             }
-            return vid;
         }
 
         function mediaEVotos(avaliacoes) {
@@ -978,7 +998,11 @@
         // a aba do site aberta no celular/computador.
 
         function notifAtiva() {
-            return localStorage.getItem(chaveLocal('notif_ativo')) === '1';
+            try {
+                return localStorage.getItem(chaveLocal('notif_ativo')) === '1';
+            } catch (e) {
+                return false; // sem conseguir ler a preferência, assume desativado (mais seguro)
+            }
         }
 
         function getMeusPedidos() {
@@ -987,7 +1011,8 @@
         }
 
         function salvarMeusPedidos(lista) {
-            localStorage.setItem(chaveLocal('meus_pedidos'), JSON.stringify(lista));
+            try { localStorage.setItem(chaveLocal('meus_pedidos'), JSON.stringify(lista)); }
+            catch (e) { console.warn('⚠️ Não foi possível lembrar seus pedidos localmente:', e); }
         }
 
         function getNotificados() {
@@ -996,7 +1021,8 @@
         }
 
         function salvarNotificados(lista) {
-            localStorage.setItem(chaveLocal('notificados'), JSON.stringify(lista));
+            try { localStorage.setItem(chaveLocal('notificados'), JSON.stringify(lista)); }
+            catch (e) { console.warn('⚠️ Não foi possível salvar notificações localmente:', e); }
         }
 
         // Toca um bipe simples via Web Audio API — não depende de nenhum arquivo de áudio
@@ -1548,6 +1574,12 @@
         function tratarErroDeSincronizacao(error) {
             console.error('❌ Erro ao sincronizar:', error);
             updateFirebaseStatus(false);
+            // Sem isso, só o DJ (que vê o indicador "Conectado ao Firebase") saberia que
+            // algo parou de sincronizar — o cliente comum ficaria olhando uma fila
+            // desatualizada sem nenhum aviso. Reaproveita o mesmo banner vermelho já
+            // usado quando a conexão em tempo real cai (ver monitorarConexaoReal).
+            const aviso = document.getElementById('aviso-sem-conexao');
+            if (aviso) aviso.classList.remove('hidden');
         }
 
         // O histórico é salvo como array (ver salvarNoFirebase), mas o Firebase entrega
@@ -1625,12 +1657,7 @@
                     if (error) {
                         console.error('❌ Erro ao salvar no Firebase:', error);
                         salvarNoLocalStorage();
-                        // Se foi um erro de permissão, a ação NÃO foi salva de verdade —
-                        // avisa o DJ em vez de falhar quieto (foi exatamente isso que
-                        // causava dados "fantasma" reaparecendo depois de serem "limpos").
-                        if (error.code === 'PERMISSION_DENIED') {
-                            alert('⚠️ Essa ação não foi salva (sessão expirada). Clique em "Sair" e faça login de novo, depois repita a ação.');
-                        }
+                        avisarFalhaAoSalvar(error);
                     } else {
                         console.log('✅ Dados salvos no Firebase');
                     }
@@ -1639,6 +1666,21 @@
                 syncInProgress = false;
                 console.error('❌ Erro:', error);
                 salvarNoLocalStorage();
+                avisarFalhaAoSalvar(error);
+            }
+        }
+
+        // Avisa o DJ sempre que uma ação dele (finalizar, remover, chamar próximo,
+        // limpar tudo...) não conseguir salvar de verdade no Firebase — sem isso, a
+        // ação parecia ter funcionado na tela (o estado local mudou), mas não
+        // sincronizava com mais ninguém, e o DJ só ia descobrir isso muito depois
+        // (foi exatamente o que causava os dados "fantasma" reaparecendo). Mensagem
+        // muda um pouco conforme o tipo de erro, pra dar uma pista do que fazer.
+        function avisarFalhaAoSalvar(error) {
+            if (error && error.code === 'PERMISSION_DENIED') {
+                alert('⚠️ Essa ação não foi salva (sessão expirada). Clique em "Sair" e faça login de novo, depois repita a ação.');
+            } else {
+                alert('⚠️ Essa ação não foi salva — parece que a conexão falhou. Confira sua internet e repita a ação.');
             }
         }
 
@@ -1670,19 +1712,54 @@
         }
 
         function salvarNoLocalStorage() {
-            localStorage.setItem(chaveLocal('fila'), JSON.stringify(fila));
-            localStorage.setItem(chaveLocal('historico'), JSON.stringify(historico));
-            localStorage.setItem(chaveLocal('contagem'), JSON.stringify(contagemCantores));
-            localStorage.setItem(chaveLocal('manual_fechada'), JSON.stringify(filaManualFechada));
-            localStorage.setItem(chaveLocal('apresentacao_atual'), JSON.stringify(apresentacaoAtual));
+            // Em modo privado de alguns navegadores (Safari principalmente), o
+            // localStorage pode simplesmente recusar a escrita (quota zero) — sem
+            // isso, um clique comum (votar, entrar na fila) travaria com um erro que
+            // a pessoa não tem como resolver sozinha.
+            try {
+                localStorage.setItem(chaveLocal('fila'), JSON.stringify(fila));
+                localStorage.setItem(chaveLocal('historico'), JSON.stringify(historico));
+                localStorage.setItem(chaveLocal('contagem'), JSON.stringify(contagemCantores));
+                localStorage.setItem(chaveLocal('manual_fechada'), JSON.stringify(filaManualFechada));
+                localStorage.setItem(chaveLocal('apresentacao_atual'), JSON.stringify(apresentacaoAtual));
+            } catch (error) {
+                console.warn('⚠️ Não foi possível salvar localmente (localStorage indisponível):', error);
+            }
         }
 
         function carregarDoLocalStorage() {
-            fila = JSON.parse(localStorage.getItem(chaveLocal('fila'))) || [];
-            historico = JSON.parse(localStorage.getItem(chaveLocal('historico'))) || [];
-            contagemCantores = JSON.parse(localStorage.getItem(chaveLocal('contagem'))) || {};
-            filaManualFechada = JSON.parse(localStorage.getItem(chaveLocal('manual_fechada'))) || false;
-            apresentacaoAtual = JSON.parse(localStorage.getItem(chaveLocal('apresentacao_atual'))) || null;
+            // Se o dado salvo estiver corrompido por qualquer motivo (gravação
+            // incompleta, navegador com bug, etc), JSON.parse quebra com uma exceção
+            // — sem o try/catch, isso travava a inicialização inteira do app.
+            // Preferimos recomeçar com tudo vazio a travar a tela da pessoa.
+            try {
+                fila = JSON.parse(localStorage.getItem(chaveLocal('fila'))) || [];
+            } catch (error) {
+                console.warn('⚠️ Dado salvo da fila estava corrompido, recomeçando vazio:', error);
+                fila = [];
+            }
+            try {
+                historico = JSON.parse(localStorage.getItem(chaveLocal('historico'))) || [];
+            } catch (error) {
+                console.warn('⚠️ Dado salvo do histórico estava corrompido, recomeçando vazio:', error);
+                historico = [];
+            }
+            try {
+                contagemCantores = JSON.parse(localStorage.getItem(chaveLocal('contagem'))) || {};
+            } catch (error) {
+                console.warn('⚠️ Dado salvo da contagem estava corrompido, recomeçando vazio:', error);
+                contagemCantores = {};
+            }
+            try {
+                filaManualFechada = JSON.parse(localStorage.getItem(chaveLocal('manual_fechada'))) || false;
+            } catch (error) {
+                filaManualFechada = false;
+            }
+            try {
+                apresentacaoAtual = JSON.parse(localStorage.getItem(chaveLocal('apresentacao_atual'))) || null;
+            } catch (error) {
+                apresentacaoAtual = null;
+            }
         }
 
         // --- LÓGICA DE NAVEGAÇÃO ---
@@ -1978,9 +2055,15 @@
         function finalizarEnvioPedido(nome, mesa, btnEnviar) {
             if (btnEnviar) { btnEnviar.disabled = false; }
 
-            // Lembra o nome e a mesa neste navegador, para não precisar digitar de novo da próxima vez
-            localStorage.setItem(chaveLocal('cliente_nome'), nome);
-            localStorage.setItem(chaveLocal('cliente_mesa'), mesa || '');
+            // Lembra o nome e a mesa neste navegador, para não precisar digitar de novo
+            // da próxima vez — se isso falhar, não pode impedir o resto da confirmação
+            // (o pedido já foi enviado de verdade nesse ponto, só essa lembrança é extra)
+            try {
+                localStorage.setItem(chaveLocal('cliente_nome'), nome);
+                localStorage.setItem(chaveLocal('cliente_mesa'), mesa || '');
+            } catch (e) {
+                console.warn('⚠️ Não foi possível lembrar seu nome/mesa localmente:', e);
+            }
             document.getElementById('btn-nao-e-voce').classList.remove('hidden');
 
             // Feedback visual — limpa só música/artista; nome e mesa continuam preenchidos
@@ -2001,8 +2084,13 @@
 
         // Preenche nome/mesa automaticamente se o navegador já tiver essa informação salva
         function preencherDadosLembrados() {
-            const nomeSalvo = localStorage.getItem(chaveLocal('cliente_nome'));
-            const mesaSalva = localStorage.getItem(chaveLocal('cliente_mesa'));
+            let nomeSalvo = null, mesaSalva = null;
+            try {
+                nomeSalvo = localStorage.getItem(chaveLocal('cliente_nome'));
+                mesaSalva = localStorage.getItem(chaveLocal('cliente_mesa'));
+            } catch (e) {
+                console.warn('⚠️ Não foi possível ler nome/mesa lembrados:', e);
+            }
             if (nomeSalvo) {
                 document.getElementById('input-nome').value = nomeSalvo;
                 document.getElementById('btn-nao-e-voce').classList.remove('hidden');
@@ -2012,8 +2100,12 @@
 
         // Limpa o nome/mesa lembrados neste navegador (ex: outra pessoa vai pedir no mesmo celular)
         function esquecerDadosLembrados() {
-            localStorage.removeItem(chaveLocal('cliente_nome'));
-            localStorage.removeItem(chaveLocal('cliente_mesa'));
+            try {
+                localStorage.removeItem(chaveLocal('cliente_nome'));
+                localStorage.removeItem(chaveLocal('cliente_mesa'));
+            } catch (e) {
+                console.warn('⚠️ Não foi possível esquecer nome/mesa localmente:', e);
+            }
             document.getElementById('input-nome').value = '';
             document.getElementById('input-mesa').value = '';
             document.getElementById('btn-nao-e-voce').classList.add('hidden');
@@ -2148,7 +2240,16 @@
             // o que estava deixando a tela do DJ "travando/recarregando" a cada voto.
             if (useFirebase && db && apresentacaoAtual.id) {
                 db.ref(caminhoBar(`apresentacaoAtual/avaliacoes/${getVotanteId()}`)).set(nota, (error) => {
-                    if (error) console.error('❌ Erro ao salvar voto:', error);
+                    if (error) {
+                        console.error('❌ Erro ao salvar voto:', error);
+                        // A estrela já mudou na tela (otimista), mas se não salvou de
+                        // verdade, a pessoa precisa saber — senão acha que votou e não votou.
+                        const statusEl = document.getElementById('avaliar-status');
+                        if (statusEl) {
+                            statusEl.innerText = '⚠️ Seu voto não foi salvo. Toque na estrela de novo.';
+                            statusEl.classList.add('text-red-600', 'font-semibold');
+                        }
+                    }
                 });
             } else {
                 salvarNoLocalStorage();
@@ -2416,6 +2517,7 @@
                     const votanteId = getVotanteId();
                     const notaDoUsuario = (apresentacaoAtual.avaliacoes || {})[votanteId] || 0;
                     const statusEl = document.getElementById('avaliar-status');
+                    statusEl.classList.remove('text-red-600', 'font-semibold'); // limpa aviso de erro de um voto anterior, se tinha
                     statusEl.innerText = notaDoUsuario ? `Você votou ${notaDoUsuario}★. Pode alterar seu voto se quiser.` : 'Toque em uma estrela para votar.';
 
                     const estrelas = document.querySelectorAll('#avaliar-estrelas i');
@@ -2467,7 +2569,11 @@
             document.getElementById('aviso-iphone').classList.remove('hidden');
         }
         notifToggle.addEventListener('change', function() {
-            localStorage.setItem(chaveLocal('notif_ativo'), this.checked ? '1' : '0');
+            try {
+                localStorage.setItem(chaveLocal('notif_ativo'), this.checked ? '1' : '0');
+            } catch (e) {
+                console.warn('⚠️ Não foi possível lembrar a preferência de notificação:', e);
+            }
             if (this.checked) {
                 pedirPermissaoNotificacao();
                 document.getElementById('aviso-iphone').classList.toggle('hidden', !ehIphoneForaDoModoApp());
