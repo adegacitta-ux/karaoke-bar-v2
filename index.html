@@ -943,11 +943,24 @@
         }
 
         function obterChaveNome(nomeCompleto, mesa) {
-            const primeiroNome = (nomeCompleto || '')
-                .trim()
-                .split(/\s+/)[0]                // pega só a primeira palavra
-                .toLowerCase()
-                .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // remove acentos (José -> jose)
+            // Duplas/grupos as vezes digitam mais de um nome separado por "/" (ex:
+            // "Karine / Amanda"). Cada nome vira uma "parte" (so o primeiro nome
+            // dela) e as partes sao ORDENADAS antes de montar a chave, entao a
+            // ordem digitada deixa de importar: "Karine / Amanda" numa vez e
+            // "Amanda / Karine" na proxima (mesma dupla) geram a mesma chave. Pra
+            // um nome so (sem "/"), o resultado e igual ao de antes: so a primeira
+            // palavra, sem acento.
+            const partes = (nomeCompleto || '')
+                .split('/')
+                .map(parte => parte
+                    .trim()
+                    .split(/\s+/)[0]                // pega so a primeira palavra dessa parte
+                    .toLowerCase()
+                    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove acentos
+                )
+                .filter(Boolean)
+                .sort();
+            const primeiroNome = partes.join('+');
 
             const mesaNormalizada = (mesa || '').toString().trim().toLowerCase();
             return mesaNormalizada ? `${primeiroNome}@mesa${mesaNormalizada}` : primeiroNome;
@@ -1545,18 +1558,23 @@
         // "Ver mais". Depois disso, o listener limitado (últimas 12) para de
         // sobrescrever, porque a lista completa já cobre esse caso.
         let historicoCompletoCarregado = false;
-        let buscandoHistoricoCompleto = false;
+        // Também funciona como "trava" contra buscas duplicadas em paralelo: quando
+        // uma busca está em andamento, essa variável guarda a Promise dela (em vez
+        // de só true/false), e quem chamar de novo enquanto isso recebe a MESMA
+        // Promise ao invés de disparar outra busca.
+        let buscandoHistoricoCompleto = null;
         function carregarHistoricoCompleto() {
-            if (!useFirebase || !db || historicoCompletoCarregado || buscandoHistoricoCompleto) return;
-            buscandoHistoricoCompleto = true;
-            db.ref(caminhoBar('historico')).once('value')
+            if (!useFirebase || !db || historicoCompletoCarregado) return Promise.resolve();
+            if (buscandoHistoricoCompleto) return buscandoHistoricoCompleto;
+            buscandoHistoricoCompleto = db.ref(caminhoBar('historico')).once('value')
                 .then((snapshot) => {
                     historico = objetoParaArray(snapshot.val());
                     historicoCompletoCarregado = true;
                     atualizarUI();
                 })
                 .catch((error) => console.error('❌ Erro ao buscar histórico completo:', error))
-                .finally(() => { buscandoHistoricoCompleto = false; });
+                .finally(() => { buscandoHistoricoCompleto = null; });
+            return buscandoHistoricoCompleto;
         }
 
         function salvarNoFirebase() {
@@ -1567,14 +1585,26 @@
 
             syncInProgress = true;
             try {
-                db.ref(caminhoBar()).set({
+                const dados = {
                     fila: fila,
-                    historico: historico,
                     contagem: contagemCantores,
                     manualFechada: filaManualFechada,
                     apresentacaoAtual: apresentacaoAtual,
                     ultimaAtualizacao: new Date().toISOString()
-                }, (error) => {
+                };
+                // Só inclui "historico" na gravação quando o array local está
+                // CONFIRMADAMENTE completo (ver historicoCompletoCarregado). Sem essa
+                // checagem, um dispositivo que ainda não tinha carregado o histórico
+                // inteiro (ex: acabou de abrir a página) sobrescrevia o histórico
+                // completo no Firebase com só as últimas ~12 músicas — foi isso que
+                // fazia músicas já cantadas "sumirem" do relatório depois de um tempo.
+                // Como agora é ".update()" (não ".set()"), omitir "historico" aqui
+                // simplesmente deixa esse campo como já está no Firebase, em vez de
+                // apagá-lo.
+                if (historicoCompletoCarregado) {
+                    dados.historico = historico;
+                }
+                db.ref(caminhoBar()).update(dados, (error) => {
                     syncInProgress = false;
                     if (error) {
                         console.error('❌ Erro ao salvar no Firebase:', error);
@@ -1852,13 +1882,23 @@
             function montarNovoPedido() {
                 const key = obterChaveNome(nome, mesa);
                 const prioridadeCalculada = contagemCantores[key] || 0;
+                const agora = new Date().getTime();
                 return {
                     id: Date.now() + Math.floor(Math.random() * 1000), // evita colisão se dois pedidos vierem no mesmo milissegundo
                     nome: nome,
                     mesa: mesa || null,
                     musica: musica,
                     artista: artista,
-                    timestamp: new Date().getTime(),
+                    // "timestamp" é a hora em que a música foi PEDIDA — nunca muda depois
+                    // disso, é o que o relatório de horário de pico usa. Já
+                    // "timestampFila" é o "relógio de espera" da fila (usado pra
+                    // calcular prioridade) e É alterado quando o DJ usa "Pular Vez"
+                    // (ver acaoPular) — se os dois fossem o mesmo campo, pular a vez de
+                    // alguém reescrevia a hora do pedido dela com a hora atual,
+                    // fazendo o relatório mostrar a hora que ela cantou em vez da hora
+                    // que ela pediu.
+                    timestamp: agora,
+                    timestampFila: agora,
                     vezesCantadas: prioridadeCalculada,
                     youtubeUrl: youtubeUrlDoPedido
                 };
@@ -1974,20 +2014,24 @@
         // quantas vezes a pessoa já cantou, e vai descontando conforme o tempo de espera
         // desse pedido específico passa. Quanto MENOR o número, mais cedo ela canta.
         function calcularPrioridadeEfetiva(pedido) {
-            const minutosEsperando = (Date.now() - pedido.timestamp) / 60000;
+            // "timestampFila" é o relógio de espera da fila (reiniciado pelo "Pular
+            // Vez" — ver acaoPular); o "|| pedido.timestamp" é só compatibilidade com
+            // pedidos que já estavam na fila antes desse campo existir.
+            const referencia = pedido.timestampFila || pedido.timestamp;
+            const minutosEsperando = (Date.now() - referencia) / 60000;
             return pedido.vezesCantadas - (minutosEsperando / MINUTOS_PARA_PERDOAR_UMA_VEZ_CANTADA);
         }
 
         function ordenarFila() {
             // Regra: menos vezes cantadas primeiro — mas o "peso" de já ter cantado
             // vai diminuindo com o tempo de espera (ver calcularPrioridadeEfetiva).
-            // Em empate, ordem de chegada (timestamp).
+            // Em empate, ordem de chegada na fila (timestampFila).
             fila.sort((a, b) => {
                 const diferenca = calcularPrioridadeEfetiva(a) - calcularPrioridadeEfetiva(b);
                 if (Math.abs(diferenca) > 0.0001) {
                     return diferenca;
                 }
-                return a.timestamp - b.timestamp;
+                return (a.timestampFila || a.timestamp) - (b.timestampFila || b.timestamp);
             });
         }
 
@@ -2002,12 +2046,26 @@
             if (index !== -1) {
                 const pedido = fila.splice(index, 1)[0];
 
-                // Inicia a apresentação (ainda não conta como cantada nem entra no histórico)
+                // Inicia a apresentação (ainda não entra no histórico, isso só
+                // acontece ao finalizar — ver acaoFinalizarApresentacao)
                 apresentacaoAtual = {
                     ...pedido,
                     avaliacoes: {},
                     iniciadoEm: new Date().toISOString()
                 };
+
+                // Já conta essa apresentação como "cantada" pra prioridade da fila
+                // assim que ela COMEÇA, não só quando termina — sem isso, se essa
+                // mesma pessoa tivesse outras músicas pedidas, elas continuavam com
+                // prioridade desatualizada (mais alta do que deveriam) até o DJ
+                // clicar em "Finalizar Apresentação", que podia demorar.
+                const key = obterChaveNome(pedido.nome, pedido.mesa);
+                contagemCantores[key] = (contagemCantores[key] || 0) + 1;
+                fila.forEach(p => {
+                    if (obterChaveNome(p.nome, p.mesa) === key) {
+                        p.vezesCantadas = contagemCantores[key];
+                    }
+                });
 
                 ordenarFila();
                 salvarNoFirebase();
@@ -2015,15 +2073,21 @@
             }
         }
 
-        // Encerra a apresentação atual: registra no histórico com a média de avaliações
-        // e incrementa o contador de vezes cantadas do cantor.
-        function acaoFinalizarApresentacao() {
+        // Encerra a apresentação atual: registra no histórico com a média de
+        // avaliações. O contador de vezes cantadas já foi incrementado quando a
+        // apresentação começou (ver acaoProximo).
+        async function acaoFinalizarApresentacao() {
             if (!apresentacaoAtual) return;
 
-            const pedido = apresentacaoAtual;
-            const key = obterChaveNome(pedido.nome, pedido.mesa);
-            contagemCantores[key] = (contagemCantores[key] || 0) + 1;
+            // Garante que o histórico local está completo ANTES de gravar — sem
+            // isso, salvarNoFirebase() poderia gravar (ou pior, deixar de gravar por
+            // segurança) com um array incompleto. Normalmente já está completo
+            // nesse ponto (a aba Admin carrega tudo ao abrir), então isso resolve na
+            // hora; só espera de verdade no caso raro de a busca ainda não ter
+            // terminado.
+            await carregarHistoricoCompleto();
 
+            const pedido = apresentacaoAtual;
             const { media, votos } = mediaEVotos(pedido.avaliacoes);
 
             historico.unshift({
@@ -2031,13 +2095,6 @@
                 horario: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
                 mediaAvaliacao: media,
                 totalVotos: votos
-            });
-
-            // Atualiza o contador de quem ainda está na fila
-            fila.forEach(p => {
-                if (obterChaveNome(p.nome, p.mesa) === key) {
-                    p.vezesCantadas = contagemCantores[key];
-                }
             });
 
             apresentacaoAtual = null;
@@ -2078,7 +2135,9 @@
         function acaoPular(id) {
             const index = fila.findIndex(p => p.id === id);
             if (index !== -1) {
-                fila[index].timestamp = Date.now();
+                // Só reinicia o relógio de espera da fila — "timestamp" (hora do
+                // pedido, usada no relatório de horário de pico) fica intocado.
+                fila[index].timestampFila = Date.now();
                 ordenarFila();
                 salvarNoFirebase();
                 atualizarUI();
