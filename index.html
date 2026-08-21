@@ -1570,16 +1570,25 @@
         // de só true/false), e quem chamar de novo enquanto isso recebe a MESMA
         // Promise ao invés de disparar outra busca.
         let buscandoHistoricoCompleto = null;
+        // Devolve uma Promise que resolve pra "true" quando o histórico local está
+        // (ou já estava) confirmadamente completo, e "false" se a busca falhou (ex:
+        // sem internet) — quem chama precisa checar isso antes de confiar que
+        // historicoCompletoCarregado ficou true (ver acaoFinalizarApresentacao).
         function carregarHistoricoCompleto() {
-            if (!useFirebase || !db || historicoCompletoCarregado) return Promise.resolve();
+            if (!useFirebase || !db) return Promise.resolve(true); // modo local: já está sempre completo
+            if (historicoCompletoCarregado) return Promise.resolve(true);
             if (buscandoHistoricoCompleto) return buscandoHistoricoCompleto;
             buscandoHistoricoCompleto = db.ref(caminhoBar('historico')).once('value')
                 .then((snapshot) => {
                     historico = objetoParaArray(snapshot.val());
                     historicoCompletoCarregado = true;
                     atualizarUI();
+                    return true;
                 })
-                .catch((error) => console.error('❌ Erro ao buscar histórico completo:', error))
+                .catch((error) => {
+                    console.error('❌ Erro ao buscar histórico completo:', error);
+                    return false;
+                })
                 .finally(() => { buscandoHistoricoCompleto = null; });
             return buscandoHistoricoCompleto;
         }
@@ -2086,15 +2095,32 @@
         async function acaoFinalizarApresentacao() {
             if (!apresentacaoAtual) return;
 
+            // Guarda o pedido e já "reserva" a finalização (zera apresentacaoAtual)
+            // ANTES do await abaixo — sem isso, um clique duplo/rápido no botão
+            // (antes da busca terminar) passava pela checagem acima duas vezes e
+            // processava a mesma apresentação duas vezes, duplicando a entrada no
+            // histórico.
+            const pedido = apresentacaoAtual;
+            apresentacaoAtual = null;
+            atualizarUI();
+
             // Garante que o histórico local está completo ANTES de gravar — sem
             // isso, salvarNoFirebase() poderia gravar (ou pior, deixar de gravar por
             // segurança) com um array incompleto. Normalmente já está completo
             // nesse ponto (a aba Admin carrega tudo ao abrir), então isso resolve na
             // hora; só espera de verdade no caso raro de a busca ainda não ter
             // terminado.
-            await carregarHistoricoCompleto();
+            const historicoOk = await carregarHistoricoCompleto();
+            if (!historicoOk) {
+                // A busca falhou (ex: sem internet) — desfaz a "reserva" acima em vez
+                // de arriscar perder essa música do histórico silenciosamente. O DJ
+                // pode tentar de novo assim que a conexão voltar.
+                apresentacaoAtual = pedido;
+                atualizarUI();
+                alert('Não foi possível confirmar o histórico antes de finalizar (verifique a internet). Tente novamente.');
+                return;
+            }
 
-            const pedido = apresentacaoAtual;
             const { media, votos } = mediaEVotos(pedido.avaliacoes);
 
             historico.unshift({
@@ -2103,8 +2129,6 @@
                 mediaAvaliacao: media,
                 totalVotos: votos
             });
-
-            apresentacaoAtual = null;
 
             ordenarFila();
             salvarNoFirebase();
