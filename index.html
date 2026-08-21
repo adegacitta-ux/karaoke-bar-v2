@@ -836,6 +836,13 @@
             return artista && artista.trim() ? `${musica} — ${artista}` : musica;
         }
 
+        // Formata a hora do pedido (ex: "20:52") a partir do timestamp — usado na
+        // fila do Admin/DJ, pra ele ver há quanto tempo cada pedido está esperando.
+        function formatarHoraPedido(timestamp) {
+            if (typeof timestamp !== 'number') return '';
+            return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
         // --- VALIDAÇÃO DO FORMULÁRIO ---
         // Cada validador devolve { valido, mensagem } — a mensagem só é usada quando
         // valido é false. Os campos "opcionais" (mesa) só falham se preenchidos errado,
@@ -2274,6 +2281,7 @@
                             <td class="px-6 py-4 font-semibold text-gray-800">
                                 ${escaparHtml(pedido.nome)}
                                 ${pedido.mesa ? `<div class="text-xs text-gray-400 mt-1">Mesa: ${escaparHtml(pedido.mesa)}</div>` : ''}
+                                <div class="text-xs text-gray-400 mt-1"><i class="fas fa-clock mr-1" aria-hidden="true"></i>Pedido às ${formatarHoraPedido(pedido.timestamp)}</div>
                             </td>
                             <td class="px-6 py-4 text-gray-600">${escaparHtml(pedido.musica)} ${pedido.artista ? `<br> <span class="text-xs text-gray-400">${escaparHtml(pedido.artista)}</span>` : ''} ${linkYoutubeSeguro(pedido.youtubeUrl)}</td>
                             <td class="px-6 py-4">
