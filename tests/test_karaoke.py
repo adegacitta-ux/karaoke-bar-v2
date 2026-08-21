@@ -981,6 +981,136 @@ def test_display_mostra_status_de_conexao_honesto(browser, base_url):
     context.close()
 
 
+def test_historico_permanente_limita_a_um_ano(browser, base_url):
+    """O 'Histórico Permanente' só considera os últimos 12 meses (registros mais
+    antigos ficam de fora das estatísticas) e limpa sozinho, no banco, qualquer
+    registro que já passou dessa janela — evita crescer pra sempre."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    page.evaluate("""
+        window.__removidos = [];
+        useFirebase = true;
+        const agora = Date.now();
+        const umAno = 365 * 24 * 60 * 60 * 1000;
+
+        const banco = {
+            'recente1': {nome: 'Carlos', mesa: '5', musica: 'Evidencias', artista: 'X', timestamp: agora - (10 * 24*60*60*1000), horario: 'x', mediaAvaliacao: 4, totalVotos: 2},
+            'recente2': {nome: 'Maria', mesa: '3', musica: 'Numb', artista: 'Linkin Park', timestamp: agora - (100 * 24*60*60*1000), horario: 'x', mediaAvaliacao: 5, totalVotos: 3},
+            'antigo1': {nome: 'Joao', mesa: '8', musica: 'Antiga', artista: 'Y', timestamp: agora - umAno - (10 * 24*60*60*1000), horario: 'x', mediaAvaliacao: 3, totalVotos: 1},
+            'antigo2': {nome: 'Ana', mesa: '2', musica: 'MuitoAntiga', artista: 'Z', timestamp: agora - umAno - (400 * 24*60*60*1000), horario: 'x', mediaAvaliacao: 2, totalVotos: 1}
+        };
+
+        function filtrarPorTimestamp(corte, pegarMaiorOuIgual) {
+            const resultado = {};
+            Object.keys(banco).forEach(chave => {
+                const ts = banco[chave].timestamp;
+                if (pegarMaiorOuIgual ? ts >= corte : ts <= corte) resultado[chave] = banco[chave];
+            });
+            return resultado;
+        }
+
+        db = {
+            ref: function(path) {
+                return {
+                    orderByChild: function(campo) {
+                        return {
+                            startAt: function(corte) {
+                                return { once: function() { return Promise.resolve({ val: () => filtrarPorTimestamp(corte, true) }); } };
+                            },
+                            endAt: function(corte) {
+                                return { once: function() { return Promise.resolve({ val: () => filtrarPorTimestamp(corte, false) }); } };
+                            }
+                        };
+                    },
+                    update: function(atualizacoes) {
+                        Object.keys(atualizacoes).forEach(chave => {
+                            if (atualizacoes[chave] === null) window.__removidos.push(chave);
+                        });
+                        return Promise.resolve();
+                    }
+                };
+            }
+        };
+
+        carregarEstatisticasPermanentes();
+    """)
+    page.wait_for_timeout(500)
+
+    total_musicas = page.evaluate("document.getElementById('perm-total-musicas').innerText")
+    removidos = page.evaluate("window.__removidos")
+
+    ok = (total_musicas == "2" and set(removidos) == {"antigo1", "antigo2"} and not erros)
+    registrar("Histórico permanente limita a 1 ano e limpa registros antigos sozinho", ok,
+               f"total_musicas_exibido={total_musicas} (esperado 2), removidos={removidos} (esperado antigo1+antigo2)")
+    context.close()
+
+
+def _contraste(cor1, cor2):
+    """Calcula a taxa de contraste entre duas cores hex, seguindo a fórmula do
+    WCAG. 4.5 é o mínimo recomendado pra texto normal ler bem."""
+    def luminancia(hex_cor):
+        hex_cor = hex_cor.lstrip("#")
+        r, g, b = [int(hex_cor[i:i+2], 16) / 255 for i in (0, 2, 4)]
+        def ajustar(c):
+            return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+        r, g, b = ajustar(r), ajustar(g), ajustar(b)
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    l1, l2 = luminancia(cor1), luminancia(cor2)
+    claro, escuro = max(l1, l2), min(l1, l2)
+    return (claro + 0.05) / (escuro + 0.05)
+
+
+def _rgb_para_hex(rgb_css):
+    """Converte 'rgb(134, 239, 172)' pra '#86efac'."""
+    numeros = [int(n) for n in rgb_css.strip("rgb()").split(",")]
+    return "#{:02x}{:02x}{:02x}".format(*numeros)
+
+
+def test_contraste_de_cores_no_modo_escuro(browser, base_url):
+    """Vários textos coloridos (verde, amarelo, laranja, vermelho, azul) tinham
+    o FUNDO escurecido no modo escuro, mas o texto continuava com a cor clara
+    original — as duas cores escuras ficavam quase impossíveis de ler. Confirma
+    que agora todas têm contraste acima do mínimo recomendado (4.5)."""
+    context, page, erros = nova_pagina(browser, base_url)
+    page.evaluate("document.body.classList.add('modo-escuro')")
+
+    page.evaluate("""
+        fila = [{id: 1, nome: 'Teste', mesa: null, musica: 'Musica', artista: 'X', timestamp: Date.now(), vezesCantadas: 0, youtubeUrl: null}];
+        registrarMeuPedido(1);
+        apresentacaoAtual = {id: 1, nome: 'Teste', musica: 'Musica', artista: 'X', avaliacoes: {a:5,b:5}};
+        atualizarUI();
+    """)
+    page.wait_for_timeout(200)
+
+    pares = page.evaluate("""
+        (function() {
+            function corDe(seletor, propriedade) {
+                const el = document.querySelector(seletor);
+                return el ? getComputedStyle(el)[propriedade] : null;
+            }
+            return {
+                verde: [corDe('.text-green-700', 'color'), corDe('.bg-green-50', 'backgroundColor')],
+                amarelo: [corDe('.text-yellow-600', 'color'), corDe('.bg-yellow-50', 'backgroundColor')]
+            };
+        })()
+    """)
+
+    resultados = {}
+    ok_geral = True
+    for nome, (cor_texto, cor_fundo) in pares.items():
+        if not cor_texto or not cor_fundo:
+            continue
+        contraste = _contraste(_rgb_para_hex(cor_texto), _rgb_para_hex(cor_fundo))
+        resultados[nome] = round(contraste, 2)
+        if contraste < 4.5:
+            ok_geral = False
+
+    ok = ok_geral and len(resultados) > 0 and not erros
+    registrar("Contraste de texto colorido no modo escuro está acima do mínimo (4.5)", ok,
+               f"contrastes={resultados}")
+    context.close()
+
+
 # ---------------------------------------------------------------------------
 
 def main():
@@ -1033,6 +1163,8 @@ def main():
             test_catalogo_escolher_musica_preenche_index(browser, base_url)
             test_voto_que_falha_avisa_a_pessoa(browser, base_url)
             test_display_mostra_status_de_conexao_honesto(browser, base_url)
+            test_historico_permanente_limita_a_um_ano(browser, base_url)
+            test_contraste_de_cores_no_modo_escuro(browser, base_url)
 
             browser.close()
 

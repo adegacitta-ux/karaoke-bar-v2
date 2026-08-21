@@ -38,6 +38,7 @@
         .modo-escuro .bg-green-50 { background-color: #16261d; }
         .modo-escuro .bg-red-50 { background-color: #2a1717; }
         .modo-escuro .bg-yellow-50 { background-color: #2a2312; }
+        .modo-escuro .bg-orange-50 { background-color: #2a1d12; }
         .modo-escuro .bg-indigo-100 { background-color: #263a63; }
         .modo-escuro .bg-red-100 { background-color: #3a1f1f; }
 
@@ -50,6 +51,31 @@
         .modo-escuro .text-indigo-700,
         .modo-escuro .text-indigo-600,
         .modo-escuro .text-indigo-500 { color: #a5b4fc; }
+
+        /* Essas cores de texto tinham o FUNDO escurecido (ex: bg-green-50) mas o
+           texto continuava com a cor escura original (ex: text-green-700) — as
+           duas cores escuras juntas ficavam quase ilegíveis. Clareamos o texto
+           pra manter contraste bom em qualquer fundo escuro da tela. */
+        .modo-escuro .text-green-600,
+        .modo-escuro .text-green-700 { color: #86efac; }
+        .modo-escuro .text-yellow-600,
+        .modo-escuro .text-yellow-700 { color: #fde047; }
+        .modo-escuro .text-orange-500,
+        .modo-escuro .text-orange-600,
+        .modo-escuro .text-orange-700 { color: #fdba74; }
+        .modo-escuro .text-red-500,
+        .modo-escuro .text-red-600,
+        .modo-escuro .text-red-700 { color: #fca5a5; }
+        .modo-escuro .text-blue-700 { color: #93c5fd; }
+
+        /* Bordas coloridas dos mesmos cartões (verde, amarelo, laranja, vermelho,
+           azul) — mais discretas que o texto, só pra não sumirem no fundo escuro */
+        .modo-escuro .border-green-200 { border-color: #15803d; }
+        .modo-escuro .border-yellow-200 { border-color: #a16207; }
+        .modo-escuro .border-orange-200 { border-color: #c2410c; }
+        .modo-escuro .border-red-200 { border-color: #b91c1c; }
+        .modo-escuro .border-red-600 { border-color: #f87171; }
+        .modo-escuro .border-blue-100 { border-color: #1d4ed8; }
 
         .modo-escuro .border-gray-100,
         .modo-escuro .border-gray-200,
@@ -496,6 +522,51 @@
                                 <div>
                                     <h4 class="text-sm font-bold text-gray-700 mb-2">🎤 Quem mais cantou</h4>
                                     <ol id="rel-ranking-cantores" class="space-y-1 text-sm text-gray-600">
+                                        <!-- Inserido via JS -->
+                                    </ol>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Histórico Permanente -->
+                    <div class="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
+                        <div class="bg-gray-50 px-6 py-4 border-b flex justify-between items-center">
+                            <h3 class="font-bold text-gray-800"><i class="fas fa-infinity mr-2" aria-hidden="true"></i>Histórico Permanente</h3>
+                        </div>
+                        <div class="p-6">
+                            <p class="text-xs text-gray-400 mb-3">
+                                Diferente do "Relatórios da Noite" (que reseta em "Limpar Tudo"), isso guarda o que foi
+                                cantado ao longo do <strong>último ano</strong> — útil pra saber a música mais pedida do mês/ano.
+                                Registros com mais de 1 ano são removidos automaticamente, pra não acumular pra sempre.
+                            </p>
+                            <button type="button" id="btn-carregar-historico-permanente" onclick="carregarEstatisticasPermanentes()" class="w-full py-2 rounded-lg border border-indigo-200 text-indigo-600 font-semibold text-sm hover:bg-indigo-50 transition-colors">
+                                <i class="fas fa-chart-line mr-2" aria-hidden="true"></i>Ver estatísticas do último ano
+                            </button>
+
+                            <div id="permanente-conteudo" class="hidden mt-4 space-y-6">
+                                <div class="grid grid-cols-2 gap-3 text-center">
+                                    <div class="bg-indigo-50 rounded-xl py-3">
+                                        <div class="text-2xl font-bold text-indigo-600" id="perm-total-musicas">0</div>
+                                        <div class="text-xs text-gray-500">Músicas cantadas (último ano)</div>
+                                    </div>
+                                    <div class="bg-indigo-50 rounded-xl py-3">
+                                        <div class="text-2xl font-bold text-indigo-600" id="perm-total-noites">0</div>
+                                        <div class="text-xs text-gray-500">Dias diferentes com uso</div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <h4 class="text-sm font-bold text-gray-700 mb-2">🎵 Músicas mais cantadas (último ano)</h4>
+                                    <ol id="perm-ranking-musicas" class="space-y-1 text-sm text-gray-600">
+                                        <!-- Inserido via JS -->
+                                    </ol>
+                                </div>
+
+                                <div>
+                                    <h4 class="text-sm font-bold text-gray-700 mb-2">🎤 Quem mais cantou (último ano)</h4>
+                                    <p class="text-xs text-gray-400 -mt-1 mb-2">Considera só o primeiro nome — duas pessoas diferentes com o mesmo primeiro nome em noites diferentes podem aparecer somadas aqui.</p>
+                                    <ol id="perm-ranking-cantores" class="space-y-1 text-sm text-gray-600">
                                         <!-- Inserido via JS -->
                                     </ol>
                                 </div>
@@ -1908,6 +1979,15 @@
             return div.innerHTML;
         }
 
+        // Remove acentos e deixa minúsculo — usado pra AGRUPAR nomes/textos parecidos
+        // (ex: "José" e "jose" contam como a mesma coisa nas estatísticas permanentes)
+        function normalizarTexto(texto) {
+            return (texto || '')
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[̀-ͯ]/g, '');
+        }
+
         // Monta o link "Abrir no YouTube" só se a URL salva for realmente do YouTube —
         // além de escapar (pra não quebrar o atributo href), isso barra alguém tentando
         // salvar um link do tipo "javascript:..." em vez de um vídeo de verdade.
@@ -2215,16 +2295,141 @@
 
             const { media, votos } = mediaEVotos(pedido.avaliacoes);
 
-            historico.unshift({
+            const registro = {
                 ...pedido,
                 horario: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
                 mediaAvaliacao: media,
                 totalVotos: votos
-            });
+            };
+
+            historico.unshift(registro);
+            registrarNoHistoricoPermanente(registro); // guarda pra sempre, mesmo depois de "Limpar Tudo"
 
             ordenarFila();
             salvarNoFirebase();
             atualizarUI();
+        }
+
+        // Guarda um registro permanente de cada apresentação — separado do "historico"
+        // de cada noite (que reseta em "Limpar Tudo da Noite"). Usa push() em vez de
+        // reescrever a lista inteira, então mesmo depois de anos de uso o tamanho de
+        // cada gravação continua pequeno (só o registro novo, não a lista toda).
+        function registrarNoHistoricoPermanente(registro) {
+            if (!useFirebase || !db) return; // sem Firebase não dá pra manter histórico entre sessões locais
+            db.ref(caminhoBar('historicoPermanente')).push(registro, (error) => {
+                if (error) console.error('❌ Erro ao salvar no histórico permanente:', error);
+            });
+        }
+
+        const UM_ANO_EM_MS = 365 * 24 * 60 * 60 * 1000;
+
+        // Busca só o último ANO do histórico permanente SOB DEMANDA (só quando o DJ
+        // clica no botão) — usa orderByChild pra já filtrar no próprio Firebase (não
+        // baixa o resto), então mesmo depois de vários anos de uso a consulta continua
+        // limitada a, no máximo, ~1 ano de dados.
+        function carregarEstatisticasPermanentes() {
+            const btn = document.getElementById('btn-carregar-historico-permanente');
+            if (!useFirebase || !db) {
+                alert('Isso precisa de conexão com o Firebase.');
+                return;
+            }
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>Carregando...';
+
+            const corte = Date.now() - UM_ANO_EM_MS;
+
+            db.ref(caminhoBar('historicoPermanente')).orderByChild('timestamp').startAt(corte).once('value')
+                .then((snapshot) => {
+                    const registros = objetoParaArray(snapshot.val());
+                    renderizarEstatisticasPermanentes(registros);
+                    // Aproveita essa visita pra limpar o que passou de 1 ano — roda em
+                    // segundo plano, não atrasa nem depende da tela já estar mostrada
+                    limparHistoricoPermanenteAntigo(corte);
+                })
+                .catch((error) => {
+                    console.error('❌ Erro ao carregar histórico permanente:', error);
+                    alert('Não deu pra carregar as estatísticas agora. Tente de novo em instantes.');
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-chart-line mr-2" aria-hidden="true"></i>Ver estatísticas do último ano';
+                });
+        }
+
+        // Remove do banco os registros com mais de 1 ano — mantém o histórico
+        // permanente sempre dentro de uma janela de 12 meses, tanto pra não crescer
+        // pra sempre (custo/armazenamento) quanto pra manter a consulta sempre rápida.
+        // Roda sozinha, sem travar nada nem pedir confirmação — é manutenção de rotina.
+        function limparHistoricoPermanenteAntigo(corte) {
+            if (!useFirebase || !db) return;
+            db.ref(caminhoBar('historicoPermanente')).orderByChild('timestamp').endAt(corte).once('value')
+                .then((snapshot) => {
+                    const antigos = snapshot.val();
+                    if (!antigos) return;
+                    const chaves = Object.keys(antigos);
+                    if (chaves.length === 0) return;
+                    const atualizacoes = {};
+                    chaves.forEach(chave => { atualizacoes[chave] = null; }); // null = remove essa chave
+                    return db.ref(caminhoBar('historicoPermanente')).update(atualizacoes).then(() => chaves.length);
+                })
+                .then((quantidadeRemovida) => {
+                    if (quantidadeRemovida) console.log(`🧹 Histórico permanente: ${quantidadeRemovida} registro(s) com mais de 1 ano removido(s)`);
+                })
+                .catch((error) => console.error('❌ Erro ao limpar histórico permanente antigo:', error));
+        }
+
+        function renderizarEstatisticasPermanentes(registros) {
+            document.getElementById('permanente-conteudo').classList.remove('hidden');
+
+            if (registros.length === 0) {
+                document.getElementById('perm-total-musicas').innerText = '0';
+                document.getElementById('perm-total-noites').innerText = '0';
+                document.getElementById('perm-ranking-musicas').innerHTML = '<li class="text-gray-400 italic">Ainda sem dados.</li>';
+                document.getElementById('perm-ranking-cantores').innerHTML = '<li class="text-gray-400 italic">Ainda sem dados.</li>';
+                return;
+            }
+
+            document.getElementById('perm-total-musicas').innerText = registros.length;
+
+            // "Dias diferentes com uso" — conta datas únicas a partir do timestamp de cada registro
+            const diasUnicos = new Set(
+                registros.filter(r => typeof r.timestamp === 'number')
+                         .map(r => new Date(r.timestamp).toDateString())
+            );
+            document.getElementById('perm-total-noites').innerText = diasUnicos.size;
+
+            // Ranking de músicas (mesma lógica do relatório da noite, só que com tudo)
+            const contagemMusicas = {};
+            const nomeOriginalMusica = {};
+            registros.forEach(r => {
+                const chave = (r.musica || '').trim().toLowerCase();
+                if (!chave) return;
+                contagemMusicas[chave] = (contagemMusicas[chave] || 0) + 1;
+                nomeOriginalMusica[chave] = r.musica;
+            });
+            const topMusicas = Object.entries(contagemMusicas).sort((a, b) => b[1] - a[1]).slice(0, 10);
+            document.getElementById('perm-ranking-musicas').innerHTML = topMusicas.length === 0
+                ? '<li class="text-gray-400 italic">Sem dados.</li>'
+                : topMusicas.map(([chave, qtd], i) =>
+                    `<li class="flex justify-between"><span>${i + 1}. ${escaparHtml(nomeOriginalMusica[chave])}</span><span class="font-bold text-gray-800">${qtd}x</span></li>`
+                  ).join('');
+
+            // Ranking de cantores — aqui usamos só o PRIMEIRO NOME (sem a mesa, que muda
+            // de noite pra noite e não identifica a pessoa de verdade ao longo do tempo)
+            const contagemCantoresPermanente = {};
+            const nomeOriginalCantor = {};
+            registros.forEach(r => {
+                const chave = normalizarTexto((r.nome || '').trim().split(/\s+/)[0]);
+                if (!chave) return;
+                contagemCantoresPermanente[chave] = (contagemCantoresPermanente[chave] || 0) + 1;
+                nomeOriginalCantor[chave] = (r.nome || '').trim().split(/\s+/)[0];
+            });
+            const topCantores = Object.entries(contagemCantoresPermanente).sort((a, b) => b[1] - a[1]).slice(0, 10);
+            document.getElementById('perm-ranking-cantores').innerHTML = topCantores.length === 0
+                ? '<li class="text-gray-400 italic">Sem dados.</li>'
+                : topCantores.map(([chave, qtd], i) =>
+                    `<li class="flex justify-between"><span>${i + 1}. ${escaparHtml(nomeOriginalCantor[chave])}</span><span class="font-bold text-gray-800">${qtd}x</span></li>`
+                  ).join('');
         }
 
         // Registra (ou atualiza) o voto do dispositivo atual para a apresentação em andamento

@@ -1,0 +1,33 @@
+{
+  "rules": {
+    "bares": {
+      "$barId": {
+        "config": {
+          ".read": true,
+          ".write": false
+        },
+
+        "karaoke": {
+          ".read": true,
+          ".write": "auth != null && auth.token.email == root.child('bares/' + $barId + '/config/adminEmail').val()",
+
+          "fila": {
+            ".write": "auth != null"
+          },
+
+          "apresentacaoAtual": {
+            "avaliacoes": {
+              "$votanteId": {
+                ".write": "auth != null"
+              }
+            }
+          },
+
+          "historicoPermanente": {
+            ".indexOn": "timestamp"
+          }
+        }
+      }
+    }
+  }
+}
