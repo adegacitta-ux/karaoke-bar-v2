@@ -1545,18 +1545,23 @@
         // "Ver mais". Depois disso, o listener limitado (últimas 12) para de
         // sobrescrever, porque a lista completa já cobre esse caso.
         let historicoCompletoCarregado = false;
-        let buscandoHistoricoCompleto = false;
+        // Também funciona como "trava" contra buscas duplicadas em paralelo: quando
+        // uma busca está em andamento, essa variável guarda a Promise dela (em vez
+        // de só true/false), e quem chamar de novo enquanto isso recebe a MESMA
+        // Promise ao invés de disparar outra busca.
+        let buscandoHistoricoCompleto = null;
         function carregarHistoricoCompleto() {
-            if (!useFirebase || !db || historicoCompletoCarregado || buscandoHistoricoCompleto) return;
-            buscandoHistoricoCompleto = true;
-            db.ref(caminhoBar('historico')).once('value')
+            if (!useFirebase || !db || historicoCompletoCarregado) return Promise.resolve();
+            if (buscandoHistoricoCompleto) return buscandoHistoricoCompleto;
+            buscandoHistoricoCompleto = db.ref(caminhoBar('historico')).once('value')
                 .then((snapshot) => {
                     historico = objetoParaArray(snapshot.val());
                     historicoCompletoCarregado = true;
                     atualizarUI();
                 })
                 .catch((error) => console.error('❌ Erro ao buscar histórico completo:', error))
-                .finally(() => { buscandoHistoricoCompleto = false; });
+                .finally(() => { buscandoHistoricoCompleto = null; });
+            return buscandoHistoricoCompleto;
         }
 
         function salvarNoFirebase() {
@@ -1567,14 +1572,26 @@
 
             syncInProgress = true;
             try {
-                db.ref(caminhoBar()).set({
+                const dados = {
                     fila: fila,
-                    historico: historico,
                     contagem: contagemCantores,
                     manualFechada: filaManualFechada,
                     apresentacaoAtual: apresentacaoAtual,
                     ultimaAtualizacao: new Date().toISOString()
-                }, (error) => {
+                };
+                // Só inclui "historico" na gravação quando o array local está
+                // CONFIRMADAMENTE completo (ver historicoCompletoCarregado). Sem essa
+                // checagem, um dispositivo que ainda não tinha carregado o histórico
+                // inteiro (ex: acabou de abrir a página) sobrescrevia o histórico
+                // completo no Firebase com só as últimas ~12 músicas — foi isso que
+                // fazia músicas já cantadas "sumirem" do relatório depois de um tempo.
+                // Como agora é ".update()" (não ".set()"), omitir "historico" aqui
+                // simplesmente deixa esse campo como já está no Firebase, em vez de
+                // apagá-lo.
+                if (historicoCompletoCarregado) {
+                    dados.historico = historico;
+                }
+                db.ref(caminhoBar()).update(dados, (error) => {
                     syncInProgress = false;
                     if (error) {
                         console.error('❌ Erro ao salvar no Firebase:', error);
@@ -2046,8 +2063,16 @@
         // Encerra a apresentação atual: registra no histórico com a média de
         // avaliações. O contador de vezes cantadas já foi incrementado quando a
         // apresentação começou (ver acaoProximo).
-        function acaoFinalizarApresentacao() {
+        async function acaoFinalizarApresentacao() {
             if (!apresentacaoAtual) return;
+
+            // Garante que o histórico local está completo ANTES de gravar — sem
+            // isso, salvarNoFirebase() poderia gravar (ou pior, deixar de gravar por
+            // segurança) com um array incompleto. Normalmente já está completo
+            // nesse ponto (a aba Admin carrega tudo ao abrir), então isso resolve na
+            // hora; só espera de verdade no caso raro de a busca ainda não ter
+            // terminado.
+            await carregarHistoricoCompleto();
 
             const pedido = apresentacaoAtual;
             const { media, votos } = mediaEVotos(pedido.avaliacoes);
