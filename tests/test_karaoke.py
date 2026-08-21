@@ -889,12 +889,18 @@ def test_catalogo_escolher_musica_preenche_index(browser, base_url):
     aguardar_tailwind(page)
     page.wait_for_timeout(300)
 
-    # Acha o índice do item "Numb" no catálogo e "clica" nele via JS
-    page.evaluate("""
-        const indice = CATALOGO_MUSICAS.findIndex(m => m.musica === 'Numb');
-        escolherMusica(indice);
-    """)
-    page.wait_for_timeout(300)
+    # Acha o índice do item "Numb" no catálogo e "clica" nele via JS. Usa
+    # expect_navigation() em vez de só um wait_for_timeout fixo — escolherMusica()
+    # navega via "window.location.href", e sem esperar a navegação de verdade
+    # (page.evaluate retorna antes dela terminar) esse teste ficava instável em
+    # ambientes mais lentos/sem internet, tentando ler o formulário no meio da
+    # troca de página.
+    with page.expect_navigation(timeout=30000):
+        page.evaluate("""
+            const indice = CATALOGO_MUSICAS.findIndex(m => m.musica === 'Numb');
+            escolherMusica(indice);
+        """)
+    page.wait_for_load_state("domcontentloaded")
     aguardar_tailwind(page)
     page.wait_for_timeout(200)
 
