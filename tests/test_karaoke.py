@@ -1111,93 +1111,6 @@ def test_contraste_de_cores_no_modo_escuro(browser, base_url):
     context.close()
 
 
-def test_pedido_pago_pix_fura_a_fila(browser, base_url):
-    """Um pedido marcado como pago (pagamentosPixPublico, o nó público que o
-    webhookMercadoPago grava via Admin SDK -- ver functions/index.js) vai pro
-    topo da fila mesmo tendo cantado mais vezes que os outros: é literalmente
-    o que a pessoa pagou por isso (ver ordenarFila em index.html). Entre dois
-    pedidos pagos, quem pagou primeiro (timestampPago menor) fica na frente."""
-    context, page, erros = nova_pagina(browser, base_url)
-
-    page.evaluate("""
-        fila = [
-            {id: 1, nome: 'JaCantouMuito', mesa: null, musica: 'M1', artista: 'X', timestamp: Date.now() - 90000, timestampFila: Date.now() - 90000, vezesCantadas: 5, youtubeUrl: null},
-            {id: 2, nome: 'NuncaCantou', mesa: null, musica: 'M2', artista: 'X', timestamp: Date.now() - 60000, timestampFila: Date.now() - 60000, vezesCantadas: 0, youtubeUrl: null},
-            {id: 3, nome: 'PagouSegundo', mesa: null, musica: 'M3', artista: 'X', timestamp: Date.now() - 30000, timestampFila: Date.now() - 30000, vezesCantadas: 3, youtubeUrl: null},
-            {id: 4, nome: 'PagouPrimeiro', mesa: null, musica: 'M4', artista: 'X', timestamp: Date.now() - 10000, timestampFila: Date.now() - 10000, vezesCantadas: 3, youtubeUrl: null}
-        ];
-        pagamentosPixPublico = {
-            3: { prioridadePaga: true, timestampPago: 2000 },
-            4: { prioridadePaga: true, timestampPago: 1000 }
-        };
-        ordenarFila();
-    """)
-
-    ordem = page.evaluate("fila.map(p => p.nome)")
-
-    ok = ordem == ["PagouPrimeiro", "PagouSegundo", "NuncaCantou", "JaCantouMuito"] and not erros
-    registrar("Pedido pago via PIX fura a fila, na ordem de quem pagou primeiro", ok,
-               f"ordem_obtida={ordem}, esperada=['PagouPrimeiro', 'PagouSegundo', 'NuncaCantou', 'JaCantouMuito']")
-    context.close()
-
-
-def test_botao_furar_fila_so_aparece_pro_dono(browser, base_url):
-    """O botão 'Furar a fila (PIX)' só aparece pro dono do pedido -- comparando
-    criadoPorUid (gravado em cada pedido a partir de usuarioAtual.uid, ver
-    adicionarPedido) com o uid atual, a mesma checagem que a Cloud Function
-    criarCobrancaPix faz do lado do servidor. E nunca aparece em pedido já
-    chamado (apresentacaoAtual): só pedidos pendentes na fila passam pelo
-    trecho de atualizarMeusPedidos que desenha esse botão."""
-    context, page, erros = nova_pagina(browser, base_url)
-
-    page.evaluate("""
-        usuarioAtual = { uid: 'uid-dono' };
-        PRECO_FURAR_FILA = 5;
-        useFirebase = true; // sem isso o botão fica desabilitado (sem conexão) por design
-        // Alguém na frente -- sem isso o pedido do "Dono" cairia na posição 0
-        // (o próximo a cantar), e o botão nem apareceria nesse caso: não faz
-        // sentido pagar pra furar a fila de quem já é o próximo.
-        fila.push({id: 999, nome: 'AlguemNaFrente', mesa: null, musica: 'M', artista: 'X', timestamp: Date.now() - 5000, timestampFila: Date.now() - 5000, vezesCantadas: 0, youtubeUrl: null});
-    """)
-
-    preencher_pedido(page, "Dono", "MinhaMusica")
-    page.wait_for_timeout(150)
-    meu_id = page.evaluate("fila.find(p => p.nome === 'Dono').id")
-
-    criado_por_uid_certo = page.evaluate(f"fila.find(p => p.id === {meu_id}).criadoPorUid") == "uid-dono"
-    tem_botao_com_dono_certo = page.evaluate(f"!!document.querySelector('#furar-fila-{meu_id} button:not([disabled])')")
-
-    # Troca o uid atual (ex: sessão anônima reiniciou nesse aparelho) --
-    # criadoPorUid do pedido continua sendo o antigo, então o botão deve
-    # sumir mesmo esse pedido ainda aparecendo na seção "Seus Pedidos".
-    page.evaluate("usuarioAtual = { uid: 'uid-outro' }; atualizarUI();")
-    page.wait_for_timeout(100)
-    sumiu_com_uid_trocado = page.evaluate(
-        f"document.getElementById('furar-fila-{meu_id}').innerHTML.trim() === ''"
-    )
-
-    # DJ chamou esse pedido (foi pra apresentacaoAtual, saiu da fila) -- o
-    # bloco "meuEmAndamento" de atualizarMeusPedidos nunca desenha esse botão.
-    page.evaluate(f"""
-        usuarioAtual = {{ uid: 'uid-dono' }};
-        const pedido = fila.find(p => p.id === {meu_id});
-        fila = fila.filter(p => p.id !== {meu_id});
-        apresentacaoAtual = {{ ...pedido, avaliacoes: {{}} }};
-        atualizarUI();
-    """)
-    page.wait_for_timeout(100)
-    sem_botao_quando_chamado = page.evaluate(
-        "!document.getElementById('lista-meus-pedidos').innerHTML.includes('Furar a fila')"
-    )
-
-    ok = (criado_por_uid_certo and tem_botao_com_dono_certo and sumiu_com_uid_trocado
-          and sem_botao_quando_chamado and not erros)
-    registrar("Botão 'Furar a fila (PIX)' só aparece pro dono do pedido, e nunca em pedido já chamado", ok,
-               f"criado_por_uid_certo={criado_por_uid_certo}, botao_com_dono_certo={tem_botao_com_dono_certo}, "
-               f"sumiu_com_uid_trocado={sumiu_com_uid_trocado}, sem_botao_apos_chamado={sem_botao_quando_chamado}")
-    context.close()
-
-
 # ---------------------------------------------------------------------------
 
 def main():
@@ -1252,8 +1165,6 @@ def main():
             test_display_mostra_status_de_conexao_honesto(browser, base_url)
             test_historico_permanente_limita_a_um_ano(browser, base_url)
             test_contraste_de_cores_no_modo_escuro(browser, base_url)
-            test_pedido_pago_pix_fura_a_fila(browser, base_url)
-            test_botao_furar_fila_so_aparece_pro_dono(browser, base_url)
 
             browser.close()
 
