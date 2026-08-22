@@ -1,0 +1,315 @@
+{
+  "communities": {
+    "0": [
+      "test_karaoke_main",
+      "test_karaoke_preencher_pedido",
+      "test_karaoke_rationale_231",
+      "test_karaoke_rationale_321",
+      "test_karaoke_rationale_406",
+      "test_karaoke_test_espera_longa_faz_pessoa_furar_a_fila",
+      "test_karaoke_test_isolamento_entre_bares",
+      "test_karaoke_test_meus_pedidos_posicao_e_cancelamento",
+      "test_karaoke_test_pessoas_diferentes_mesas_diferentes_nao_se_confundem",
+      "test_karaoke_test_prioridade_por_nome_e_mesa",
+      "test_karaoke_test_voto_nao_reconstroi_a_tela"
+    ],
+    "1": [
+      "tests_test_karaoke",
+      "tests_test_karaoke_preencher_pedido",
+      "tests_test_karaoke_rationale_232",
+      "tests_test_karaoke_rationale_322",
+      "tests_test_karaoke_rationale_410",
+      "tests_test_karaoke_test_espera_longa_faz_pessoa_furar_a_fila",
+      "tests_test_karaoke_test_isolamento_entre_bares",
+      "tests_test_karaoke_test_meus_pedidos_posicao_e_cancelamento",
+      "tests_test_karaoke_test_pessoas_diferentes_mesas_diferentes_nao_se_confundem",
+      "tests_test_karaoke_test_prioridade_por_nome_e_mesa",
+      "tests_test_karaoke_test_voto_nao_reconstroi_a_tela"
+    ],
+    "2": [
+      "tests_test_karaoke_aguardar_tailwind",
+      "tests_test_karaoke_rationale_845",
+      "tests_test_karaoke_rationale_882",
+      "tests_test_karaoke_rationale_91",
+      "tests_test_karaoke_rationale_956",
+      "tests_test_karaoke_test_catalogo_escolher_musica_preenche_index",
+      "tests_test_karaoke_test_catalogo_pagina_separada_lista_por_letra",
+      "tests_test_karaoke_test_display_mostra_status_de_conexao_honesto"
+    ],
+    "3": [
+      "tests_test_karaoke_rationale_483",
+      "tests_test_karaoke_rationale_812",
+      "tests_test_karaoke_rationale_921",
+      "tests_test_karaoke_registrar",
+      "tests_test_karaoke_test_aviso_iphone_aparece_so_no_iphone",
+      "tests_test_karaoke_test_bar_valido_carrega_sem_erros",
+      "tests_test_karaoke_test_horario_de_pico",
+      "tests_test_karaoke_test_voto_que_falha_avisa_a_pessoa"
+    ],
+    "4": [
+      "test_karaoke_aguardar_tailwind",
+      "test_karaoke_nova_pagina",
+      "test_karaoke_rationale_479",
+      "test_karaoke_rationale_512",
+      "test_karaoke_rationale_90",
+      "test_karaoke_test_aviso_de_conexao_perdida_existe",
+      "test_karaoke_test_aviso_iphone_aparece_so_no_iphone"
+    ],
+    "5": [
+      "test_karaoke_rationale_600",
+      "test_karaoke_registrar",
+      "test_karaoke_test_admin_exige_login",
+      "test_karaoke_test_bar_valido_carrega_sem_erros",
+      "test_karaoke_test_listeners_separados_por_pedaco",
+      "test_karaoke_test_media_de_avaliacoes",
+      "test_karaoke_test_sem_bar_mostra_erro"
+    ],
+    "6": [
+      "tests_test_karaoke_main",
+      "tests_test_karaoke_rationale_551",
+      "tests_test_karaoke_rationale_647",
+      "tests_test_karaoke_test_admin_exige_login",
+      "tests_test_karaoke_test_historico_completo_sob_demanda",
+      "tests_test_karaoke_test_protecao_contra_xss",
+      "tests_test_karaoke_test_youtube_preenche_musica_e_libera_artista"
+    ],
+    "7": [
+      "tests_test_karaoke_nova_pagina",
+      "tests_test_karaoke_rationale_516",
+      "tests_test_karaoke_rationale_530",
+      "tests_test_karaoke_test_aviso_de_conexao_perdida_existe",
+      "tests_test_karaoke_test_media_de_avaliacoes",
+      "tests_test_karaoke_test_modo_escuro_alterna_e_persiste",
+      "tests_test_karaoke_test_sem_bar_mostra_erro"
+    ],
+    "8": [
+      "tests_test_karaoke_contraste",
+      "tests_test_karaoke_rationale_1049",
+      "tests_test_karaoke_rationale_1064",
+      "tests_test_karaoke_rationale_1070",
+      "tests_test_karaoke_rgb_para_hex",
+      "tests_test_karaoke_test_contraste_de_cores_no_modo_escuro"
+    ],
+    "9": [
+      "test_karaoke",
+      "test_karaoke_porta_livre",
+      "test_karaoke_rationale_73",
+      "test_karaoke_servidor_http",
+      "test_karaoke_test_youtube_preenche_musica_e_libera_artista"
+    ],
+    "10": [
+      "tests_test_karaoke_porta_livre",
+      "tests_test_karaoke_rationale_74",
+      "tests_test_karaoke_servidor_http"
+    ],
+    "11": [
+      "test_karaoke_rationale_358",
+      "test_karaoke_test_dois_pedidos_simultaneos_nao_se_perdem"
+    ],
+    "12": [
+      "test_karaoke_rationale_449",
+      "test_karaoke_test_historico_paginado_no_cliente"
+    ],
+    "13": [
+      "test_karaoke_rationale_526",
+      "test_karaoke_test_modo_escuro_alterna_e_persiste"
+    ],
+    "14": [
+      "test_karaoke_rationale_547",
+      "test_karaoke_test_protecao_contra_xss"
+    ],
+    "15": [
+      "test_karaoke_rationale_643",
+      "test_karaoke_test_historico_completo_sob_demanda"
+    ],
+    "16": [
+      "test_karaoke_rationale_690",
+      "test_karaoke_test_validacao_de_formulario"
+    ],
+    "17": [
+      "test_karaoke_rationale_740",
+      "test_karaoke_test_acessibilidade_basica"
+    ],
+    "18": [
+      "tests_test_karaoke_rationale_362",
+      "tests_test_karaoke_test_dois_pedidos_simultaneos_nao_se_perdem"
+    ],
+    "19": [
+      "tests_test_karaoke_rationale_453",
+      "tests_test_karaoke_test_historico_paginado_no_cliente"
+    ],
+    "20": [
+      "tests_test_karaoke_rationale_604",
+      "tests_test_karaoke_test_listeners_separados_por_pedaco"
+    ],
+    "21": [
+      "tests_test_karaoke_rationale_771",
+      "tests_test_karaoke_test_relatorios_da_noite"
+    ],
+    "22": [
+      "tests_test_karaoke_rationale_694",
+      "tests_test_karaoke_test_validacao_de_formulario"
+    ],
+    "23": [
+      "tests_test_karaoke_rationale_744",
+      "tests_test_karaoke_test_acessibilidade_basica"
+    ],
+    "24": [
+      "tests_test_karaoke_rationale_985",
+      "tests_test_karaoke_test_historico_permanente_limita_a_um_ano"
+    ]
+  },
+  "cohesion": {
+    "0": 0.2727272727272727,
+    "1": 0.2909090909090909,
+    "2": 0.25,
+    "3": 0.25,
+    "4": 0.3333333333333333,
+    "5": 0.2857142857142857,
+    "6": 0.2857142857142857,
+    "7": 0.2857142857142857,
+    "8": 0.3333333333333333,
+    "9": 0.5,
+    "10": 0.6666666666666666,
+    "11": 1.0,
+    "12": 1.0,
+    "13": 1.0,
+    "14": 1.0,
+    "15": 1.0,
+    "16": 1.0,
+    "17": 1.0,
+    "18": 1.0,
+    "19": 1.0,
+    "20": 1.0,
+    "21": 1.0,
+    "22": 1.0,
+    "23": 1.0,
+    "24": 1.0
+  },
+  "gods": [
+    {
+      "id": "tests_test_karaoke_main",
+      "label": "main()",
+      "degree": 31
+    },
+    {
+      "id": "tests_test_karaoke_registrar",
+      "label": "registrar()",
+      "degree": 30
+    },
+    {
+      "id": "tests_test_karaoke_nova_pagina",
+      "label": "nova_pagina()",
+      "degree": 28
+    },
+    {
+      "id": "test_karaoke_main",
+      "label": "main()",
+      "degree": 23
+    },
+    {
+      "id": "test_karaoke_nova_pagina",
+      "label": "nova_pagina()",
+      "degree": 23
+    },
+    {
+      "id": "test_karaoke_registrar",
+      "label": "registrar()",
+      "degree": 22
+    },
+    {
+      "id": "test_karaoke_preencher_pedido",
+      "label": "preencher_pedido()",
+      "degree": 7
+    },
+    {
+      "id": "tests_test_karaoke_preencher_pedido",
+      "label": "preencher_pedido()",
+      "degree": 7
+    },
+    {
+      "id": "tests_test_karaoke_aguardar_tailwind",
+      "label": "aguardar_tailwind()",
+      "degree": 7
+    },
+    {
+      "id": "tests_test_karaoke_test_contraste_de_cores_no_modo_escuro",
+      "label": "test_contraste_de_cores_no_modo_escuro()",
+      "degree": 7
+    }
+  ],
+  "surprises": [
+    {
+      "source": "main()",
+      "target": "servidor_http()",
+      "source_files": [
+        "test_karaoke.py",
+        "test_karaoke.py"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "note": "Bridges community 0 → community 9"
+    },
+    {
+      "source": "main()",
+      "target": "test_acessibilidade_basica()",
+      "source_files": [
+        "test_karaoke.py",
+        "test_karaoke.py"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "note": "Bridges community 0 → community 17"
+    },
+    {
+      "source": "main()",
+      "target": "test_admin_exige_login()",
+      "source_files": [
+        "test_karaoke.py",
+        "test_karaoke.py"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "note": "Bridges community 0 → community 5"
+    },
+    {
+      "source": "main()",
+      "target": "test_aviso_de_conexao_perdida_existe()",
+      "source_files": [
+        "test_karaoke.py",
+        "test_karaoke.py"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "note": "Bridges community 0 → community 4"
+    },
+    {
+      "source": "main()",
+      "target": "test_dois_pedidos_simultaneos_nao_se_perdem()",
+      "source_files": [
+        "test_karaoke.py",
+        "test_karaoke.py"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "note": "Bridges community 0 → community 11"
+    }
+  ],
+  "questions": [
+    {
+      "type": "bridge_node",
+      "question": "Why does `main()` connect `Community 6` to `Community 1`, `Community 2`, `Community 3`, `Community 7`, `Community 8`, `Community 10`, `Community 18`, `Community 19`, `Community 20`, `Community 21`, `Community 22`, `Community 23`, `Community 24`?",
+      "why": "High betweenness centrality (0.065) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `registrar()` connect `Community 3` to `Community 1`, `Community 2`, `Community 6`, `Community 7`, `Community 8`, `Community 18`, `Community 19`, `Community 20`, `Community 21`, `Community 22`, `Community 23`, `Community 24`?",
+      "why": "High betweenness centrality (0.056) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `nova_pagina()` connect `Community 7` to `Community 1`, `Community 2`, `Community 3`, `Community 6`, `Community 8`, `Community 18`, `Community 19`, `Community 20`, `Community 21`, `Community 22`, `Community 23`, `Community 24`?",
+      "why": "High betweenness centrality (0.048) - this node is a cross-community bridge."
+    }
+  ]
+}
