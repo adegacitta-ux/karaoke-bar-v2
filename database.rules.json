@@ -25,21 +25,6 @@
 
           "historicoPermanente": {
             ".indexOn": "timestamp"
-          },
-
-          "pagamentosPixPublico": {
-            ".read": true,
-            ".write": false
-          },
-
-          "pagamentosPixPrivado": {
-            ".read": false,
-            ".write": false
-          },
-
-          "pagamentosOrfaos": {
-            ".read": false,
-            ".write": false
           }
         }
       }
