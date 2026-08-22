@@ -8,18 +8,108 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; }
-        .bg-gradient-custom { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        @import url('https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..900;1,6..96,400..900&family=Oswald:wght@300;400;500;600;700&display=swap');
 
-        /* Índice de letras fixo no topo da lista, tipo agenda telefônica */
+        /* Mesma identidade do display.html (telão): papel de ingresso claro por
+           padrão, e a marquise noturna do Città no modo escuro. Tudo abaixo lê
+           essas variáveis — o modo escuro só precisa redefini-las uma vez. */
+        :root {
+            --cor-fundo: #f6efe1;
+            --cor-painel: #fffaf0;
+            --cor-texto-forte: #2b1015;
+            --cor-texto-suave: #8a6f63;
+            --cor-texto-fraco: #cbb9a4;
+            --cor-borda: rgba(139, 94, 60, 0.18);
+            --cor-realce-fraco: rgba(184, 134, 60, 0.12);
+            --cor-ouro: #b8863c;
+            --cor-ouro-forte: #93691f;
+            --cor-neon: #c94272;
+        }
+
+        body.modo-escuro {
+            --cor-fundo: #150a0f;
+            --cor-painel: #241019;
+            --cor-texto-forte: #f7ecd9;
+            --cor-texto-suave: #c9a9a0;
+            --cor-texto-fraco: #6b4a4f;
+            --cor-borda: rgba(232, 176, 75, 0.22);
+            --cor-realce-fraco: rgba(232, 176, 75, 0.1);
+            --cor-ouro: #e8b04b;
+            --cor-ouro-forte: #f5cd7e;
+            --cor-neon: #ff5d8f;
+        }
+
+        body { font-family: 'Oswald', sans-serif; }
+
+        body.bg-gray-100 { background-color: var(--cor-fundo); }
+
+        :is(button, a, [tabindex]):focus-visible {
+            outline: 2px solid var(--cor-neon);
+            outline-offset: 2px;
+        }
+
+        /* --- Cabeçalho --- */
+        nav.bg-white { background-color: var(--cor-painel); border-bottom: 1px solid var(--cor-borda); box-shadow: none; }
+        nav .text-gray-800 {
+            color: var(--cor-texto-forte);
+            font-family: 'Bodoni Moda', serif;
+            font-style: italic;
+            letter-spacing: 0.2px;
+        }
+        nav .text-indigo-600 { color: var(--cor-ouro-forte); }
+        nav .text-indigo-600:hover { color: var(--cor-neon); }
+        .toggle-tema-btn { background: none; border: none; cursor: pointer; font-size: 17px; color: var(--cor-texto-suave); padding: 6px 10px; border-radius: 8px; transition: color .2s, background-color .2s; }
+        .toggle-tema-btn:hover { background-color: var(--cor-realce-fraco); color: var(--cor-ouro-forte); }
+
+        /* --- Banner "não sabe o que cantar" — cartaz de bilheteria, não um
+           bloco de gradiente genérico: bordas tracejadas e "furos" de canhoto
+           de ingresso nas laterais, como o painel do telão. --- */
+        .bg-gradient-custom {
+            position: relative;
+            background: linear-gradient(120deg, #9a5a1f 0%, #a53564 100%);
+            border: 1px dashed rgba(255, 255, 255, 0.5);
+        }
+        .bg-gradient-custom::before, .bg-gradient-custom::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px; height: 16px;
+            border-radius: 50%;
+            background: var(--cor-fundo);
+        }
+        .bg-gradient-custom::before { left: -8px; }
+        .bg-gradient-custom::after { right: -8px; }
+        .bg-gradient-custom p:first-child {
+            font-family: 'Bodoni Moda', serif;
+            font-style: italic;
+            font-size: 19px;
+            letter-spacing: 0.2px;
+        }
+
+        /* --- Aviso de link incompleto --- */
+        #erro-sem-bar.bg-white { background-color: var(--cor-painel); border: 1px dashed var(--cor-borda); box-shadow: none; }
+        #erro-sem-bar .text-gray-800 { color: var(--cor-texto-forte); }
+        #erro-sem-bar .text-gray-500 { color: var(--cor-texto-suave); }
+        #erro-sem-bar .text-yellow-500 { color: var(--cor-ouro); }
+
+        /* --- Índice de letras fixo no topo da lista, tipo agenda telefônica --- */
         .indice-letras {
             position: sticky;
             top: 0;
             z-index: 10;
-            background: rgba(255, 255, 255, 0.97);
+            background: rgba(255, 250, 240, 0.94);
             backdrop-filter: blur(6px);
+            border-bottom: 1px dashed var(--cor-borda);
         }
+        body.modo-escuro .indice-letras { background: rgba(21, 10, 15, 0.94); }
+
+        #indice-letras a, #indice-letras span { font-family: 'Oswald', sans-serif; }
+        #indice-letras .bg-indigo-100 { background-color: var(--cor-realce-fraco); }
+        #indice-letras .text-indigo-700 { color: var(--cor-ouro-forte); }
+        #indice-letras .hover\:bg-indigo-600:hover { background-color: var(--cor-ouro); }
+        #indice-letras .hover\:text-white:hover { color: var(--cor-painel); }
+        #indice-letras .text-gray-300 { color: var(--cor-texto-fraco); }
 
         /* Cabeçalho de cada letra também fica "grudado" enquanto rola, como nos
            contatos do celular. O "top" é calculado em JS (ver ajustarAlturaIndice)
@@ -30,22 +120,48 @@
             position: sticky;
             top: var(--altura-indice-letras, 52px);
             z-index: 5;
+            font-family: 'Oswald', sans-serif;
         }
 
-        /* --- MODO ESCURO (mesmo esquema do index.html/display.html) --- */
-        body.modo-escuro { background-color: #0f172a; color-scheme: dark; }
-        .modo-escuro .bg-gray-100 { background-color: #0f172a; }
-        .modo-escuro .bg-white { background-color: #1e293b; }
-        .modo-escuro .text-gray-800, .modo-escuro .text-gray-700 { color: #e5e7eb; }
-        .modo-escuro .text-gray-600, .modo-escuro .text-gray-500 { color: #9ca3af; }
-        .modo-escuro .text-gray-400 { color: #6b7280; }
-        .modo-escuro .border-gray-100, .modo-escuro .border-gray-200,
-        .modo-escuro .divide-gray-100 { border-color: #334155; }
-        .modo-escuro .indice-letras { background: rgba(15, 23, 42, 0.97); }
-        .modo-escuro .cabecalho-letra { background-color: #0f172a; }
-        .toggle-tema-btn { background: none; border: none; cursor: pointer; font-size: 18px; color: #6b7280; padding: 6px 10px; border-radius: 8px; }
-        .modo-escuro .toggle-tema-btn { color: #e5e7eb; }
-        .toggle-tema-btn:hover { background-color: rgba(107, 114, 128, 0.15); }
+        /* --- Lista de músicas --- */
+        /* Sem overflow-hidden aqui (era o original) — ele quebrava o
+           position:sticky do .cabecalho-letra, porque um ancestral com
+           overflow diferente de "visible" vira o "contêiner" da rolagem pra
+           efeitos de sticky, quando deveria ser a página inteira. O primeiro
+           cabeçalho de letra acabava desenhado abaixo da primeira música.
+           Arredonda só os cantos das pontas pra manter o visual de cartão. */
+        #lista-catalogo.bg-white { background-color: var(--cor-painel); }
+        #lista-catalogo > div:first-child > .cabecalho-letra {
+            border-top-left-radius: 1rem;
+            border-top-right-radius: 1rem;
+        }
+        #lista-catalogo > div:last-child > button:last-child {
+            border-bottom-left-radius: 1rem;
+            border-bottom-right-radius: 1rem;
+        }
+        #lista-catalogo.divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: var(--cor-borda); }
+        #lista-catalogo .bg-gray-50 { background-color: var(--cor-realce-fraco); }
+        #lista-catalogo .border-gray-100 { border-color: var(--cor-borda); }
+        #lista-catalogo .border-gray-50 { border-color: var(--cor-borda); }
+        /* Sem isso os <button> pegam o cinza padrão do navegador em vez de
+           deixar o fundo do painel (--cor-painel) aparecer — quase invisível
+           no claro, mas bem feio no escuro. */
+        #lista-catalogo button { background: transparent; }
+        #lista-catalogo .hover\:bg-indigo-50:hover { background-color: var(--cor-realce-fraco); }
+        #lista-catalogo .text-gray-800 { color: var(--cor-texto-forte); }
+        #lista-catalogo .text-gray-500 { color: var(--cor-texto-suave); }
+        #lista-catalogo .text-gray-300 { color: var(--cor-texto-fraco); }
+        /* Rótulo da letra (dentro do cabecalho-letra): destacado em dourado,
+           diferente da cor mais neutra usada no nome do artista abaixo dele —
+           ambos compartilham a classe text-gray-500, então precisa da regra
+           mais específica (id + as duas classes) pra vencer a de cima. */
+        #lista-catalogo .cabecalho-letra.text-gray-500 {
+            color: var(--cor-ouro-forte);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            font-size: 11px;
+        }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
@@ -79,7 +195,7 @@
                 <!-- Inserido via JS -->
             </div>
 
-            <div id="lista-catalogo" class="bg-white rounded-2xl shadow-md divide-y divide-gray-100 overflow-hidden">
+            <div id="lista-catalogo" class="bg-white rounded-2xl shadow-md divide-y divide-gray-100">
                 <!-- Inserido via JS -->
             </div>
         </div>
