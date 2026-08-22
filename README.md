@@ -26,39 +26,7 @@ Copie o **Access Token de produção** (não o de teste/sandbox — esse não
 recebe PIX de verdade). Trate esse valor como uma senha: não cole em chat,
 planilha ou print.
 
-**1.2. Cadastrar o segredo — pelo site, sem usar terminal**
-
-Esse caminho é só clicar, não precisa instalar nada nem digitar comando:
-
-1. Acesse [console.cloud.google.com/security/secret-manager](https://console.cloud.google.com/security/secret-manager)
-   e confirme que o projeto selecionado (canto superior esquerdo, ao lado do
-   logo do Google Cloud) é `karaoke-bar-v2`. Se não for, clique ali e troque.
-2. Se aparecer um botão **"Ativar API"** ou **"Enable API"** na tela, clique
-   nele primeiro (só acontece na primeira vez que alguém usa o Secret
-   Manager nesse projeto) e espere carregar.
-3. Clique em **"+ Criar Segredo"** ("+ Create Secret").
-4. Em **"Nome do segredo"**, digite `mp-access-token-citta` — troque `citta`
-   pelo `barId` real do bar (o mesmo id que aparece na URL, `?bar=citta`).
-5. Em **"Valor do segredo"**, cole o Access Token de produção que você copiou
-   no passo 1.1.
-6. Deixe o resto padrão e clique em **"Criar segredo"**.
-7. Pronto — pode conferir na lista de segredos que `mp-access-token-citta`
-   apareceu. Não precisa fazer mais nada, a Cloud Function já sabe buscar
-   esse segredo sozinha da próxima vez que alguém tentar pagar PIX nesse bar.
-
-**Trocar o token depois** (renovação, revogação): abra o segredo na mesma
-lista, clique em **"+ Nova versão"** ("+ New version"), cole o token novo e
-salve. Não crie um segredo novo com outro nome — é sempre uma versão nova em
-cima do mesmo `mp-access-token-{barId}`.
-
-**Se aparecer erro de permissão** ao criar ou ler o segredo, normalmente é a
-conta de serviço das Cloud Functions que ainda não tem acesso — peça pra
-alguém com acesso de administrador do projeto Google Cloud liberar o papel
-"Secret Manager Secret Accessor" pra ela (ver o caminho por linha de comando
-mais abaixo, que também serve pra esse ajuste pontual).
-
-<details>
-<summary><strong>Prefere linha de comando (gcloud)? Clique aqui</strong></summary>
+**1.2. Ter a gcloud CLI pronta**
 
 Duas opções, escolha uma:
 
@@ -74,15 +42,17 @@ Duas opções, escolha uma:
   gcloud config set project karaoke-bar-v2
   ```
 
-Habilitar o Secret Manager no projeto (só na primeira vez):
+**1.3. Habilitar o Secret Manager no projeto (só na primeira vez)**
 
 ```bash
 gcloud services enable secretmanager.googleapis.com --project=karaoke-bar-v2
 ```
 
-Criar o segredo (troque `citta` pelo `barId` real; o comando pede o token
-digitado/colado direto no terminal, sem deixar rastro no histórico do shell
-nem em nenhum arquivo):
+**1.4. Criar o segredo**
+
+Troque `citta` pelo `barId` real do bar que está cadastrando. O comando pede
+o token digitado/colado direto no terminal (fica só na memória, não no
+histórico do shell nem em nenhum arquivo):
 
 ```bash
 read -s -p "Cole o Access Token do Mercado Pago: " MP_TOKEN && echo
@@ -91,7 +61,7 @@ printf '%s' "$MP_TOKEN" | gcloud secrets create mp-access-token-citta \
 unset MP_TOKEN
 ```
 
-Conferir se deu certo:
+**1.5. Conferir se deu certo**
 
 ```bash
 gcloud secrets versions access latest --secret=mp-access-token-citta --project=karaoke-bar-v2
@@ -99,10 +69,11 @@ gcloud secrets versions access latest --secret=mp-access-token-citta --project=k
 
 Deve devolver o mesmo token que você colou (sem quebra de linha extra). Se
 aparecer `PERMISSION_DENIED` ou `NOT_FOUND`, confirme que está no projeto
-certo (`gcloud config get-value project`) e que o passo de habilitar a API
-rodou sem erro.
+certo (`gcloud config get-value project`) e que o passo 1.3 rodou sem erro.
 
-Trocar o token depois (adiciona uma versão nova, nunca recria o segredo):
+**1.6. Trocar o token depois (renovação, revogação, etc.)**
+
+Não recrie o segredo — adicione uma versão nova por cima:
 
 ```bash
 read -s -p "Cole o NOVO Access Token: " MP_TOKEN && echo
@@ -111,7 +82,8 @@ printf '%s' "$MP_TOKEN" | gcloud secrets versions add mp-access-token-citta \
 unset MP_TOKEN
 ```
 
-</details>
+A Cloud Function sempre lê a versão `latest`, então o próximo pagamento já
+usa o token novo, sem precisar reimplantar nada.
 
 **Sobre permissão de leitura:** a conta de serviço que executa as Cloud
 Functions precisa do papel `roles/secretmanager.secretAccessor` pra ler
