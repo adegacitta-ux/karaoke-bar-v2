@@ -11,33 +11,89 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700;800;900&display=swap');
-        * { font-family: 'Poppins', sans-serif; }
-        
-        body { 
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        @import url('https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..900;1,6..96,400..900&family=Oswald:wght@300;400;500;600;700&display=swap');
+
+        :root {
+            --cor-fundo-1: #150a0f;
+            --cor-fundo-2: #34101d;
+            --cor-painel: #241019;
+            --cor-painel-clara: #2d1420;
+            --cor-ouro: #e8b04b;
+            --cor-ouro-claro: #f5cd7e;
+            --cor-neon: #ff5d8f;
+            --cor-marfim: #f7ecd9;
+            --cor-suave: #c9a9a0;
+        }
+
+        * { font-family: 'Oswald', sans-serif; }
+
+        /* Rede de segurança: se o CDN do Tailwind demorar/falhar num wifi
+           ruim do bar, os estados (aguardando / próximo / fila encerrada)
+           não podem aparecer todos sobrepostos na tela. */
+        .hidden { display: none !important; }
+
+        body {
+            background:
+                radial-gradient(ellipse 900px 620px at 50% -8%, rgba(232, 176, 75, 0.18), transparent 60%),
+                radial-gradient(ellipse 800px 560px at 92% 105%, rgba(255, 93, 143, 0.16), transparent 60%),
+                linear-gradient(180deg, var(--cor-fundo-1) 0%, var(--cor-fundo-2) 100%);
+            color: var(--cor-marfim);
             margin: 0;
             padding: 0;
             min-height: 100vh;
             overflow: hidden;
         }
 
+        /* Moldura de lâmpadas correndo, como a marquise de um teatro/clube antigo */
+        .marquise {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 12px;
+            z-index: 5;
+            pointer-events: none;
+        }
+        .marquise::before, .marquise::after {
+            content: '';
+            position: absolute;
+            left: -28px; right: -28px;
+            height: 6px;
+        }
+        .marquise::before {
+            top: 0;
+            background: radial-gradient(circle, var(--cor-ouro) 0 3px, transparent 4px) 0 0 / 28px 6px repeat-x;
+            filter: drop-shadow(0 0 4px rgba(232, 176, 75, 0.8));
+            animation: correrLampadas 1.6s linear infinite;
+        }
+        .marquise::after {
+            top: 6px;
+            background: radial-gradient(circle, var(--cor-neon) 0 2.5px, transparent 3.5px) 14px 0 / 28px 6px repeat-x;
+            filter: drop-shadow(0 0 4px rgba(255, 93, 143, 0.7));
+            opacity: 0.85;
+            animation: correrLampadas 1.6s linear infinite reverse;
+        }
+        @keyframes correrLampadas {
+            from { background-position-x: 0; }
+            to { background-position-x: 28px; }
+        }
+
         .main-container {
+            position: relative;
+            z-index: 10;
             display: flex;
             flex-direction: column;
             height: 100vh;
             justify-content: center;
             align-items: center;
-            padding: 20px;
+            padding: 24px;
             overflow-y: auto;
         }
 
+        /* Cartaz principal: cara de "passe de bastidor", não de card de app */
         .display-card {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 30px;
-            padding: 28px 40px;
-            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+            background: var(--cor-painel);
+            border-radius: 22px;
+            padding: 30px 44px;
+            box-shadow: 0 0 0 1px rgba(232, 176, 75, 0.35), 0 0 0 7px rgba(232, 176, 75, 0.08), 0 30px 60px rgba(0, 0, 0, 0.55);
             text-align: center;
             max-width: 900px;
             width: 100%;
@@ -47,120 +103,132 @@
         }
 
         @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .logo {
-            font-size: 80px;
-            margin-bottom: 20px;
-            animation: bounce 2s infinite;
-        }
-
-        @keyframes bounce {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-20px); }
+            from { opacity: 0; transform: translateY(24px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         .display-logo {
-            width: 160px;
+            width: 140px;
             height: auto;
-            margin-bottom: 20px;
+            margin-bottom: 18px;
         }
 
         .titulo-proximo {
-            font-size: 24px;
-            color: #666;
-            margin-bottom: 10px;
+            font-size: 15px;
+            color: var(--cor-ouro);
+            margin-bottom: 12px;
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 2px;
+            letter-spacing: 4px;
+        }
+
+        .mensagem-secundaria {
+            font-size: 20px;
+            color: var(--cor-suave);
+            font-style: italic;
+            font-weight: 300;
+            margin-top: 6px;
         }
 
         .cantor-nombre {
-            font-size: 40px;
-            font-weight: 900;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Bodoni Moda', serif;
+            font-size: 58px;
+            font-weight: 800;
+            font-style: italic;
+            line-height: 1.08;
+            background: linear-gradient(100deg, var(--cor-ouro-claro) 0%, var(--cor-neon) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            margin-bottom: 8px;
+            text-shadow: 0 0 34px rgba(232, 176, 75, 0.35);
+            margin-bottom: 6px;
             animation: scaleIn 0.6s ease-out;
         }
 
         @keyframes scaleIn {
-            from {
-                opacity: 0;
-                transform: scale(0.8);
-            }
-            to {
-                opacity: 1;
-                transform: scale(1);
-            }
+            from { opacity: 0; transform: scale(0.85); }
+            to { opacity: 1; transform: scale(1); }
         }
 
+        /* "Canhoto de ingresso": painel de dados com friso pontilhado (perfuração) */
         .musica-info {
-            background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
-            padding: 16px;
-            border-radius: 20px;
-            margin: 12px 0;
+            position: relative;
+            background: var(--cor-painel-clara);
+            border: 1px dashed rgba(232, 176, 75, 0.4);
+            padding: 20px 18px 16px;
+            border-radius: 14px;
+            margin: 18px 0 0;
         }
+        .musica-info::before, .musica-info::after {
+            content: '';
+            position: absolute;
+            top: -9px;
+            width: 18px; height: 18px;
+            border-radius: 50%;
+            background: var(--cor-painel);
+            box-shadow: 0 0 0 1px rgba(232, 176, 75, 0.35) inset;
+        }
+        .musica-info::before { left: -9px; }
+        .musica-info::after { right: -9px; }
 
         .musica-titulo {
-            font-size: 24px;
+            font-size: 25px;
             font-weight: 700;
-            color: #333;
-            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--cor-marfim);
+            margin-bottom: 4px;
         }
 
         .musica-artista {
-            font-size: 18px;
-            color: #666;
-            font-weight: 400;
-            margin-bottom: 8px;
+            font-size: 17px;
+            color: var(--cor-suave);
+            font-weight: 300;
+            font-style: italic;
+            margin-bottom: 10px;
         }
 
         .veces-cantadas {
             display: inline-block;
-            background: #667eea;
-            color: white;
-            padding: 8px 18px;
+            background: transparent;
+            border: 1px solid var(--cor-ouro);
+            color: var(--cor-ouro-claro);
+            padding: 6px 16px;
             border-radius: 50px;
-            font-size: 15px;
+            font-size: 13px;
             font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
         .fila-info {
-            margin-top: 14px;
+            margin-top: 16px;
             display: flex;
             justify-content: space-around;
-            font-size: 24px;
+            gap: 12px;
         }
 
         .fila-stat {
-            background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
-            padding: 10px 16px;
-            border-radius: 15px;
+            background: var(--cor-painel-clara);
+            border: 1px dashed rgba(232, 176, 75, 0.28);
+            padding: 12px 10px;
+            border-radius: 12px;
             flex: 1;
-            margin: 0 6px;
         }
 
         .stat-numero {
-            font-size: 24px;
-            font-weight: 900;
-            color: #667eea;
+            font-family: 'Bodoni Moda', serif;
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--cor-ouro-claro);
         }
 
         .stat-label {
-            font-size: 12px;
-            color: #666;
-            margin-top: 4px;
+            font-size: 11px;
+            color: var(--cor-suave);
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            margin-top: 3px;
         }
 
         .control-bar {
@@ -168,98 +236,69 @@
             bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(255, 255, 255, 0.95);
-            padding: 15px 30px;
+            background: rgba(21, 10, 15, 0.88);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(232, 176, 75, 0.3);
+            padding: 13px 26px;
             border-radius: 50px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
             display: flex;
-            gap: 15px;
+            gap: 12px;
             z-index: 50;
         }
 
         .control-btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 10px 20px;
+            background: transparent;
+            border: 1px solid rgba(232, 176, 75, 0.5);
+            color: var(--cor-ouro-claro);
+            padding: 9px 18px;
             border-radius: 25px;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
             cursor: pointer;
-            transition: opacity 0.3s;
+            transition: background 0.25s, color 0.25s;
         }
 
         .control-btn:hover {
-            opacity: 0.8;
+            background: var(--cor-ouro);
+            color: #241019;
+        }
+
+        .control-btn:focus-visible,
+        .fullscreen-btn:focus-visible {
+            outline: 2px solid var(--cor-neon);
+            outline-offset: 2px;
         }
 
         .pulse {
-            animation: pulse 2s infinite;
+            animation: pulse 2.6s infinite;
         }
 
         @keyframes pulse {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.7); }
-            50% { box-shadow: 0 0 0 20px rgba(102, 126, 234, 0); }
+            0%, 100% { box-shadow: 0 0 0 0 rgba(232, 176, 75, 0.45), 0 0 0 1px rgba(232, 176, 75, 0.35); }
+            50% { box-shadow: 0 0 0 16px rgba(232, 176, 75, 0), 0 0 0 1px rgba(232, 176, 75, 0.35); }
         }
 
         @media (max-width: 1024px) {
-            .display-card {
-                padding: 28px 32px;
-            }
-
-            .cantor-nombre {
-                font-size: 40px;
-            }
-
-            .titulo-proximo {
-                font-size: 26px;
-            }
-
-            .musica-titulo {
-                font-size: 26px;
-            }
-
-            .musica-artista {
-                font-size: 20px;
-            }
+            .display-card { padding: 26px 30px; }
+            .cantor-nombre { font-size: 42px; }
+            .titulo-proximo { font-size: 14px; }
+            .musica-titulo { font-size: 22px; }
+            .musica-artista { font-size: 16px; }
         }
 
         @media (max-width: 768px) {
-            .display-card {
-                padding: 20px 22px;
-            }
-
-            .logo {
-                font-size: 60px;
-            }
-
-            .cantor-nombre {
-                font-size: 32px;
-            }
-
-            .titulo-proximo {
-                font-size: 22px;
-            }
-
-            .musica-titulo {
-                font-size: 22px;
-            }
-
-            .musica-artista {
-                font-size: 17px;
-            }
-
-            .fila-info {
-                flex-direction: column;
-            }
-
-            .fila-stat {
-                margin: 6px 0;
-            }
-
-            .veces-cantadas {
-                font-size: 15px;
-            }
+            .display-card { padding: 20px 20px; }
+            .display-logo { width: 90px; }
+            .cantor-nombre { font-size: 32px; }
+            .titulo-proximo { font-size: 13px; letter-spacing: 3px; }
+            .musica-titulo { font-size: 20px; }
+            .musica-artista { font-size: 15px; }
+            .fila-info { flex-direction: column; gap: 8px; }
+            .veces-cantadas { font-size: 12px; }
+            .mensagem-secundaria { font-size: 16px; }
         }
 
         /* Quando a janela do navegador é baixa (não maximizada, sem estar em modo
@@ -267,73 +306,80 @@
            interna no card — o botão de "Tela cheia" resolve isso de vez quando clicado */
         @media (max-height: 850px) {
             .display-card { padding: 14px 24px; max-height: 74vh; }
-            .titulo-proximo { font-size: 16px; margin-bottom: 4px; }
+            .titulo-proximo { font-size: 12px; margin-bottom: 6px; }
             .cantor-nombre { font-size: 26px; margin-bottom: 3px; }
-            .musica-info { padding: 8px; margin: 6px 0; }
+            .musica-info { padding: 10px 12px 8px; margin: 8px 0 0; }
             .musica-titulo { font-size: 17px; margin-bottom: 3px; }
-            .musica-artista { font-size: 13px; margin-bottom: 3px; }
-            .veces-cantadas { padding: 4px 12px; font-size: 12px; }
-            .fila-info { margin-top: 6px; font-size: 16px; }
-            .fila-stat { padding: 5px 8px; }
-            .stat-numero { font-size: 16px; }
+            .musica-artista { font-size: 13px; margin-bottom: 6px; }
+            .veces-cantadas { padding: 4px 12px; font-size: 11px; }
+            .fila-info { margin-top: 8px; }
+            .fila-stat { padding: 6px 8px; }
+            .stat-numero { font-size: 18px; }
             .stat-label { font-size: 9px; }
-            .mini-fila-lista { margin-top: 6px; }
+            .mini-fila-lista { margin-top: 8px; }
             .mini-fila-item { padding: 4px 12px; margin-bottom: 3px; }
-            .display-logo { width: 80px; margin-bottom: 6px; }
-            .qr-card { padding: 6px 12px; margin-top: 6px; max-width: 260px; }
+            .display-logo { width: 70px; margin-bottom: 6px; }
+            .qr-card { padding: 6px 12px; margin-top: 8px; max-width: 260px; }
             .qr-card img { width: 40px; height: 40px; }
             .qr-card .qr-titulo { font-size: 11px; }
             .qr-card .qr-sub { font-size: 9px; }
+            .mensagem-secundaria { font-size: 14px; }
         }
 
         .fullscreen-btn {
             position: fixed;
-            top: 20px;
-            right: 20px;
-            background: white;
-            border: none;
+            top: 22px;
+            right: 22px;
+            background: rgba(21, 10, 15, 0.75);
+            border: 1px solid rgba(232, 176, 75, 0.45);
+            color: var(--cor-ouro-claro);
             width: 42px;
             height: 42px;
             border-radius: 50%;
             cursor: pointer;
-            font-size: 18px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            font-size: 16px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.35);
             z-index: 110;
-            transition: transform 0.3s;
+            transition: transform 0.3s, background 0.3s;
         }
 
         .fullscreen-btn:hover {
-            transform: scale(1.1);
+            transform: scale(1.08);
+            background: rgba(232, 176, 75, 0.2);
         }
 
         .timer {
             position: fixed;
-            top: 20px;
-            left: 20px;
-            background: white;
-            padding: 10px 18px;
+            top: 22px;
+            left: 22px;
+            background: rgba(21, 10, 15, 0.75);
+            border: 1px solid rgba(232, 176, 75, 0.45);
+            padding: 9px 18px;
             border-radius: 50px;
-            font-size: 18px;
-            font-weight: 700;
-            color: #667eea;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--cor-ouro-claro);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.35);
         }
 
         .firebase-status {
             position: fixed;
-            top: 20px;
+            top: 22px;
             left: 50%;
             transform: translateX(-50%);
-            padding: 10px 20px;
+            padding: 9px 18px;
             border-radius: 50px;
-            font-size: 12px;
-            font-weight: bold;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
             z-index: 100;
-            background: #10b981;
-            color: white;
+            color: var(--cor-marfim);
+            background: rgb(16, 185, 129);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.35);
         }
 
-        /* Notas musicais flutuando no fundo */
+        /* Fagulhas/notas subindo do palco no fundo */
         .notas-flutuantes {
             position: fixed;
             inset: 0;
@@ -345,21 +391,19 @@
         .nota-flutuante {
             position: absolute;
             bottom: -60px;
-            color: rgba(255, 255, 255, 0.18);
+            color: var(--cor-ouro);
+            opacity: 0.16;
             animation: subirNota linear infinite;
         }
+        .nota-flutuante:nth-child(3n) { color: var(--cor-neon); }
 
         @keyframes subirNota {
             0% { transform: translateY(0) rotate(0deg); opacity: 0; }
-            10% { opacity: 1; }
-            90% { opacity: 1; }
+            10% { opacity: 0.16; }
+            90% { opacity: 0.16; }
             100% { transform: translateY(-110vh) rotate(25deg); opacity: 0; }
         }
 
-        .main-container {
-            position: relative;
-            z-index: 10;
-        }
         .qr-card, .control-bar, .timer, .firebase-status {
             /* Importante: NÃO definir "position" aqui — cada um já tem seu próprio
                position: fixed declarado antes. Sobrescrever pra "relative" aqui foi
@@ -369,50 +413,64 @@
             z-index: 10;
         }
 
-        /* Card do QR Code para pedidos — fica abaixo do card principal, no fluxo
-           normal da página (não mais "flutuando" fixo num canto). Isso evita de vez
-           a sobreposição com o conteúdo do card em janelas mais estreitas/baixas. */
+        /* Card do QR Code para pedidos — segue o mesmo idioma visual de "passe" —
+           fica abaixo do card principal, no fluxo normal da página */
         .qr-card {
-            background: rgba(255, 255, 255, 0.97);
-            border-radius: 16px;
-            padding: 8px 16px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+            background: rgba(36, 16, 25, 0.9);
+            border: 1px dashed rgba(232, 176, 75, 0.4);
+            border-radius: 14px;
+            padding: 10px 18px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 14px;
             max-width: 320px;
             width: 100%;
-            margin: 14px auto 0;
+            margin: 16px auto 0;
             flex-shrink: 0;
         }
 
-        .qr-card img { width: 52px; height: 52px; border-radius: 8px; flex-shrink: 0; }
+        .qr-card img { width: 52px; height: 52px; border-radius: 8px; flex-shrink: 0; background: #fff; padding: 3px; }
 
-        .qr-card .qr-texto { text-align: left; max-width: 150px; }
-        .qr-card .qr-titulo { font-size: 13px; font-weight: 800; color: #333; line-height: 1.2; }
-        .qr-card .qr-sub { font-size: 11px; color: #667eea; font-weight: 600; margin-top: 3px; }
+        .qr-card .qr-texto { text-align: left; max-width: 170px; }
+        .qr-card .qr-titulo { font-size: 13px; font-weight: 700; color: var(--cor-marfim); line-height: 1.2; text-transform: uppercase; letter-spacing: 0.5px; }
+        .qr-card .qr-sub { font-size: 11px; color: var(--cor-ouro-claro); font-weight: 500; margin-top: 4px; }
 
         /* Lista de próximos na fila, dentro do card principal */
-        .mini-fila-lista { margin-top: 16px; text-align: left; }
-        .mini-fila-titulo { font-size: 15px; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; text-align: center; }
+        .mini-fila-lista { margin-top: 18px; text-align: left; }
+        .mini-fila-titulo { font-size: 13px; font-weight: 600; color: var(--cor-suave); text-transform: uppercase; letter-spacing: 2.5px; margin-bottom: 8px; text-align: center; }
         .mini-fila-item {
             display: flex; justify-content: space-between; align-items: center;
-            background: #f8f9ff; border-radius: 12px; padding: 8px 16px; margin-bottom: 6px;
+            background: var(--cor-painel-clara); border-radius: 10px; padding: 8px 16px; margin-bottom: 6px;
+            border-left: 2px solid var(--cor-ouro);
         }
-        .mini-fila-item .mini-fila-nome { font-weight: 700; color: #444; font-size: 16px; }
-        .mini-fila-item .mini-fila-musica { color: #888; font-size: 13px; }
-        .mini-fila-posicao { background: #667eea; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; margin-right: 10px; }
+        .mini-fila-item .mini-fila-nome { font-weight: 600; color: var(--cor-marfim); font-size: 16px; }
+        .mini-fila-item .mini-fila-musica { color: var(--cor-suave); font-size: 13px; }
+        .mini-fila-posicao { background: var(--cor-ouro); color: #241019; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; margin-right: 10px; }
 
         @media (max-width: 768px) {
-            .qr-card { flex-direction: column; text-align: center; padding: 12px 16px; }
+            .qr-card { flex-direction: column; text-align: center; padding: 14px 18px; }
             .qr-card .qr-texto { text-align: center; max-width: none; }
             .qr-card img { width: 70px; height: 70px; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .marquise::before, .marquise::after,
+            .nota-flutuante,
+            .pulse,
+            .display-card,
+            .cantor-nombre {
+                animation: none !important;
+            }
         }
     </style>
 </head>
 <body>
 
-    <!-- Notas musicais decorativas -->
+    <!-- Moldura de lâmpadas correndo -->
+    <div class="marquise"></div>
+
+    <!-- Fagulhas/notas musicais decorativas -->
     <div class="notas-flutuantes" id="notas-flutuantes"></div>
 
     <!-- Status Firebase -->
@@ -434,28 +492,26 @@
     <!-- Contenedor Principal -->
     <div class="main-container">
         <div class="display-card pulse" id="display-card">
-            
+
             <!-- Estado Inicial -->
             <div id="estado-inicial" class="hidden">
-                
                 <h1 class="titulo-proximo">Karaokê Do Città</h1>
-                <p style="font-size: 32px; color: #999;">Aguardando próxima música...</p>
+                <p class="mensagem-secundaria">Aguardando próxima música...</p>
             </div>
 
             <!-- Fila Vazia -->
             <div id="fila-vazia" class="hidden">
-                
                 <h1 class="titulo-proximo">Fila Encerrada</h1>
-                <p style="font-size: 32px; color: #999; margin-top: 20px;">Obrigado por participar!</p>
+                <p class="mensagem-secundaria">Obrigado por participar!</p>
             </div>
 
             <!-- Apresentação em Andamento ou Próximo Cantor -->
             <div id="proximo-cantor" class="hidden">
-                
+
                 <h1 class="titulo-proximo" id="titulo-apresentacao">Próximo a Cantar</h1>
-                
+
                 <div class="cantor-nombre" id="cantor-nombre">-</div>
-                
+
                 <div class="musica-info">
                     <div class="musica-titulo" id="musica-titulo">-</div>
                     <div class="musica-artista" id="musica-artista">-</div>
@@ -540,7 +596,7 @@
 
         function mostrarErroSemBar() {
             document.body.innerHTML = `
-                <div style="display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:20px;font-family:sans-serif;color:white;">
+                <div style="display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:20px;font-family:sans-serif;color:#f7ecd9;background:#150a0f;">
                     <div>
                         <h1 style="font-size:22px;margin-bottom:10px;">⚠️ Link incompleto</h1>
                         <p>Essa página precisa saber qual bar exibir.<br>Peça o link correto pro responsável (algo como <code>?bar=nomedobar</code> no final do endereço).</p>
@@ -548,7 +604,7 @@
                 </div>`;
         }
 
-        // Gera notas musicais flutuando no fundo, para dar mais vida à tela
+        // Gera fagulhas/notas musicais subindo do palco, para dar mais vida à tela
         function criarNotasFlutuantes() {
             const container = document.getElementById('notas-flutuantes');
             const icones = ['fa-music', 'fa-microphone', 'fa-headphones-alt'];
@@ -679,12 +735,12 @@
 
                 const avalArea = document.getElementById('avaliacao-info');
                 if (media !== null) {
-                    avalArea.innerHTML = `<div style="font-size:18px;color:#333;font-weight:700;">Avaliação média: ★ ${media} <span style="font-size:12px;color:#666;margin-left:8px;">(${votos} ${votos === 1 ? 'voto' : 'votos'})</span></div>`;
+                    avalArea.innerHTML = `<div style="font-size:18px;color:#f7ecd9;font-weight:700;">Avaliação média: ★ ${media} <span style="font-size:12px;color:#c9a9a0;margin-left:8px;">(${votos} ${votos === 1 ? 'voto' : 'votos'})</span></div>`;
                 } else {
-                    avalArea.innerHTML = `<div style="font-size:16px;color:#666;">Sem avaliações ainda — incentive o público a votar!</div>`;
+                    avalArea.innerHTML = `<div style="font-size:16px;color:#c9a9a0;">Sem avaliações ainda — incentive o público a votar!</div>`;
                 }
 
-                // vezes cantadas: se disponível no nó (poder vir com o objeto), senão '-' 
+                // vezes cantadas: se disponível no nó (poder vir com o objeto), senão '-'
                 document.getElementById('veces-cantadas').innerText = '-';
 
                 // info de fila
