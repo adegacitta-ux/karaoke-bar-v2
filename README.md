@@ -15,90 +15,28 @@ Cada bar tem seu próprio Access Token do Mercado Pago, guardado no **Google
 Secret Manager** (nunca no Realtime Database — é uma credencial que
 movimenta dinheiro da conta do bar). O nome do segredo é sempre
 `mp-access-token-{barId}`, onde `{barId}` é o mesmo id usado na URL do bar
-(`?bar={barId}`). Passo a passo completo, do zero:
+(`?bar={barId}`).
 
-**1.1. Pegar o Access Token de produção no Mercado Pago**
-
-No painel do Mercado Pago da conta desse bar: **Seu negócio → Configurações
-→ Credenciais** (ou acesse direto
-[mercadopago.com.br/developers/panel/credentials](https://www.mercadopago.com.br/developers/panel/credentials)).
-Copie o **Access Token de produção** (não o de teste/sandbox — esse não
-recebe PIX de verdade). Trate esse valor como uma senha: não cole em chat,
-planilha ou print.
-
-**1.2. Ter a gcloud CLI pronta**
-
-Duas opções, escolha uma:
-
-- **Cloud Shell** (mais simples, não instala nada): abra
-  [console.cloud.google.com](https://console.cloud.google.com), selecione o
-  projeto `karaoke-bar-v2` no topo da página, e clique no ícone de terminal
-  (`>_`) no canto superior direito. Já abre com a gcloud instalada e
-  autenticada na sua conta Google.
-- **Máquina local**: instale a
-  [gcloud CLI](https://cloud.google.com/sdk/docs/install) e rode:
-  ```bash
-  gcloud auth login
-  gcloud config set project karaoke-bar-v2
-  ```
-
-**1.3. Habilitar o Secret Manager no projeto (só na primeira vez)**
+Com a [gcloud CLI](https://cloud.google.com/sdk/docs/install) autenticada no
+projeto Firebase:
 
 ```bash
-gcloud services enable secretmanager.googleapis.com --project=karaoke-bar-v2
+echo -n "SEU_ACCESS_TOKEN_DE_PRODUCAO_AQUI" | \
+  gcloud secrets create mp-access-token-citta --data-file=- --project=karaoke-bar-v2
 ```
 
-**1.4. Criar o segredo**
-
-Troque `citta` pelo `barId` real do bar que está cadastrando. O comando pede
-o token digitado/colado direto no terminal (fica só na memória, não no
-histórico do shell nem em nenhum arquivo):
+Se o segredo já existir e for só trocar o token (ex: renovação), crie uma
+nova versão em vez de recriar o segredo:
 
 ```bash
-read -s -p "Cole o Access Token do Mercado Pago: " MP_TOKEN && echo
-printf '%s' "$MP_TOKEN" | gcloud secrets create mp-access-token-citta \
-  --data-file=- --project=karaoke-bar-v2
-unset MP_TOKEN
+echo -n "NOVO_ACCESS_TOKEN" | \
+  gcloud secrets versions add mp-access-token-citta --data-file=- --project=karaoke-bar-v2
 ```
 
-**1.5. Conferir se deu certo**
-
-```bash
-gcloud secrets versions access latest --secret=mp-access-token-citta --project=karaoke-bar-v2
-```
-
-Deve devolver o mesmo token que você colou (sem quebra de linha extra). Se
-aparecer `PERMISSION_DENIED` ou `NOT_FOUND`, confirme que está no projeto
-certo (`gcloud config get-value project`) e que o passo 1.3 rodou sem erro.
-
-**1.6. Trocar o token depois (renovação, revogação, etc.)**
-
-Não recrie o segredo — adicione uma versão nova por cima:
-
-```bash
-read -s -p "Cole o NOVO Access Token: " MP_TOKEN && echo
-printf '%s' "$MP_TOKEN" | gcloud secrets versions add mp-access-token-citta \
-  --data-file=- --project=karaoke-bar-v2
-unset MP_TOKEN
-```
-
-A Cloud Function sempre lê a versão `latest`, então o próximo pagamento já
-usa o token novo, sem precisar reimplantar nada.
-
-**Sobre permissão de leitura:** a conta de serviço que executa as Cloud
-Functions precisa do papel `roles/secretmanager.secretAccessor` pra ler
-qualquer segredo `mp-access-token-*`. Normalmente isso já vem concedido pelo
-papel padrão de um projeto Blaze; se o webhook ou `criarCobrancaPix` falharem
-com erro de permissão do Secret Manager, descubra a conta de serviço em uso
-(`gcloud functions describe webhookMercadoPago --gen2 --region=us-central1
---project=karaoke-bar-v2 --format="value(serviceConfig.serviceAccountEmail)"`)
-e conceda o papel a ela:
-
-```bash
-gcloud projects add-iam-policy-binding karaoke-bar-v2 \
-  --member="serviceAccount:CONTA_DE_SERVICO_AQUI" \
-  --role="roles/secretmanager.secretAccessor"
-```
+A conta de serviço das Cloud Functions precisa de permissão de leitura no
+segredo (normalmente já vem concedida pelo papel padrão do projeto Blaze; se
+der erro de permissão, conceda o papel `roles/secretmanager.secretAccessor`
+pra ela).
 
 ### 2. Configurar o preço de furar a fila
 
