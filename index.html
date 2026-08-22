@@ -11,7 +11,6 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
         body { font-family: 'Inter', sans-serif; }
@@ -637,24 +636,6 @@
         </div>
     </div>
 
-    <!-- MODAL: FURAR A FILA (PIX) -->
-    <div id="pix-modal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black bg-opacity-50 px-0 sm:px-4">
-        <div class="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-xl p-6 max-h-[85vh] overflow-y-auto">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
-                    <i class="fas fa-bolt text-amber-500" aria-hidden="true"></i> Furar a fila com PIX
-                </h3>
-                <button type="button" onclick="fecharModalFurarFila()" class="text-gray-400 hover:text-gray-600 text-xl" aria-label="Fechar pagamento PIX">
-                    <i class="fas fa-times" aria-hidden="true"></i>
-                </button>
-            </div>
-
-            <div id="pix-modal-conteudo">
-                <!-- Preenchido via JS: confirmar, carregando, QR code, erro -->
-            </div>
-        </div>
-    </div>
-
     <script>
         // --- CONFIGURAÇÃO YOUTUBE (busca de karaokê) ---
         const YOUTUBE_API_KEY = "AIzaSyDLAwdk2PZ3NsKJFHOrXsE8odiJDnJFvlY";
@@ -739,16 +720,10 @@
         let ADMIN_EMAIL = null;
         let barConfigCarregada = false;
 
-        // Preço configurado por bar pra furar a fila via PIX, em reais. null = bar
-        // não configurou essa feature ainda -> botão "Furar a fila" nem aparece.
-        let PRECO_FURAR_FILA = null;
-
         function aplicarConfigDoBar(config) {
             if (!config) return;
             ADMIN_EMAIL = config.adminEmail || null;
             barConfigCarregada = true;
-            const preco = Number(config.precoFurarFila);
-            PRECO_FURAR_FILA = Number.isFinite(preco) && preco > 0 ? preco : null;
 
             if (config.nome) {
                 document.title = config.nome + ' - Karaokê';
@@ -761,7 +736,6 @@
         }
 
         let db = null;
-        let funcoesFirebase = null;
         let firebaseConnected = false;
         let useFirebase = false;
         let syncInProgress = false;
@@ -776,7 +750,6 @@
             try {
                 firebase.initializeApp(firebaseConfig);
                 db = firebase.database();
-                funcoesFirebase = firebase.functions();
                 firebaseConnected = true;
                 useFirebase = true;
                 updateFirebaseStatus(true);
@@ -886,12 +859,6 @@
         let contagemCantores = {};
         let filaManualFechada = false;
         let apresentacaoAtual = null; // { id, nome, mesa, musica, artista, vezesCantadas, avaliacoes: {votanteId: nota} }
-        // Nó público mínimo de quem pagou PIX pra furar a fila: { [pedidoId]:
-        // {prioridadePaga, timestampPago} }. Só a Cloud Function webhookMercadoPago
-        // escreve aqui via Admin SDK (ver database.rules.json, ".write": false) --
-        // o cliente só lê. O detalhe financeiro (paymentId, valor) fica num nó
-        // PRIVADO separado (pagamentosPixPrivado), que o cliente nem consegue ler.
-        let pagamentosPixPublico = {};
 
         // Guardam a última versão renderizada da fila/histórico, para não reconstruir
         // o HTML dessas listas sem necessidade (ex: a cada voto de avaliação)
@@ -1265,9 +1232,6 @@
                                 ${botaoCancelarHtml(pedido.id)}
                             </div>
                         </div>
-                        <div id="furar-fila-${pedido.id}" class="mt-2">
-                            ${botaoFurarFilaHtml(pedido, posicao)}
-                        </div>
                     </li>`;
             });
 
@@ -1455,46 +1419,6 @@
             return `
                 <button type="button" onclick="pedirConfirmacaoCancelamento(${id})" class="text-xs text-red-500 hover:text-red-700 hover:underline whitespace-nowrap">
                     <i class="fas fa-times mr-1" aria-hidden="true"></i>Cancelar
-                </button>`;
-        }
-
-        // Botão/selo de "furar a fila pagando PIX". Só é chamado dentro do laço de
-        // "meusNaFila" (ver atualizarMeusPedidos) — pedidos já chamados
-        // (apresentacaoAtual) ou fora da fila nunca passam por aqui, o que já
-        // satisfaz a regra de "só pode pagar enquanto pendente na fila" sem
-        // precisar de checagem extra. A comparação por criadoPorUid (em vez de só
-        // confiar em "isso está na minha lista local de pedidos") é a mesma
-        // verificação de dono que a Cloud Function criarCobrancaPix faz do lado
-        // do servidor — aqui é só pra decidir se mostra o botão.
-        function botaoFurarFilaHtml(pedido, posicao) {
-            const souODono = !!(usuarioAtual && pedido.criadoPorUid === usuarioAtual.uid);
-            if (!souODono) return '';
-
-            if (pagamentosPixPublico[pedido.id]?.prioridadePaga) {
-                return '<span class="text-xs font-bold text-green-600"><i class="fas fa-bolt mr-1" aria-hidden="true"></i>Você furou a fila!</span>';
-            }
-            // Já é o próximo — não faz sentido pagar pra furar a fila nesse caso.
-            if (posicao === 0) return '';
-            // Bar não configurou preço pra essa feature ainda (ver aplicarConfigDoBar).
-            if (!PRECO_FURAR_FILA) return '';
-
-            // PIX exige confirmação real de servidor — no modo offline/localStorage
-            // (useFirebase = false) não existe nenhum servidor confirmando nada, só
-            // o navegador deste aparelho. "Confirmar" um pagamento nesse modo não
-            // significaria nada de verdade, por isso o botão fica desabilitado com
-            // uma explicação, em vez de escondido (silencioso) ou, pior, fingindo
-            // funcionar só localmente.
-            if (!useFirebase) {
-                return `
-                    <button type="button" disabled title="Pagamento indisponível no momento (sem conexão)" class="text-xs font-bold text-gray-400 bg-gray-100 px-3 py-1.5 rounded-lg cursor-not-allowed whitespace-nowrap">
-                        <i class="fas fa-bolt mr-1" aria-hidden="true"></i>Furar a fila (PIX) — sem conexão
-                    </button>`;
-            }
-
-            const valorTexto = PRECO_FURAR_FILA.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-            return `
-                <button type="button" onclick="abrirModalFurarFila(${pedido.id})" class="text-xs font-bold text-white bg-amber-500 hover:bg-amber-600 px-3 py-1.5 rounded-lg whitespace-nowrap">
-                    <i class="fas fa-bolt mr-1" aria-hidden="true"></i>Furar a fila por ${valorTexto} (PIX)
                 </button>`;
         }
 
@@ -1699,18 +1623,6 @@
             db.ref(caminhoBar('contagem')).on('value', (snapshot) => {
                 if (syncInProgress) return;
                 contagemCantores = snapshot.val() || {};
-            }, (error) => tratarErroDeSincronizacao(error));
-
-            // Quem furou a fila pagando PIX — nó público mínimo, separado do
-            // financeiro (ver webhookMercadoPago em functions/index.js). Listener em
-            // tempo real é o que faz a fila reordenar sozinha assim que o webhook
-            // confirma um pagamento, e o modal de pagamento fechar sozinho, sem a
-            // pessoa precisar recarregar a página.
-            db.ref(caminhoBar('pagamentosPixPublico')).on('value', (snapshot) => {
-                if (syncInProgress) return;
-                pagamentosPixPublico = snapshot.val() || {};
-                atualizarStatusPagamentoPix();
-                atualizarUI();
             }, (error) => tratarErroDeSincronizacao(error));
 
             // Nota: historico é salvo com o mais recente PRIMEIRO (acaoFinalizarApresentacao
@@ -2057,179 +1969,6 @@
             }
         }
 
-        // --- FURAR A FILA (PIX) ---
-        // Só pro texto exibido antes de gerar a cobrança -- precisa bater com
-        // MINUTOS_ATE_EXPIRAR em functions/mercadoPago.js (não dá pra importar essa
-        // constante de lá pra cá, são dois ambientes JS separados). A contagem
-        // regressiva de verdade, depois que a cobrança já existe, usa o
-        // dataExpiracaoMs que a Cloud Function devolve — não este número.
-        const MINUTOS_EXPIRACAO_PIX = 10;
-        // Pedido cujo modal de pagamento está aberto no momento (null = fechado).
-        // Guardado à parte porque o listener de pagamentosPixPublico
-        // (sincronizarComFirebase) precisa saber "pra qual pedido, se algum, devo
-        // atualizar o modal agora?" sem vasculhar o DOM procurando um modal aberto.
-        let pedidoIdFurarFilaAtual = null;
-        // Guarda o copia-e-cola do pagamento em aberto pra "Copiar código" funcionar
-        // sem precisar reconsultar a Cloud Function.
-        let copiaEColaPixAtual = null;
-        // Intervalo da contagem regressiva até a cobrança expirar (ver
-        // MINUTOS_ATE_EXPIRAR em functions/mercadoPago.js) -- guardado à parte pra
-        // dar clearInterval() ao fechar o modal ou trocar de pedido, sem deixar um
-        // intervalo órfão rodando em segundo plano depois que o elemento some da tela.
-        let intervaloContagemPix = null;
-
-        function pararContagemPix() {
-            if (intervaloContagemPix) {
-                clearInterval(intervaloContagemPix);
-                intervaloContagemPix = null;
-            }
-        }
-
-        function abrirModalFurarFila(id) {
-            pedidoIdFurarFilaAtual = id;
-            document.getElementById('pix-modal').classList.remove('hidden');
-            renderizarTelaConfirmarPix(id);
-        }
-
-        function fecharModalFurarFila() {
-            pedidoIdFurarFilaAtual = null;
-            pararContagemPix();
-            document.getElementById('pix-modal').classList.add('hidden');
-        }
-
-        function renderizarTelaConfirmarPix(id) {
-            pararContagemPix();
-            const valorTexto = PRECO_FURAR_FILA.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-            document.getElementById('pix-modal-conteudo').innerHTML = `
-                <p class="text-sm text-gray-600 mb-4">
-                    Pague <strong>${valorTexto}</strong> via PIX e seu pedido vai pro topo da fila assim que o
-                    pagamento for confirmado. O QR Code vale por ${MINUTOS_EXPIRACAO_PIX} minutos.
-                </p>
-                <button type="button" onclick="confirmarPagamentoPix(${id})" class="w-full py-3 rounded-lg font-semibold bg-amber-500 hover:bg-amber-600 text-white transition-colors">
-                    <i class="fas fa-qrcode mr-2" aria-hidden="true"></i>Pagar com PIX
-                </button>
-                <button type="button" onclick="fecharModalFurarFila()" class="mt-2 w-full py-3 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">
-                    Cancelar
-                </button>
-            `;
-        }
-
-        function renderizarTelaCarregandoPix() {
-            pararContagemPix();
-            document.getElementById('pix-modal-conteudo').innerHTML = `
-                <div class="text-center text-gray-400 py-8">
-                    <i class="fas fa-spinner fa-spin text-2xl mb-2" aria-hidden="true"></i>
-                    <div class="text-sm">Gerando cobrança PIX...</div>
-                </div>
-            `;
-        }
-
-        function renderizarTelaErroPix(mensagem) {
-            pararContagemPix();
-            document.getElementById('pix-modal-conteudo').innerHTML = `
-                <div class="text-center text-red-500 py-6 text-sm mb-2">
-                    <i class="fas fa-exclamation-triangle text-xl mb-2 block" aria-hidden="true"></i>
-                    ${escaparHtml(mensagem)}
-                </div>
-                <button type="button" onclick="fecharModalFurarFila()" class="w-full py-3 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">
-                    Fechar
-                </button>
-            `;
-        }
-
-        // Mostra o QR Code/copia-e-cola e uma contagem regressiva até a cobrança
-        // expirar (ver date_of_expiration em functions/mercadoPago.js) -- sem essa
-        // contagem visível, a pessoa podia ficar tentando pagar um código que o
-        // Mercado Pago já não aceita mais, sem entender por que "não funcionou".
-        function renderizarTelaAguardandoPix({ id, qrCodeBase64, copiaECola, valorEmReais, dataExpiracaoMs }) {
-            copiaEColaPixAtual = copiaECola;
-            const valorTexto = valorEmReais.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-            // "textContent" nunca, porque isso é innerHTML — mas nenhum destes valores
-            // vem de entrada de usuário (são todos devolvidos pela nossa própria Cloud
-            // Function/Mercado Pago), então não precisam de escaparHtml() aqui; o
-            // texto livre (mensagem de erro) em renderizarTelaErroPix acima é que
-            // passa por escaparHtml(), por vir de erro.message.
-            document.getElementById('pix-modal-conteudo').innerHTML = `
-                <p class="text-sm text-gray-600 mb-3 text-center">Escaneie o QR Code ou copie o código PIX — valor: <strong>${valorTexto}</strong></p>
-                ${qrCodeBase64 ? `<img src="data:image/png;base64,${qrCodeBase64}" alt="QR Code PIX" class="mx-auto w-48 h-48 mb-3" />` : ''}
-                <button type="button" onclick="copiarCodigoPix()" class="w-full py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors text-sm mb-2">
-                    <i class="fas fa-copy mr-1" aria-hidden="true"></i>Copiar código PIX
-                </button>
-                <div id="pix-contagem" class="text-center text-xs text-gray-400 mb-3"></div>
-                <div id="pix-status-pagamento" class="text-center text-sm font-semibold text-amber-600">
-                    <i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i>Aguardando pagamento...
-                </div>
-                <button type="button" onclick="fecharModalFurarFila()" class="mt-4 w-full py-3 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">
-                    Fechar
-                </button>
-            `;
-
-            pararContagemPix();
-            const atualizarContagem = () => {
-                const restanteMs = dataExpiracaoMs - Date.now();
-                const contagemEl = document.getElementById('pix-contagem');
-                if (!contagemEl) { pararContagemPix(); return; }
-                if (restanteMs <= 0) {
-                    contagemEl.innerText = 'Cobrança expirada.';
-                    const statusEl = document.getElementById('pix-status-pagamento');
-                    if (statusEl) {
-                        statusEl.className = 'text-center text-sm font-semibold text-red-500';
-                        statusEl.innerHTML = '<i class="fas fa-times-circle mr-1" aria-hidden="true"></i>Tempo esgotado. Feche e tente de novo.';
-                    }
-                    pararContagemPix();
-                    return;
-                }
-                const minutos = Math.floor(restanteMs / 60000);
-                const segundos = Math.floor((restanteMs % 60000) / 1000).toString().padStart(2, '0');
-                contagemEl.innerText = `Expira em ${minutos}:${segundos}`;
-            };
-            atualizarContagem();
-            intervaloContagemPix = setInterval(atualizarContagem, 1000);
-        }
-
-        function copiarCodigoPix() {
-            if (!copiaEColaPixAtual) return;
-            navigator.clipboard?.writeText(copiaEColaPixAtual).catch((err) => {
-                console.error('❌ Não foi possível copiar o código PIX:', err);
-            });
-        }
-
-        // Chama a Cloud Function criarCobrancaPix — não dá pra criar a cobrança
-        // direto no navegador porque isso exigiria expor o Access Token do Mercado
-        // Pago (uma credencial que movimenta dinheiro do bar) no JavaScript público
-        // (ver functions/index.js e functions/secretManager.js).
-        async function confirmarPagamentoPix(id) {
-            if (!useFirebase || !funcoesFirebase) {
-                renderizarTelaErroPix('Pagamento via PIX só funciona com o app conectado ao Firebase.');
-                return;
-            }
-            renderizarTelaCarregandoPix();
-            try {
-                const criarCobrancaPix = funcoesFirebase.httpsCallable('criarCobrancaPix');
-                const resultado = await criarCobrancaPix({ barId: BAR_ID, pedidoId: id });
-                if (pedidoIdFurarFilaAtual !== id) return; // modal fechado/trocado enquanto esperava
-                renderizarTelaAguardandoPix({ id, ...resultado.data });
-            } catch (erro) {
-                console.error('❌ Erro ao criar cobrança PIX:', erro);
-                if (pedidoIdFurarFilaAtual !== id) return;
-                renderizarTelaErroPix(erro.message || 'Não foi possível gerar o pagamento PIX agora. Tente de novo em instantes.');
-            }
-        }
-
-        // Chamado pelo listener de pagamentosPixPublico (sincronizarComFirebase) toda
-        // vez que esse nó muda — é assim que o modal "Aguardando pagamento..."
-        // descobre sozinho que o webhook confirmou o pagamento, sem precisar ficar
-        // checando em loop.
-        function atualizarStatusPagamentoPix() {
-            if (pedidoIdFurarFilaAtual === null) return;
-            if (!pagamentosPixPublico[pedidoIdFurarFilaAtual]?.prioridadePaga) return;
-            pararContagemPix();
-            const statusEl = document.getElementById('pix-status-pagamento');
-            if (!statusEl) return; // modal pode estar numa tela sem esse elemento (ex: erro)
-            statusEl.className = 'text-center text-sm font-semibold text-green-600';
-            statusEl.innerHTML = '<i class="fas fa-check-circle mr-1" aria-hidden="true"></i>Pagamento confirmado! Você furou a fila 🎉';
-        }
-
         // Escapa texto de qualquer campo digitado por usuário (nome, música, artista,
         // mesa, etc.) antes de colocar dentro de innerHTML. Sem isso, alguém poderia
         // digitar algo como <img src=x onerror=alert(1)> no campo "Nome" e esse código
@@ -2334,19 +2073,7 @@
                     timestamp: agora,
                     timestampFila: agora,
                     vezesCantadas: prioridadeCalculada,
-                    youtubeUrl: youtubeUrlDoPedido,
-                    // Dono do pedido pro ponto de vista do Firebase -- é o que a
-                    // Cloud Function criarCobrancaPix confere antes de gerar uma
-                    // cobrança PIX (só o dono pode pagar pra furar a própria fila).
-                    // Todo visitante já recebe uma sessão anônima automática (ver
-                    // signInAnonymously() em initFirebase), então "usuarioAtual" já
-                    // deve estar preenchido a essa altura na grande maioria dos
-                    // casos; se não estiver (ex: pedido feito antes do login
-                    // anônimo terminar), fica null e esse pedido simplesmente não
-                    // pode furar a fila depois -- limitação aceitável, mesma
-                    // categoria da limitação já existente de "Seus Pedidos" (ver
-                    // getMeusPedidos) quando o navegador troca de UID anônimo.
-                    criadoPorUid: (usuarioAtual && usuarioAtual.uid) || null
+                    youtubeUrl: youtubeUrlDoPedido
                 };
             }
 
@@ -2484,24 +2211,10 @@
         }
 
         function ordenarFila() {
-            // Quem pagou PIX pra furar a fila (pagamentosPixPublico, ver
-            // sincronizarComFirebase) sempre vem ANTES de qualquer pedido sem
-            // pagamento, não importa vezesCantadas nem tempo de espera — é
-            // literalmente o que a pessoa pagou por isso. Entre dois pedidos pagos,
-            // quem pagou primeiro (timestampPago menor) canta primeiro. Só depois de
-            // esgotados os pedidos pagos é que entra a regra normal pros demais.
+            // Regra: menos vezes cantadas primeiro — mas o "peso" de já ter cantado
+            // vai diminuindo com o tempo de espera (ver calcularPrioridadeEfetiva).
+            // Em empate, ordem de chegada na fila (timestampFila).
             fila.sort((a, b) => {
-                const pagoA = pagamentosPixPublico[a.id]?.prioridadePaga === true;
-                const pagoB = pagamentosPixPublico[b.id]?.prioridadePaga === true;
-                if (pagoA !== pagoB) return pagoA ? -1 : 1;
-                if (pagoA && pagoB) {
-                    return (pagamentosPixPublico[a.id].timestampPago || Infinity)
-                         - (pagamentosPixPublico[b.id].timestampPago || Infinity);
-                }
-
-                // Regra normal: menos vezes cantadas primeiro — mas o "peso" de já ter
-                // cantado vai diminuindo com o tempo de espera (ver calcularPrioridadeEfetiva).
-                // Em empate, ordem de chegada na fila (timestampFila).
                 const diferenca = calcularPrioridadeEfetiva(a) - calcularPrioridadeEfetiva(b);
                 if (Math.abs(diferenca) > 0.0001) {
                     return diferenca;
@@ -2878,11 +2591,7 @@
             // Tabela da Fila — só reconstrói o HTML se a fila realmente mudou.
             // Isso evita "piscar"/travar a tela do DJ toda vez que alguém vota
             // (um voto muda só a avaliação da apresentação atual, não a fila).
-            // Inclui pagamentosPixPublico no hash: sem isso, quando o webhook confirma
-            // um pagamento (sem mudar nada dentro do array "fila" em si), a tabela do
-            // DJ não reconstruiria e o selo "PIX" nunca apareceria até a próxima
-            // mudança real na fila.
-            const filaHashAtual = stringifyOrdenado(fila) + '|' + stringifyOrdenado(pagamentosPixPublico);
+            const filaHashAtual = stringifyOrdenado(fila);
             if (filaHashAtual !== _ultimaFilaHash) {
                 _ultimaFilaHash = filaHashAtual;
 
@@ -2901,7 +2610,6 @@
                             <td class="px-6 py-4 font-bold text-gray-400">${index + 1}</td>
                             <td class="px-6 py-4 font-semibold text-gray-800">
                                 ${escaparHtml(pedido.nome)}
-                                ${pagamentosPixPublico[pedido.id]?.prioridadePaga ? '<span class="ml-1 px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-bold whitespace-nowrap"><i class="fas fa-bolt mr-1" aria-hidden="true"></i>Furou a fila (PIX)</span>' : ''}
                                 ${pedido.mesa ? `<div class="text-xs text-gray-400 mt-1">Mesa: ${escaparHtml(pedido.mesa)}</div>` : ''}
                                 <div class="text-xs text-gray-400 mt-1"><i class="fas fa-clock mr-1" aria-hidden="true"></i>Pedido às ${formatarHoraPedido(pedido.timestamp)}</div>
                             </td>
