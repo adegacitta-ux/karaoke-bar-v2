@@ -304,8 +304,26 @@
             }
             document.getElementById('link-voltar').href = 'index.html?bar=' + encodeURIComponent(BAR_ID);
             renderizarCatalogo();
-            ajustarAlturaIndice();
-            window.addEventListener('resize', ajustarAlturaIndice);
+
+            // ResizeObserver em vez de só medir uma vez + ouvir "resize": o Tailwind
+            // (carregado via CDN) aplica as classes de forma ASSÍNCRONA — se a rede
+            // estiver mais lenta, dava pra medir a altura do índice ANTES dele ficar
+            // com o tamanho final (pílulas com padding), gravando uma altura pequena
+            // demais na variável CSS. O resultado: o cabeçalho da letra ficava
+            // sobreposto/ilegível atrás do nome da primeira música. ResizeObserver
+            // dispara de novo sozinho toda vez que o tamanho real do índice muda —
+            // por causa do Tailwind terminar de aplicar o estilo, troca de fonte,
+            // redimensionar a janela, ou virar o celular — sem depender de acertar
+            // o timing manualmente.
+            const indice = document.getElementById('indice-letras');
+            if (indice && window.ResizeObserver) {
+                new ResizeObserver(ajustarAlturaIndice).observe(indice);
+            } else {
+                // Navegador sem ResizeObserver (raríssimo hoje em dia): volta pro
+                // comportamento antigo, imperfeito mas melhor que nada.
+                ajustarAlturaIndice();
+                window.addEventListener('resize', ajustarAlturaIndice);
+            }
         });
     </script>
 </body>
