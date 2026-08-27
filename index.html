@@ -155,16 +155,16 @@
     <!-- Aviso de conexão perdida — visível pra todo mundo (cliente e DJ), só quando
          a conexão em tempo real cai de verdade (ver monitorarConexaoReal) -->
     <div id="aviso-sem-conexao" class="hidden bg-red-600 text-white text-sm font-medium text-center py-2 px-4" role="alert" aria-live="assertive">
-        <i class="fas fa-exclamation-triangle mr-2" aria-hidden="true"></i>Sem conexão no momento — seu pedido pode não salvar até a internet voltar. Aguarde um instante.
+        <i class="fas fa-exclamation-triangle mr-2" aria-hidden="true"></i><span data-i18n="sem_conexao_aviso">Sem conexão no momento — seu pedido pode não salvar até a internet voltar. Aguarde um instante.</span>
     </div>
 
     <!-- Banner "É a sua vez" -->
     <div id="minha-vez-banner" class="hidden fixed top-0 inset-x-0 z-50 bg-gradient-custom text-white px-4 py-4 shadow-lg flex items-center justify-between gap-3" style="animation: pulse-banner 1.5s infinite;" role="alert" aria-live="assertive">
         <div class="flex items-center gap-3">
             <i class="fas fa-microphone text-2xl" aria-hidden="true"></i>
-            <span class="font-bold text-lg" id="minha-vez-texto">Prepare-se! Você é o próximo a cantar.</span>
+            <span class="font-bold text-lg" id="minha-vez-texto" data-i18n="minha_vez_padrao">Prepare-se! Você é o próximo a cantar.</span>
         </div>
-        <button type="button" onclick="document.getElementById('minha-vez-banner').classList.add('hidden')" class="text-white text-xl leading-none px-2" aria-label="Fechar aviso">&times;</button>
+        <button type="button" onclick="document.getElementById('minha-vez-banner').classList.add('hidden')" class="text-white text-xl leading-none px-2" aria-label="Fechar aviso" data-i18n-aria-label="fechar_aviso">&times;</button>
     </div>
 
     <!-- Header / Navegação Simples para o Protótipo -->
@@ -172,9 +172,12 @@
         <div class="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
             <h1 class="text-xl font-bold text-indigo-600"><span id="nome-do-bar">Karaokê Manager</span></h1>
             <div class="flex items-center space-x-2" role="tablist" aria-label="Navegação principal">
-                <button type="button" onclick="switchTab('cliente')" id="tab-cliente" role="tab" aria-selected="true" aria-controls="cliente" class="px-3 py-1 text-sm font-medium rounded-md hover:bg-gray-100">Pedir Música</button>
+                <button type="button" onclick="switchTab('cliente')" id="tab-cliente" role="tab" aria-selected="true" aria-controls="cliente" class="px-3 py-1 text-sm font-medium rounded-md hover:bg-gray-100" data-i18n="nav_pedir_musica">Pedir Música</button>
                 <button type="button" onclick="switchTab('admin')" id="tab-admin" role="tab" aria-selected="false" aria-controls="admin" class="px-3 py-1 text-sm font-medium rounded-md hover:bg-gray-100">Admin/DJ</button>
-                <button type="button" onclick="alternarModoEscuro()" id="btn-toggle-tema" class="toggle-tema-btn" title="Alternar modo escuro" aria-label="Alternar modo escuro" aria-pressed="false">
+                <button type="button" onclick="alternarIdioma()" id="btn-toggle-idioma" class="toggle-tema-btn" title="Switch to English" aria-label="Switch to English">
+                    <span id="idioma-atual-label" class="text-xs font-bold">EN</span>
+                </button>
+                <button type="button" onclick="alternarModoEscuro()" id="btn-toggle-tema" class="toggle-tema-btn" title="Alternar modo escuro" aria-label="Alternar modo escuro" data-i18n-title="dark_mode_toggle_label" data-i18n-aria-label="dark_mode_toggle_label" aria-pressed="false">
                     <i class="fas fa-moon" id="icone-tema" aria-hidden="true"></i>
                 </button>
             </div>
@@ -191,7 +194,7 @@
                 <div id="secao-meus-pedidos" class="hidden bg-white rounded-2xl shadow-xl overflow-hidden border-2 border-indigo-300">
                     <div class="p-4">
                         <h2 class="font-bold text-gray-800 mb-3 flex items-center gap-2">
-                            <i class="fas fa-user-circle text-indigo-500" aria-hidden="true"></i> Seus Pedidos
+                            <i class="fas fa-user-circle text-indigo-500" aria-hidden="true"></i> <span data-i18n="seus_pedidos_titulo">Seus Pedidos</span>
                         </h2>
                         <ul id="lista-meus-pedidos" class="space-y-2">
                             <!-- Inserido via JS -->
@@ -201,37 +204,37 @@
 
                 <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
                     <div class="bg-gradient-custom p-6 text-white text-center">
-                        <h2 class="text-2xl font-bold">Peça sua Música</h2>
-                        <p class="opacity-90 text-sm">Sua vez depende de quantas vezes já cantou!</p>
+                        <h2 class="text-2xl font-bold" data-i18n="peca_sua_musica_titulo">Peça sua Música</h2>
+                        <p class="opacity-90 text-sm" data-i18n="peca_sua_musica_subtitulo">Sua vez depende de quantas vezes já cantou!</p>
                     </div>
-                    
+
                     <div class="p-6">
                         <!-- Alerta de Fila Encerrada -->
                         <div id="msg-encerrado" class="hidden mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 font-semibold text-center">
-                            <i class="fas fa-clock mr-2" aria-hidden="true"></i> Fila encerrada para esta noite. Já atingimos o limite de músicas que conseguimos tocar até as 23h! Obrigado.
+                            <i class="fas fa-clock mr-2" aria-hidden="true"></i> <span data-i18n="fila_encerrada_msg">Fila encerrada para esta noite. Já atingimos o limite de músicas que conseguimos tocar até as 23h! Obrigado.</span>
                         </div>
 
                         <!-- Info de Tempo -->
                         <div class="mb-4 flex justify-between items-center bg-indigo-50 p-3 rounded-lg text-indigo-800 text-sm font-medium">
-                            <span><i class="fas fa-hourglass-half mr-2" aria-hidden="true"></i>Espera estimada:</span>
+                            <span><i class="fas fa-hourglass-half mr-2" aria-hidden="true"></i><span data-i18n="espera_estimada_label">Espera estimada:</span></span>
                             <span id="cliente-tempo-espera">0 min</span>
                         </div>
 
                         <!-- Toggle de Notificação -->
                         <label class="mb-1 flex items-center justify-between bg-yellow-50 border border-yellow-200 p-3 rounded-lg text-sm cursor-pointer select-none">
-                            <span class="text-gray-700"><i class="fas fa-bell mr-2 text-yellow-600" aria-hidden="true"></i>Avisar quando for minha vez</span>
+                            <span class="text-gray-700"><i class="fas fa-bell mr-2 text-yellow-600" aria-hidden="true"></i><span data-i18n="avisar_minha_vez">Avisar quando for minha vez</span></span>
                             <input type="checkbox" id="notif-toggle" class="w-5 h-5 accent-indigo-600" />
                         </label>
                         <p id="aviso-iphone" class="hidden -mt-1 mb-4 text-xs text-gray-400 px-1">
-                            <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>No iPhone, esse aviso funciona melhor com a aba aberta e a tela ligada — a notificação do sistema só chega direitinho se você adicionar este site à tela de início (compartilhar → "Adicionar à Tela de Início").
+                            <i class="fas fa-info-circle mr-1" aria-hidden="true"></i><span data-i18n="aviso_iphone_texto">No iPhone, esse aviso funciona melhor com a aba aberta e a tela ligada — a notificação do sistema só chega direitinho se você adicionar este site à tela de início (compartilhar → "Adicionar à Tela de Início").</span>
                         </p>
                         <p id="notif-status" class="hidden -mt-4 mb-6 text-xs text-gray-500"></p>
 
                         <form id="form-pedido" class="space-y-4" novalidate>
                             <div>
                                 <div class="mb-1 flex justify-between items-center">
-                                    <label for="input-nome" class="block text-sm font-medium text-gray-700">Seu Nome / Apelido</label>
-                                    <button type="button" id="btn-nao-e-voce" class="text-xs font-normal text-indigo-500 hover:underline hidden">Não é você? Trocar</button>
+                                    <label for="input-nome" class="block text-sm font-medium text-gray-700" data-i18n="label_nome">Seu Nome / Apelido</label>
+                                    <button type="button" id="btn-nao-e-voce" class="text-xs font-normal text-indigo-500 hover:underline hidden" data-i18n="nao_e_voce">Não é você? Trocar</button>
                                 </div>
                                 <input type="text" id="input-nome" required maxlength="50" aria-describedby="erro-nome" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
                                 <p id="erro-nome" class="hidden text-xs text-red-600 mt-1" role="alert"></p>
@@ -239,38 +242,38 @@
 
                             <!-- NOVO CAMPO: Número da Mesa -->
                             <div>
-                                <label for="input-mesa" class="block text-sm font-medium text-gray-700 mb-1">Número da Mesa (opcional)</label>
-                                <input type="text" id="input-mesa" placeholder="Ex: 12" maxlength="20" aria-describedby="erro-mesa" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                                <label for="input-mesa" class="block text-sm font-medium text-gray-700 mb-1" data-i18n="label_mesa">Número da Mesa (opcional)</label>
+                                <input type="text" id="input-mesa" placeholder="Ex: 12" data-i18n-placeholder="placeholder_mesa" maxlength="20" aria-describedby="erro-mesa" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
                                 <p id="erro-mesa" class="hidden text-xs text-red-600 mt-1" role="alert"></p>
                             </div>
 
                             <div>
-                                <label for="input-musica" class="block text-sm font-medium text-gray-700 mb-1">Nome da Música</label>
+                                <label for="input-musica" class="block text-sm font-medium text-gray-700 mb-1" data-i18n="label_musica">Nome da Música</label>
                                 <input type="text" id="input-musica" required maxlength="100" aria-describedby="erro-musica" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
                                 <p id="erro-musica" class="hidden text-xs text-red-600 mt-1" role="alert"></p>
-                                <button type="button" id="btn-abrir-youtube" onclick="abrirModalYoutube()" aria-label="Buscar o karaokê dessa música no YouTube" class="mt-2 flex items-center gap-2 text-sm font-semibold text-red-600 border border-red-200 rounded-lg px-3 py-2 hover:bg-red-50 transition-colors">
+                                <button type="button" id="btn-abrir-youtube" onclick="abrirModalYoutube()" aria-label="Buscar o karaokê dessa música no YouTube" data-i18n-aria-label="aria_buscar_youtube" class="mt-2 flex items-center gap-2 text-sm font-semibold text-red-600 border border-red-200 rounded-lg px-3 py-2 hover:bg-red-50 transition-colors">
                                     <i class="fab fa-youtube text-lg" aria-hidden="true"></i> YouTube
                                 </button>
-                                <p class="text-xs text-gray-400 mt-1"><i class="fas fa-lightbulb mr-1" aria-hidden="true"></i>Busque o karaokê da música no YouTube</p>
+                                <p class="text-xs text-gray-400 mt-1"><i class="fas fa-lightbulb mr-1" aria-hidden="true"></i><span data-i18n="dica_busca_youtube">Busque o karaokê da música no YouTube</span></p>
                             </div>
                             <div>
-                                <label for="input-artista" class="block text-sm font-medium text-gray-700 mb-1">Artista <span id="artista-opcional-tag" class="hidden text-gray-400 font-normal">(opcional — já veio do YouTube)</span></label>
+                                <label for="input-artista" class="block text-sm font-medium text-gray-700 mb-1"><span data-i18n="label_artista">Artista</span> <span id="artista-opcional-tag" class="hidden text-gray-400 font-normal" data-i18n="artista_opcional_tag">(opcional — já veio do YouTube)</span></label>
                                 <input type="text" id="input-artista" required maxlength="100" aria-describedby="erro-artista" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
                                 <p id="erro-artista" class="hidden text-xs text-red-600 mt-1" role="alert"></p>
                             </div>
-                            <button type="submit" id="btn-enviar" class="w-full bg-gradient-custom text-white font-bold py-3 rounded-lg shadow-lg hover:opacity-90 transition-all">
+                            <button type="submit" id="btn-enviar" class="w-full bg-gradient-custom text-white font-bold py-3 rounded-lg shadow-lg hover:opacity-90 transition-all" data-i18n="btn_enviar_pedido">
                                 ENVIAR PEDIDO
                             </button>
                         </form>
 
                         <div id="feedback-sucesso" class="hidden mt-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 text-center animate-bounce" role="status" aria-live="polite">
-                            <i class="fas fa-check-circle mr-2" aria-hidden="true"></i> Pedido enviado para a fila!
+                            <i class="fas fa-check-circle mr-2" aria-hidden="true"></i> <span data-i18n="pedido_enviado_sucesso">Pedido enviado para a fila!</span>
                         </div>
 
                         <div class="mt-6 text-center space-x-4">
-                            <a href="#" onclick="window.location.href='catalogo.html?bar=' + encodeURIComponent(BAR_ID); return false;" class="text-sm text-indigo-600 hover:underline">Não sabe o que cantar? Ver catálogo ↓</a>
-                            <a href="#secao-proximos" class="text-sm text-indigo-600 hover:underline">Ver a ordem e próximos cantores ↓</a>
-                            <a href="#secao-ja-cantadas" class="text-sm text-indigo-600 hover:underline">Ver quem já cantou ↓</a>
+                            <a href="#" onclick="window.location.href='catalogo.html?bar=' + encodeURIComponent(BAR_ID); return false;" class="text-sm text-indigo-600 hover:underline" data-i18n="link_catalogo">Não sabe o que cantar? Ver catálogo ↓</a>
+                            <a href="#secao-proximos" class="text-sm text-indigo-600 hover:underline" data-i18n="link_proximos">Ver a ordem e próximos cantores ↓</a>
+                            <a href="#secao-ja-cantadas" class="text-sm text-indigo-600 hover:underline" data-i18n="link_ja_cantou">Ver quem já cantou ↓</a>
                         </div>
                     </div>
                 </div>
@@ -278,19 +281,19 @@
                 <!-- AVALIAÇÃO DE QUEM ESTÁ CANTANDO AGORA -->
                 <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
                     <div class="bg-gradient-custom p-6 text-white text-center">
-                        <h2 class="text-2xl font-bold">Avalie a Apresentação</h2>
-                        <p class="opacity-90 text-sm">Dê sua nota para quem está cantando agora!</p>
+                        <h2 class="text-2xl font-bold" data-i18n="avaliar_titulo">Avalie a Apresentação</h2>
+                        <p class="opacity-90 text-sm" data-i18n="avaliar_subtitulo">Dê sua nota para quem está cantando agora!</p>
                     </div>
 
                     <div class="p-6">
                         <div id="avaliar-sem-apresentacao" class="hidden p-8 text-center text-gray-400">
                             <i class="fas fa-microphone-slash text-4xl mb-3 block" aria-hidden="true"></i>
-                            Ninguém está cantando no momento.
+                            <span data-i18n="avaliar_vazio">Ninguém está cantando no momento.</span>
                         </div>
 
                         <div id="avaliar-conteudo" class="hidden">
                             <div class="text-center mb-4">
-                                <div class="text-xs uppercase tracking-wide text-indigo-500 font-bold mb-1">Cantando agora</div>
+                                <div class="text-xs uppercase tracking-wide text-indigo-500 font-bold mb-1" data-i18n="avaliar_cantando_agora">Cantando agora</div>
                                 <div class="text-2xl font-extrabold text-gray-800" id="avaliar-nome">-</div>
                                 <div class="text-gray-500" id="avaliar-musica">-</div>
                             </div>
@@ -308,11 +311,11 @@
                             <div class="mt-6 flex justify-around bg-indigo-50 rounded-lg p-4 text-center">
                                 <div>
                                     <div class="text-xl font-bold text-indigo-600" id="avaliar-media">-</div>
-                                    <div class="text-xs text-gray-500">Média atual</div>
+                                    <div class="text-xs text-gray-500" data-i18n="avaliar_media_label">Média atual</div>
                                 </div>
                                 <div>
                                     <div class="text-xl font-bold text-indigo-600" id="avaliar-votos">0</div>
-                                    <div class="text-xs text-gray-500">Votos</div>
+                                    <div class="text-xs text-gray-500" data-i18n="avaliar_votos_label">Votos</div>
                                 </div>
                             </div>
                         </div>
@@ -322,23 +325,23 @@
                 <!-- PRÓXIMOS NA FILA -->
                 <div id="secao-proximos" class="bg-white rounded-2xl shadow-xl overflow-hidden scroll-mt-4">
                     <div class="bg-gradient-custom p-6 text-white text-center">
-                        <h2 class="text-2xl font-bold">Próximos na Fila</h2>
-                        <p class="opacity-90 text-sm">Veja a ordem atual e quem serão os próximos a cantar.</p>
+                        <h2 class="text-2xl font-bold" data-i18n="proximos_titulo">Próximos na Fila</h2>
+                        <p class="opacity-90 text-sm" data-i18n="proximos_subtitulo">Veja a ordem atual e quem serão os próximos a cantar.</p>
                     </div>
 
                     <div class="p-6">
-                        <div class="mb-4 text-sm text-gray-600">Mostrando até 10 próximos.</div>
+                        <div class="mb-4 text-sm text-gray-600" data-i18n="proximos_mostrando">Mostrando até 10 próximos.</div>
                         <div class="bg-white rounded-lg border border-gray-100">
                             <ul id="proximos-list" class="divide-y divide-gray-100">
                                 <!-- Inserido via JS -->
                             </ul>
                             <div id="proximos-vazio" class="p-12 text-center text-gray-400">
                                 <i class="fas fa-music text-4xl mb-3 block" aria-hidden="true"></i>
-                                Nenhuma música na fila no momento.
+                                <span data-i18n="proximos_vazio">Nenhuma música na fila no momento.</span>
                             </div>
                         </div>
 
-                        <div class="mt-6 text-center text-xs text-gray-500">
+                        <div class="mt-6 text-center text-xs text-gray-500" data-i18n="proximos_nota_realtime">
                             A lista é atualizada em tempo real (quando o Firebase está conectado) ou ao recarregar a página.
                         </div>
                     </div>
@@ -347,8 +350,8 @@
                 <!-- JÁ CANTADAS -->
                 <div id="secao-ja-cantadas" class="bg-white rounded-2xl shadow-xl overflow-hidden scroll-mt-4">
                     <div class="bg-gradient-custom p-6 text-white text-center">
-                        <h2 class="text-2xl font-bold">Já Cantadas</h2>
-                        <p class="opacity-90 text-sm">Quem já se apresentou hoje e as notas que recebeu.</p>
+                        <h2 class="text-2xl font-bold" data-i18n="historico_titulo">Já Cantadas</h2>
+                        <p class="opacity-90 text-sm" data-i18n="historico_subtitulo">Quem já se apresentou hoje e as notas que recebeu.</p>
                     </div>
 
                     <div class="p-6">
@@ -613,31 +616,31 @@
         <div class="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-xl p-6 max-h-[85vh] flex flex-col">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
-                    <i class="fab fa-youtube text-red-600" aria-hidden="true"></i> Buscar Karaokê no YouTube
+                    <i class="fab fa-youtube text-red-600" aria-hidden="true"></i> <span data-i18n="youtube_modal_titulo">Buscar Karaokê no YouTube</span>
                 </h3>
-                <button type="button" onclick="fecharModalYoutube()" class="text-gray-400 hover:text-gray-600 text-xl" aria-label="Fechar busca do YouTube">
+                <button type="button" onclick="fecharModalYoutube()" class="text-gray-400 hover:text-gray-600 text-xl" aria-label="Fechar busca do YouTube" data-i18n-aria-label="youtube_fechar_aria">
                     <i class="fas fa-times" aria-hidden="true"></i>
                 </button>
             </div>
 
             <div class="flex gap-2 mb-3">
-                <label for="youtube-busca-input" class="sr-only">Nome da música</label>
-                <input type="text" id="youtube-busca-input" placeholder="Digite o nome da música... (ex: Evidências)" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
-                <button type="button" onclick="buscarNoYoutube()" class="bg-red-100 text-red-600 px-4 rounded-lg hover:bg-red-200 transition-colors" aria-label="Buscar">
+                <label for="youtube-busca-input" class="sr-only" data-i18n="youtube_label_musica_sr">Nome da música</label>
+                <input type="text" id="youtube-busca-input" placeholder="Digite o nome da música... (ex: Evidências)" data-i18n-placeholder="youtube_placeholder_busca" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                <button type="button" onclick="buscarNoYoutube()" class="bg-red-100 text-red-600 px-4 rounded-lg hover:bg-red-200 transition-colors" aria-label="Buscar" data-i18n-aria-label="youtube_aria_buscar">
                     <i class="fas fa-search" aria-hidden="true"></i>
                 </button>
             </div>
 
             <div class="bg-blue-50 border border-blue-100 text-blue-700 text-xs rounded-lg p-3 mb-4">
                 <i class="fas fa-lightbulb mr-1" aria-hidden="true"></i>
-                <strong>Dica:</strong> Escreva apenas o nome da música. A busca automática procura por karaokês e playbacks no YouTube.
+                <strong data-i18n="youtube_dica_label">Dica:</strong> <span data-i18n="youtube_dica_texto">Escreva apenas o nome da música. A busca automática procura por karaokês e playbacks no YouTube.</span>
             </div>
 
             <div id="youtube-resultados" class="overflow-y-auto flex-1 space-y-2 -mx-2 px-2">
                 <!-- Resultados inseridos via JS -->
             </div>
 
-            <button type="button" onclick="fecharModalYoutube()" class="mt-4 w-full py-3 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">
+            <button type="button" onclick="fecharModalYoutube()" class="mt-4 w-full py-3 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors" data-i18n="btn_cancelar">
                 Cancelar
             </button>
         </div>
@@ -684,6 +687,268 @@
         // bares diferentes se a mesma pessoa usar o navegador em mais de um bar
         function chaveLocal(nome) {
             return `karaoke_${BAR_ID}_${nome}`;
+        }
+
+        // --- IDIOMA (tradução do lado do cliente para inglês) ---
+        // Cobre só a interface do CLIENTE (aba "Pedir Música" + modal do YouTube) —
+        // o painel Admin/DJ continua em português, já que é uso interno da equipe.
+        const IDIOMAS_SUPORTADOS = ['pt', 'en'];
+
+        const TRADUCOES = {
+            pt: {
+                dark_mode_toggle_label: 'Alternar modo escuro',
+                nav_pedir_musica: 'Pedir Música',
+                sem_conexao_aviso: 'Sem conexão no momento — seu pedido pode não salvar até a internet voltar. Aguarde um instante.',
+                fechar_aviso: 'Fechar aviso',
+                minha_vez_padrao: 'Prepare-se! Você é o próximo a cantar.',
+                seus_pedidos_titulo: 'Seus Pedidos',
+                peca_sua_musica_titulo: 'Peça sua Música',
+                peca_sua_musica_subtitulo: 'Sua vez depende de quantas vezes já cantou!',
+                fila_encerrada_msg: 'Fila encerrada para esta noite. Já atingimos o limite de músicas que conseguimos tocar até as 23h! Obrigado.',
+                espera_estimada_label: 'Espera estimada:',
+                avisar_minha_vez: 'Avisar quando for minha vez',
+                aviso_iphone_texto: 'No iPhone, esse aviso funciona melhor com a aba aberta e a tela ligada — a notificação do sistema só chega direitinho se você adicionar este site à tela de início (compartilhar → "Adicionar à Tela de Início").',
+                label_nome: 'Seu Nome / Apelido',
+                nao_e_voce: 'Não é você? Trocar',
+                label_mesa: 'Número da Mesa (opcional)',
+                placeholder_mesa: 'Ex: 12',
+                label_musica: 'Nome da Música',
+                aria_buscar_youtube: 'Buscar o karaokê dessa música no YouTube',
+                dica_busca_youtube: 'Busque o karaokê da música no YouTube',
+                label_artista: 'Artista',
+                artista_opcional_tag: '(opcional — já veio do YouTube)',
+                btn_enviar_pedido: 'ENVIAR PEDIDO',
+                pedido_enviado_sucesso: 'Pedido enviado para a fila!',
+                link_catalogo: 'Não sabe o que cantar? Ver catálogo ↓',
+                link_proximos: 'Ver a ordem e próximos cantores ↓',
+                link_ja_cantou: 'Ver quem já cantou ↓',
+                avaliar_titulo: 'Avalie a Apresentação',
+                avaliar_subtitulo: 'Dê sua nota para quem está cantando agora!',
+                avaliar_vazio: 'Ninguém está cantando no momento.',
+                avaliar_cantando_agora: 'Cantando agora',
+                avaliar_media_label: 'Média atual',
+                avaliar_votos_label: 'Votos',
+                avaliar_status_default: 'Toque em uma estrela para votar.',
+                avaliar_status_votou: 'Você votou {nota}★. Pode alterar seu voto se quiser.',
+                avaliar_erro_voto: '⚠️ Seu voto não foi salvo. Toque na estrela de novo.',
+                proximos_titulo: 'Próximos na Fila',
+                proximos_subtitulo: 'Veja a ordem atual e quem serão os próximos a cantar.',
+                proximos_mostrando: 'Mostrando até 10 próximos.',
+                proximos_vazio: 'Nenhuma música na fila no momento.',
+                proximos_nota_realtime: 'A lista é atualizada em tempo real (quando o Firebase está conectado) ou ao recarregar a página.',
+                mesa_inline: 'Mesa',
+                historico_titulo: 'Já Cantadas',
+                historico_subtitulo: 'Quem já se apresentou hoje e as notas que recebeu.',
+                historico_vazio: 'Nenhuma música cantada ainda.',
+                historico_cantou_conector: 'cantou',
+                sem_avaliacoes: 'Sem avaliações',
+                voto_singular: 'voto',
+                voto_plural: 'votos',
+                historico_ver_menos: 'Ver menos ↑',
+                historico_ver_mais: 'Ver mais{contagem} ↓',
+                historico_restantes: ' ({n} restantes)',
+                meu_pedido_em_andamento: '🎤 É a sua vez agora! {musica}',
+                meu_pedido_proximo: '🎤 Você é o próximo!',
+                meu_pedido_falta_singular: 'Falta {n} pessoa antes de você',
+                meu_pedido_falta_plural: 'Faltam {n} pessoas antes de você',
+                remover_pedido_pergunta: 'Remover esse pedido da fila?',
+                sim_cancelar: 'Sim, cancelar',
+                manter_pedido: 'Manter pedido',
+                btn_cancelar: 'Cancelar',
+                erro_cancelar_pedido: 'Não deu pra cancelar agora. Tente de novo em alguns segundos.',
+                minha_vez_prepare: 'Prepare-se, {nome}! Você é o próximo a cantar — {musica}',
+                notif_titulo: '🎤 É a sua vez!',
+                notif_corpo: '{nome}, prepare-se para cantar "{musica}"!',
+                notif_sem_suporte: 'Seu navegador não suporta notificações — mas o aviso sonoro na tela ainda vai funcionar.',
+                notif_ativadas: '🔔 Notificações ativadas.',
+                notif_bloqueadas: 'Notificações bloqueadas no navegador — o aviso vai aparecer só na tela do site.',
+                notif_sem_problema: 'Sem problemas — o aviso ainda vai aparecer na tela do site enquanto estiver aberto.',
+                erro_nome_vazio: 'Digite seu nome ou apelido.',
+                erro_nome_longo: 'Nome muito longo (máximo 50 caracteres).',
+                erro_mesa_longa: 'Número da mesa muito longo.',
+                erro_mesa_invalida: 'Use só letras, números e hífen.',
+                erro_musica_vazia: 'Digite o nome da música.',
+                erro_musica_longa: 'Nome da música muito longo (máximo 100 caracteres).',
+                erro_artista_vazio: 'Digite o nome do artista (ou busque a música no YouTube).',
+                erro_artista_longo: 'Nome do artista muito longo (máximo 100 caracteres).',
+                fila_encerrada_alert: 'Fila encerrada!',
+                erro_enviar_pedido: 'Não deu pra enviar seu pedido agora. Tente de novo em alguns segundos.',
+                youtube_modal_titulo: 'Buscar Karaokê no YouTube',
+                youtube_fechar_aria: 'Fechar busca do YouTube',
+                youtube_label_musica_sr: 'Nome da música',
+                youtube_placeholder_busca: 'Digite o nome da música... (ex: Evidências)',
+                youtube_aria_buscar: 'Buscar',
+                youtube_dica_label: 'Dica:',
+                youtube_dica_texto: 'Escreva apenas o nome da música. A busca automática procura por karaokês e playbacks no YouTube.',
+                youtube_buscando: 'Buscando...',
+                youtube_erro_api: 'Não foi possível buscar agora. Tente digitar o nome da música direto no campo.',
+                youtube_sem_resultado: 'Nenhum resultado encontrado. Tente outro nome.',
+                youtube_erro_conexao: 'Erro de conexão. Tente digitar o nome da música direto no campo.'
+            },
+            en: {
+                dark_mode_toggle_label: 'Toggle dark mode',
+                nav_pedir_musica: 'Order a Song',
+                sem_conexao_aviso: "No connection right now — your request may not save until the internet comes back. Please wait a moment.",
+                fechar_aviso: 'Close notice',
+                minha_vez_padrao: "Get ready! You're next to sing.",
+                seus_pedidos_titulo: 'Your Requests',
+                peca_sua_musica_titulo: 'Request Your Song',
+                peca_sua_musica_subtitulo: "Your turn depends on how many times you've already sung!",
+                fila_encerrada_msg: "The queue is closed for tonight. We've reached the limit of songs we can play before 11 PM! Thank you.",
+                espera_estimada_label: 'Estimated wait:',
+                avisar_minha_vez: "Notify me when it's my turn",
+                aviso_iphone_texto: 'On iPhone, this works best with the tab open and the screen on — the system notification only arrives reliably if you add this site to your Home Screen (Share → "Add to Home Screen").',
+                label_nome: 'Your Name / Nickname',
+                nao_e_voce: 'Not you? Switch',
+                label_mesa: 'Table Number (optional)',
+                placeholder_mesa: 'E.g.: 12',
+                label_musica: 'Song Name',
+                aria_buscar_youtube: "Search for this song's karaoke on YouTube",
+                dica_busca_youtube: "Search for the song's karaoke on YouTube",
+                label_artista: 'Artist',
+                artista_opcional_tag: '(optional — already filled from YouTube)',
+                btn_enviar_pedido: 'SEND REQUEST',
+                pedido_enviado_sucesso: 'Request sent to the queue!',
+                link_catalogo: "Don't know what to sing? See the catalog ↓",
+                link_proximos: 'See the order and next singers ↓',
+                link_ja_cantou: 'See who has already sung ↓',
+                avaliar_titulo: 'Rate the Performance',
+                avaliar_subtitulo: "Rate whoever is singing right now!",
+                avaliar_vazio: 'No one is singing right now.',
+                avaliar_cantando_agora: 'Singing now',
+                avaliar_media_label: 'Current average',
+                avaliar_votos_label: 'Votes',
+                avaliar_status_default: 'Tap a star to vote.',
+                avaliar_status_votou: 'You voted {nota}★. You can change your vote if you want.',
+                avaliar_erro_voto: "⚠️ Your vote wasn't saved. Tap the star again.",
+                proximos_titulo: 'Next in Queue',
+                proximos_subtitulo: "See the current order and who's singing next.",
+                proximos_mostrando: 'Showing up to 10 next.',
+                proximos_vazio: 'No songs in the queue right now.',
+                proximos_nota_realtime: 'The list updates in real time (when Firebase is connected) or when the page is reloaded.',
+                mesa_inline: 'Table',
+                historico_titulo: 'Already Sung',
+                historico_subtitulo: 'Who has performed today and the ratings they received.',
+                historico_vazio: 'No songs sung yet.',
+                historico_cantou_conector: 'sang',
+                sem_avaliacoes: 'No ratings',
+                voto_singular: 'vote',
+                voto_plural: 'votes',
+                historico_ver_menos: 'See less ↑',
+                historico_ver_mais: 'See more{contagem} ↓',
+                historico_restantes: ' ({n} remaining)',
+                meu_pedido_em_andamento: "🎤 It's your turn now! {musica}",
+                meu_pedido_proximo: "🎤 You're next!",
+                meu_pedido_falta_singular: '{n} person ahead of you',
+                meu_pedido_falta_plural: '{n} people ahead of you',
+                remover_pedido_pergunta: 'Remove this request from the queue?',
+                sim_cancelar: 'Yes, cancel',
+                manter_pedido: 'Keep request',
+                btn_cancelar: 'Cancel',
+                erro_cancelar_pedido: "Couldn't cancel right now. Please try again in a few seconds.",
+                minha_vez_prepare: "Get ready, {nome}! You're next to sing — {musica}",
+                notif_titulo: "🎤 It's your turn!",
+                notif_corpo: '{nome}, get ready to sing "{musica}"!',
+                notif_sem_suporte: "Your browser doesn't support notifications — but the on-screen sound alert will still work.",
+                notif_ativadas: '🔔 Notifications enabled.',
+                notif_bloqueadas: "Notifications are blocked in the browser — the alert will only appear on the site's screen.",
+                notif_sem_problema: "No problem — the alert will still appear on the site's screen while it's open.",
+                erro_nome_vazio: 'Enter your name or nickname.',
+                erro_nome_longo: 'Name too long (maximum 50 characters).',
+                erro_mesa_longa: 'Table number too long.',
+                erro_mesa_invalida: 'Use only letters, numbers, and hyphens.',
+                erro_musica_vazia: 'Enter the song name.',
+                erro_musica_longa: 'Song name too long (maximum 100 characters).',
+                erro_artista_vazio: "Enter the artist's name (or search for the song on YouTube).",
+                erro_artista_longo: 'Artist name too long (maximum 100 characters).',
+                fila_encerrada_alert: 'Queue is closed!',
+                erro_enviar_pedido: "Couldn't send your request right now. Please try again in a few seconds.",
+                youtube_modal_titulo: 'Search Karaoke on YouTube',
+                youtube_fechar_aria: 'Close YouTube search',
+                youtube_label_musica_sr: 'Song name',
+                youtube_placeholder_busca: 'Type the song name... (e.g.: Evidências)',
+                youtube_aria_buscar: 'Search',
+                youtube_dica_label: 'Tip:',
+                youtube_dica_texto: 'Just type the song name. The automatic search looks for karaoke tracks and backing tracks on YouTube.',
+                youtube_buscando: 'Searching...',
+                youtube_erro_api: "Couldn't search right now. Try typing the song name directly in the field.",
+                youtube_sem_resultado: 'No results found. Try another name.',
+                youtube_erro_conexao: "Connection error. Try typing the song name directly in the field."
+            }
+        };
+
+        let IDIOMA_ATUAL = 'pt';
+
+        // Busca uma tradução pela chave no idioma atual (cai pro português se faltar
+        // na tradução em inglês) e substitui placeholders tipo {nome} pelo valor de params.
+        function t(chave, params) {
+            let texto = (TRADUCOES[IDIOMA_ATUAL] && TRADUCOES[IDIOMA_ATUAL][chave]) || TRADUCOES.pt[chave] || chave;
+            if (params) {
+                Object.keys(params).forEach(chaveParam => {
+                    texto = texto.replace(new RegExp(`\\{${chaveParam}\\}`, 'g'), params[chaveParam]);
+                });
+            }
+            return texto;
+        }
+
+        // Aplica as traduções em todo elemento marcado com data-i18n* — cobre só a
+        // interface do cliente e o modal do YouTube (ver comentário no topo do bloco).
+        function aplicarTraducoesEstaticas() {
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                el.textContent = t(el.getAttribute('data-i18n'));
+            });
+            document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+                el.setAttribute('placeholder', t(el.getAttribute('data-i18n-placeholder')));
+            });
+            document.querySelectorAll('[data-i18n-aria-label]').forEach(el => {
+                el.setAttribute('aria-label', t(el.getAttribute('data-i18n-aria-label')));
+            });
+            document.querySelectorAll('[data-i18n-title]').forEach(el => {
+                el.setAttribute('title', t(el.getAttribute('data-i18n-title')));
+            });
+        }
+
+        function aplicarIdioma(lang) {
+            IDIOMA_ATUAL = IDIOMAS_SUPORTADOS.includes(lang) ? lang : 'pt';
+            document.documentElement.lang = IDIOMA_ATUAL === 'en' ? 'en' : 'pt-br';
+
+            const labelBotao = document.getElementById('idioma-atual-label');
+            if (labelBotao) labelBotao.textContent = IDIOMA_ATUAL === 'en' ? 'PT' : 'EN';
+            const btnIdioma = document.getElementById('btn-toggle-idioma');
+            if (btnIdioma) {
+                const dicaBotao = IDIOMA_ATUAL === 'en' ? 'Mudar para português' : 'Switch to English';
+                btnIdioma.setAttribute('title', dicaBotao);
+                btnIdioma.setAttribute('aria-label', dicaBotao);
+            }
+
+            aplicarTraducoesEstaticas();
+
+            // Força reconstruir fila/histórico já traduzidos, mesmo que os dados em
+            // si não tenham mudado (atualizarUI() só reconstrói esse HTML quando o
+            // hash muda, pra não travar a tela do DJ a cada voto — ver atualizarUI).
+            _ultimaFilaHash = null;
+            _ultimoHistoricoHash = null;
+            if (typeof atualizarUI === 'function') atualizarUI();
+        }
+
+        function alternarIdioma() {
+            const novoIdioma = IDIOMA_ATUAL === 'en' ? 'pt' : 'en';
+            aplicarIdioma(novoIdioma);
+            try {
+                localStorage.setItem(chaveLocal('idioma'), novoIdioma);
+            } catch (e) {
+                console.warn('⚠️ Não foi possível lembrar a preferência de idioma:', e);
+            }
+        }
+
+        function iniciarIdioma() {
+            let salvo = null;
+            try {
+                salvo = localStorage.getItem(chaveLocal('idioma'));
+            } catch (e) {
+                console.warn('⚠️ Não foi possível ler a preferência de idioma salva:', e);
+            }
+            aplicarIdioma(salvo || 'pt');
         }
 
         // --- MODO ESCURO ---
@@ -948,27 +1213,27 @@
         const VALIDADORES = {
             nome: (valor) => {
                 const v = (valor || '').trim();
-                if (v.length === 0) return { valido: false, mensagem: 'Digite seu nome ou apelido.' };
-                if (v.length > 50) return { valido: false, mensagem: 'Nome muito longo (máximo 50 caracteres).' };
+                if (v.length === 0) return { valido: false, mensagem: t('erro_nome_vazio') };
+                if (v.length > 50) return { valido: false, mensagem: t('erro_nome_longo') };
                 return { valido: true };
             },
             mesa: (valor) => {
                 const v = (valor || '').trim();
                 if (v.length === 0) return { valido: true }; // campo opcional
-                if (v.length > 20) return { valido: false, mensagem: 'Número da mesa muito longo.' };
-                if (!/^[a-zA-Z0-9\-\s]+$/.test(v)) return { valido: false, mensagem: 'Use só letras, números e hífen.' };
+                if (v.length > 20) return { valido: false, mensagem: t('erro_mesa_longa') };
+                if (!/^[a-zA-Z0-9\-\s]+$/.test(v)) return { valido: false, mensagem: t('erro_mesa_invalida') };
                 return { valido: true };
             },
             musica: (valor) => {
                 const v = (valor || '').trim();
-                if (v.length === 0) return { valido: false, mensagem: 'Digite o nome da música.' };
-                if (v.length > 100) return { valido: false, mensagem: 'Nome da música muito longo (máximo 100 caracteres).' };
+                if (v.length === 0) return { valido: false, mensagem: t('erro_musica_vazia') };
+                if (v.length > 100) return { valido: false, mensagem: t('erro_musica_longa') };
                 return { valido: true };
             },
             artista: (valor, campoObrigatorio) => {
                 const v = (valor || '').trim();
-                if (campoObrigatorio && v.length === 0) return { valido: false, mensagem: 'Digite o nome do artista (ou busque a música no YouTube).' };
-                if (v.length > 100) return { valido: false, mensagem: 'Nome do artista muito longo (máximo 100 caracteres).' };
+                if (campoObrigatorio && v.length === 0) return { valido: false, mensagem: t('erro_artista_vazio') };
+                if (v.length > 100) return { valido: false, mensagem: t('erro_artista_longo') };
                 return { valido: true };
             }
         };
@@ -1136,25 +1401,25 @@
         function pedirPermissaoNotificacao() {
             const statusEl = document.getElementById('notif-status');
             if (!('Notification' in window)) {
-                statusEl.innerText = 'Seu navegador não suporta notificações — mas o aviso sonoro na tela ainda vai funcionar.';
+                statusEl.innerText = t('notif_sem_suporte');
                 statusEl.classList.remove('hidden');
                 return;
             }
             if (Notification.permission === 'granted') {
-                statusEl.innerText = '🔔 Notificações ativadas.';
+                statusEl.innerText = t('notif_ativadas');
                 statusEl.classList.remove('hidden');
                 return;
             }
             if (Notification.permission === 'denied') {
-                statusEl.innerText = 'Notificações bloqueadas no navegador — o aviso vai aparecer só na tela do site.';
+                statusEl.innerText = t('notif_bloqueadas');
                 statusEl.classList.remove('hidden');
                 return;
             }
             Notification.requestPermission().then(permissao => {
                 statusEl.classList.remove('hidden');
                 statusEl.innerText = permissao === 'granted'
-                    ? '🔔 Notificações ativadas.'
-                    : 'Sem problemas — o aviso ainda vai aparecer na tela do site enquanto estiver aberto.';
+                    ? t('notif_ativadas')
+                    : t('notif_sem_problema');
             });
         }
 
@@ -1218,14 +1483,14 @@
                 html += `
                     <li class="p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
                         <i class="fas fa-microphone-alt text-green-600" aria-hidden="true"></i>
-                        <span class="text-sm font-semibold text-green-700">🎤 É a sua vez agora! ${meuEmAndamento.musica}</span>
+                        <span class="text-sm font-semibold text-green-700">${escaparHtml(t('meu_pedido_em_andamento', { musica: meuEmAndamento.musica }))}</span>
                     </li>`;
             }
 
             meusNaFila.forEach(({ pedido, posicao }) => {
                 const textoPosicao = posicao === 0
-                    ? '🎤 Você é o próximo!'
-                    : `Falta${posicao === 1 ? '' : 'm'} ${posicao} pessoa${posicao === 1 ? '' : 's'} antes de você`;
+                    ? t('meu_pedido_proximo')
+                    : t(posicao === 1 ? 'meu_pedido_falta_singular' : 'meu_pedido_falta_plural', { n: posicao });
                 const corFundo = posicao === 0 ? 'bg-indigo-50 border-indigo-200' : 'bg-gray-50 border-gray-200';
 
                 html += `
@@ -1254,7 +1519,7 @@
             if (!listaHistCliente) return;
 
             if (_historicoItensHtml.length === 0) {
-                listaHistCliente.innerHTML = '<li class="p-4 text-center text-gray-400 italic">Nenhuma música cantada ainda.</li>';
+                listaHistCliente.innerHTML = `<li class="p-4 text-center text-gray-400 italic">${t('historico_vazio')}</li>`;
                 return;
             }
 
@@ -1270,14 +1535,14 @@
                 // disso, sabemos que "tem mais" (buscamos 1 a mais pra descobrir isso),
                 // mas não sabemos exatamente quantas, então o texto fica sem número.
                 const textoContagem = historicoCompletoCarregado
-                    ? ` (${_historicoItensHtml.length - LIMITE_HISTORICO_CLIENTE} restantes)`
+                    ? t('historico_restantes', { n: _historicoItensHtml.length - LIMITE_HISTORICO_CLIENTE })
                     : '';
                 html += verTudoHistoricoCliente
                     ? `<li class="p-3 text-center">
-                           <button type="button" onclick="toggleVerTudoHistorico()" class="text-sm text-indigo-600 hover:underline">Ver menos ↑</button>
+                           <button type="button" onclick="toggleVerTudoHistorico()" class="text-sm text-indigo-600 hover:underline">${t('historico_ver_menos')}</button>
                        </li>`
                     : `<li class="p-3 text-center">
-                           <button type="button" onclick="toggleVerTudoHistorico()" class="text-sm text-indigo-600 hover:underline">Ver mais${textoContagem} ↓</button>
+                           <button type="button" onclick="toggleVerTudoHistorico()" class="text-sm text-indigo-600 hover:underline">${t('historico_ver_mais', { contagem: textoContagem })}</button>
                        </li>`;
             }
             listaHistCliente.innerHTML = html;
@@ -1425,7 +1690,7 @@
         function botaoCancelarHtml(id) {
             return `
                 <button type="button" onclick="pedirConfirmacaoCancelamento(${id})" class="text-xs text-red-500 hover:text-red-700 hover:underline whitespace-nowrap">
-                    <i class="fas fa-times mr-1" aria-hidden="true"></i>Cancelar
+                    <i class="fas fa-times mr-1" aria-hidden="true"></i>${t('btn_cancelar')}
                 </button>`;
         }
 
@@ -1438,13 +1703,13 @@
             if (!container) return;
             container.innerHTML = `
                 <div class="flex flex-col items-end gap-1">
-                    <span class="text-xs text-gray-500">Remover esse pedido da fila?</span>
+                    <span class="text-xs text-gray-500">${t('remover_pedido_pergunta')}</span>
                     <div class="flex gap-3">
                         <button type="button" onclick="cancelarMeuPedido(${id})" class="text-xs font-bold text-red-600 hover:underline whitespace-nowrap">
-                            Sim, cancelar
+                            ${t('sim_cancelar')}
                         </button>
                         <button type="button" onclick="atualizarMeusPedidos()" class="text-xs font-semibold text-gray-600 hover:underline whitespace-nowrap">
-                            Manter pedido
+                            ${t('manter_pedido')}
                         </button>
                     </div>
                 </div>`;
@@ -1464,7 +1729,7 @@
                 }, (error, comprometido, snapshot) => {
                     if (error) {
                         console.error('❌ Erro ao cancelar pedido:', error);
-                        alert('Não deu pra cancelar agora. Tente de novo em alguns segundos.');
+                        alert(t('erro_cancelar_pedido'));
                         return;
                     }
                     fila = snapshot.val() || [];
@@ -1488,14 +1753,14 @@
             // 2) Banner na própria tela (funciona sempre, mesmo sem permissão de notificação)
             const banner = document.getElementById('minha-vez-banner');
             document.getElementById('minha-vez-texto').innerText =
-                `Prepare-se, ${pedido.nome}! Você é o próximo a cantar — ${pedido.musica}`;
+                t('minha_vez_prepare', { nome: pedido.nome, musica: pedido.musica });
             banner.classList.remove('hidden');
 
             // 3) Notificação do navegador (se permitido)
             if ('Notification' in window && Notification.permission === 'granted') {
                 try {
-                    new Notification('🎤 É a sua vez!', {
-                        body: `${pedido.nome}, prepare-se para cantar "${pedido.musica}"!`,
+                    new Notification(t('notif_titulo'), {
+                        body: t('notif_corpo', { nome: pedido.nome, musica: pedido.musica }),
                     });
                 } catch (e) { console.warn('Não foi possível exibir a notificação:', e); }
             }
@@ -1914,7 +2179,7 @@
             resultadosDiv.innerHTML = `
                 <div class="text-center text-gray-400 py-8">
                     <i class="fas fa-spinner fa-spin text-2xl mb-2" aria-hidden="true"></i>
-                    <div class="text-sm">Buscando...</div>
+                    <div class="text-sm">${t('youtube_buscando')}</div>
                 </div>
             `;
 
@@ -1929,7 +2194,7 @@
                     resultadosDiv.innerHTML = `
                         <div class="text-center text-red-500 py-8 text-sm">
                             <i class="fas fa-exclamation-triangle text-xl mb-2 block" aria-hidden="true"></i>
-                            Não foi possível buscar agora. Tente digitar o nome da música direto no campo.
+                            ${t('youtube_erro_api')}
                         </div>
                     `;
                     return;
@@ -1939,7 +2204,7 @@
                 if (itens.length === 0) {
                     resultadosDiv.innerHTML = `
                         <div class="text-center text-gray-400 py-8 text-sm">
-                            Nenhum resultado encontrado. Tente outro nome.
+                            ${t('youtube_sem_resultado')}
                         </div>
                     `;
                     return;
@@ -1970,7 +2235,7 @@
                 resultadosDiv.innerHTML = `
                     <div class="text-center text-red-500 py-8 text-sm">
                         <i class="fas fa-exclamation-triangle text-xl mb-2 block" aria-hidden="true"></i>
-                        Erro de conexão. Tente digitar o nome da música direto no campo.
+                        ${t('youtube_erro_conexao')}
                     </div>
                 `;
             }
@@ -2034,7 +2299,7 @@
             e.preventDefault();
             
             if (isFilaBloqueada()) {
-                alert("Fila encerrada!");
+                alert(t('fila_encerrada_alert'));
                 return;
             }
 
@@ -2099,7 +2364,7 @@
                 }, (error, comprometido, snapshot) => {
                     if (error) {
                         console.error('❌ Erro na transação ao adicionar pedido:', error);
-                        alert('Não deu pra enviar seu pedido agora. Tente de novo em alguns segundos.');
+                        alert(t('erro_enviar_pedido'));
                         if (btnEnviar) { btnEnviar.disabled = false; }
                         return;
                     }
@@ -2458,7 +2723,7 @@
                         // verdade, a pessoa precisa saber — senão acha que votou e não votou.
                         const statusEl = document.getElementById('avaliar-status');
                         if (statusEl) {
-                            statusEl.innerText = '⚠️ Seu voto não foi salvo. Toque na estrela de novo.';
+                            statusEl.innerText = t('avaliar_erro_voto');
                             statusEl.classList.add('text-red-600', 'font-semibold');
                         }
                     }
@@ -2657,7 +2922,7 @@
                             li.innerHTML = `
                                 <div>
                                     <div class="font-bold text-gray-800">${i + 1}. ${escaparHtml(p.nome)}</div>
-                                    <div class="text-sm text-gray-500">${formatarMusicaArtista(escaparHtml(p.musica), escaparHtml(p.artista))}${p.mesa ? ` <span class="mx-2">| Mesa: ${escaparHtml(p.mesa)}</span>` : ''}</div>
+                                    <div class="text-sm text-gray-500">${formatarMusicaArtista(escaparHtml(p.musica), escaparHtml(p.artista))}${p.mesa ? ` <span class="mx-2">| ${t('mesa_inline')}: ${escaparHtml(p.mesa)}</span>` : ''}</div>
                                 </div>
                                 <div class="text-xs text-gray-400 font-bold">${p.vezesCantadas}x</div>
                             `;
@@ -2681,14 +2946,14 @@
                 } else {
                     _historicoItensHtml = historico.map(item => {
                         const avaliacaoHtml = (typeof item.mediaAvaliacao === 'number')
-                            ? `<div class="text-xs mt-1"><span class="mini-stars">${renderMiniEstrelas(item.mediaAvaliacao)}</span> <span class="text-gray-400">${item.mediaAvaliacao.toFixed(1)} (${item.totalVotos} ${item.totalVotos === 1 ? 'voto' : 'votos'})</span></div>`
-                            : `<div class="text-xs mt-1 text-gray-400 italic">Sem avaliações</div>`;
+                            ? `<div class="text-xs mt-1"><span class="mini-stars">${renderMiniEstrelas(item.mediaAvaliacao)}</span> <span class="text-gray-400">${item.mediaAvaliacao.toFixed(1)} (${item.totalVotos} ${t(item.totalVotos === 1 ? 'voto_singular' : 'voto_plural')})</span></div>`
+                            : `<div class="text-xs mt-1 text-gray-400 italic">${t('sem_avaliacoes')}</div>`;
                         return `
                             <li class="p-4 flex justify-between items-center">
                                 <div>
                                     <span class="font-bold text-gray-700">${escaparHtml(item.nome)}</span>
-                                    ${item.mesa ? `<span class="text-gray-500 mx-2">| Mesa: ${escaparHtml(item.mesa)}</span>` : ''}
-                                    <span class="text-gray-500 mx-2">cantou</span>
+                                    ${item.mesa ? `<span class="text-gray-500 mx-2">| ${t('mesa_inline')}: ${escaparHtml(item.mesa)}</span>` : ''}
+                                    <span class="text-gray-500 mx-2">${t('historico_cantou_conector')}</span>
                                     <span class="text-indigo-600 font-medium">${escaparHtml(item.musica)}</span>
                                     ${avaliacaoHtml}
                                 </div>
@@ -2730,7 +2995,7 @@
                     const notaDoUsuario = (apresentacaoAtual.avaliacoes || {})[votanteId] || 0;
                     const statusEl = document.getElementById('avaliar-status');
                     statusEl.classList.remove('text-red-600', 'font-semibold'); // limpa aviso de erro de um voto anterior, se tinha
-                    statusEl.innerText = notaDoUsuario ? `Você votou ${notaDoUsuario}★. Pode alterar seu voto se quiser.` : 'Toque em uma estrela para votar.';
+                    statusEl.innerText = notaDoUsuario ? t('avaliar_status_votou', { nota: notaDoUsuario }) : t('avaliar_status_default');
 
                     const estrelas = document.querySelectorAll('#avaliar-estrelas i');
                     estrelas.forEach(estrela => {
@@ -2802,6 +3067,7 @@
         // Inicializar
         window.addEventListener('load', () => {
             iniciarModoEscuro(); // independe de ter bar ou não — já deixa a tela no tom certo
+            iniciarIdioma(); // idem — já aplica a preferência de idioma do cliente
             if (!BAR_ID) {
                 mostrarErroSemBar();
                 return; // não continua tentando mexer em elementos que acabaram de sumir
