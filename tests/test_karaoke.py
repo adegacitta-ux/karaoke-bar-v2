@@ -36,6 +36,7 @@ código de erro != 0 se algo falhou (útil pra rodar antes de qualquer deploy).
 
 import sys
 import re
+import json
 import argparse
 import functools
 import http.server
@@ -52,6 +53,8 @@ from playwright.sync_api import sync_playwright
 RESULTADOS = []
 _AVISO_TAILWIND_JA_MOSTRADO = False
 ARQUIVO_INDEX = "index.html"  # ajustado em main() se --arquivo apontar pra outro nome
+CAMINHO_INDEX = None  # Path completo, ajustado em main() — usado pelos testes estáticos (sem browser)
+CAMINHO_REGRAS = None  # Path completo do database.rules.json correspondente
 
 
 def registrar(nome, ok, detalhe=""):
@@ -1310,10 +1313,43 @@ def test_contraste_de_cores_no_modo_escuro(browser, base_url):
     context.close()
 
 
+def test_campos_do_pedido_batem_com_regras_do_firebase(browser, base_url):
+    """As regras reais do Firebase (database.rules.json) travam a fila com uma
+    whitelist de campos ($other: false) — se o JS gravar um campo que as regras
+    não conhecem, a transação inteira é rejeitada com permission_denied, e nada
+    disso aparece nos outros testes (que rodam em modo localStorage, sem as
+    regras reais). Já aconteceu de verdade com o campo "youtubeUrl". Esse teste
+    não abre browser: só compara estaticamente os campos que montarNovoPedido()
+    grava com o schema declarado em fila/$index nas regras."""
+    conteudo = CAMINHO_INDEX.read_text(encoding="utf-8")
+    regras = json.loads(CAMINHO_REGRAS.read_text(encoding="utf-8"))
+
+    match_funcao = re.search(
+        r"function montarNovoPedido\(\).*?return \{(.*?)\};",
+        conteudo, re.DOTALL
+    )
+    linhas_sem_comentario = "\n".join(
+        linha for linha in match_funcao.group(1).splitlines()
+        if not linha.strip().startswith("//")
+    )
+    campos_do_pedido = set(re.findall(r"^\s*(\w+):", linhas_sem_comentario, re.MULTILINE))
+
+    schema_fila = regras["rules"]["bares"]["$barId"]["karaoke"]["fila"]["$index"]
+    campos_permitidos = {chave for chave in schema_fila.keys() if not chave.startswith(("$", "."))}
+
+    campos_nao_permitidos = campos_do_pedido - campos_permitidos
+
+    ok = bool(match_funcao) and len(campos_do_pedido) > 0 and not campos_nao_permitidos
+    registrar("Campos gravados em /fila batem com a whitelist de database.rules.json", ok,
+              f"gravados={sorted(campos_do_pedido)}, "
+              f"permitidos={sorted(campos_permitidos)}, "
+              f"fora_da_whitelist={sorted(campos_nao_permitidos)}")
+
+
 # ---------------------------------------------------------------------------
 
 def main():
-    global ARQUIVO_INDEX
+    global ARQUIVO_INDEX, CAMINHO_INDEX, CAMINHO_REGRAS
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--arquivo", default=None,
@@ -1327,6 +1363,8 @@ def main():
 
     pasta = caminho_index.parent.resolve()
     ARQUIVO_INDEX = caminho_index.name
+    CAMINHO_INDEX = caminho_index.resolve()
+    CAMINHO_REGRAS = Path(__file__).parent.parent / "database.rules.json"
 
     print(f"Testando: {caminho_index}")
     print(f"Servindo {pasta} por HTTP local (não mais file://, pra ficar mais fiel à produção)\n")
@@ -1371,6 +1409,7 @@ def main():
             test_display_mostra_status_de_conexao_honesto(browser, base_url)
             test_historico_permanente_limita_a_um_ano(browser, base_url)
             test_contraste_de_cores_no_modo_escuro(browser, base_url)
+            test_campos_do_pedido_batem_com_regras_do_firebase(browser, base_url)
 
             browser.close()
 

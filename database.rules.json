@@ -12,7 +12,21 @@
           ".write": "auth != null && auth.token.email == root.child('bares/' + $barId + '/config/adminEmail').val()",
 
           "fila": {
-            ".write": "auth != null"
+            ".write": "auth != null",
+            "$index": {
+              ".validate": "newData.hasChildren(['id', 'nome', 'musica', 'deviceId', 'timestamp', 'timestampFila', 'vezesCantadas'])",
+              "id": { ".validate": "newData.isNumber()" },
+              "nome": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60" },
+              "mesa": { ".validate": "newData.val() == null || (newData.isString() && newData.val().length <= 20)" },
+              "musica": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 120 && !newData.val().matches(/^https?:\\/\\//)" },
+              "artista": { ".validate": "newData.val() == null || (newData.isString() && newData.val().length <= 80)" },
+              "deviceId": { ".validate": "newData.isString() && newData.val().length <= 100" },
+              "timestamp": { ".validate": "newData.isNumber()" },
+              "timestampFila": { ".validate": "newData.isNumber()" },
+              "vezesCantadas": { ".validate": "newData.isNumber()" },
+              "youtubeUrl": { ".validate": "newData.val() == null || (newData.isString() && newData.val().length <= 200 && newData.val().matches(/^https:\\/\\/(www\\.)?(youtube\\.com|youtu\\.be)\\/.+/))" },
+              "$other": { ".validate": false }
+            }
           },
 
           "apresentacaoAtual": {
