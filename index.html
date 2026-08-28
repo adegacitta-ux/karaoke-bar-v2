@@ -261,6 +261,8 @@
                                 <input type="text" id="input-artista" required maxlength="100" aria-describedby="erro-artista" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
                                 <p id="erro-artista" class="hidden text-xs text-red-600 mt-1" role="alert"></p>
                             </div>
+                            <p id="indicador-creditos" class="hidden text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-center" role="status" aria-live="polite"></p>
+
                             <button type="submit" id="btn-enviar" class="w-full bg-gradient-custom text-white font-bold py-3 rounded-lg shadow-lg hover:opacity-90 transition-all" data-i18n="btn_enviar_pedido">
                                 ENVIAR PEDIDO
                             </button>
@@ -813,6 +815,7 @@
                 fila_encerrada_alert: 'Fila encerrada!',
                 erro_enviar_pedido: 'Não deu pra enviar seu pedido agora. Tente de novo em alguns segundos.',
                 limite_creditos_alert: 'Você já tem músicas suficientes na fila — aguarde ou tente de novo em alguns minutos.',
+                indicador_creditos_texto: '{usados} de {limite} pedidos usados — libera em {minutos} min',
                 youtube_modal_titulo: 'Buscar Karaokê no YouTube',
                 youtube_fechar_aria: 'Fechar busca do YouTube',
                 youtube_label_musica_sr: 'Nome da música',
@@ -904,6 +907,7 @@
                 fila_encerrada_alert: 'Queue is closed!',
                 erro_enviar_pedido: "Couldn't send your request right now. Please try again in a few seconds.",
                 limite_creditos_alert: "You already have enough songs in the queue — please wait or try again in a few minutes.",
+                indicador_creditos_texto: '{usados} of {limite} requests used — next one frees up in {minutos} min',
                 youtube_modal_titulo: 'Search Karaoke on YouTube',
                 youtube_fechar_aria: 'Close YouTube search',
                 youtube_label_musica_sr: 'Song name',
@@ -2363,16 +2367,25 @@
         const LIMITE_PEDIDOS_ATIVOS_POR_DEVICE = 5;
         const MINUTOS_RECARGA_CREDITO = 50;
         const LIMIAR_FILA_CURTA = 3; // menos que isso de OUTRAS pessoas esperando ignora o limite de créditos
-        // Mensagem traduzida — ver chave "limite_creditos_alert" em TRADUCOES (pt/en)
+        const LIMIAR_AVISO_CREDITO = 4; // a partir de quantos pedidos ativos o indicador visual aparece
+        // Mensagens traduzidas — ver chaves "limite_creditos_alert" e
+        // "indicador_creditos_texto" em TRADUCOES (pt/en)
 
-        // Quantos pedidos deste deviceId ainda "contam" como crédito gasto: estão na
+        // Pedidos deste deviceId que ainda "contam" como crédito gasto: estão na
         // lista passada (fila atual — não cantados nem removidos) E foram feitos há
         // menos de MINUTOS_RECARGA_CREDITO minutos. Pedidos mais antigos que isso já
-        // recarregaram o crédito, mesmo que ainda não tenham sido cantados.
-        function contarPedidosAtivosDoDevice(lista, deviceId) {
+        // recarregaram o crédito, mesmo que ainda não tenham sido cantados. Devolve os
+        // pedidos (não só a contagem) porque o indicador visual de créditos também
+        // precisa do timestamp do mais antigo, pra calcular quando libera a próxima vaga
+        // (ver atualizarIndicadorCreditos) — reaproveita a mesma consulta, sem duplicar.
+        function pedidosAtivosDoDevice(lista, deviceId) {
             const agora = Date.now();
             const janelaMs = MINUTOS_RECARGA_CREDITO * 60000;
-            return lista.filter(p => p.deviceId === deviceId && (agora - p.timestamp) < janelaMs).length;
+            return lista.filter(p => p.deviceId === deviceId && (agora - p.timestamp) < janelaMs);
+        }
+
+        function contarPedidosAtivosDoDevice(lista, deviceId) {
+            return pedidosAtivosDoDevice(lista, deviceId).length;
         }
 
         // true = pode adicionar; false = bloqueado (estourou o teto de créditos e a
@@ -2387,6 +2400,37 @@
             if (contarPedidosAtivosDoDevice(lista, deviceId) < LIMITE_PEDIDOS_ATIVOS_POR_DEVICE) return true;
             const outrasPessoasNaFila = lista.filter(p => p.deviceId !== deviceId).length;
             return outrasPessoasNaFila < LIMIAR_FILA_CURTA;
+        }
+
+        // Indicador visual de créditos: fica invisível no uso normal e só aparece
+        // quando o device já tem LIMIAR_AVISO_CREDITO ou mais pedidos ativos — um
+        // aviso ANTES de bater no teto de verdade (LIMITE_PEDIDOS_ATIVOS_POR_DEVICE) e
+        // ser bloqueado por podeAdicionarPedido. Reaproveita pedidosAtivosDoDevice, sem
+        // nenhuma consulta nova ao Firebase/RTDB. Chamada de dentro de atualizarUI(),
+        // que já roda ao carregar a página, depois de cada pedido novo (ver
+        // adicionarPedido) e a cada 10s (ver setInterval no fim do arquivo) — então o
+        // contador de minutos se mantém atualizado sozinho enquanto o badge está visível.
+        function atualizarIndicadorCreditos() {
+            const badge = document.getElementById('indicador-creditos');
+            if (!badge) return;
+
+            const ativos = pedidosAtivosDoDevice(fila, DEVICE_ID);
+            if (ativos.length < LIMIAR_AVISO_CREDITO) {
+                badge.classList.add('hidden');
+                badge.textContent = '';
+                return;
+            }
+
+            const timestampMaisAntigo = Math.min(...ativos.map(p => p.timestamp));
+            const proximaLiberacao = timestampMaisAntigo + MINUTOS_RECARGA_CREDITO * 60000;
+            const minutosRestantes = Math.max(0, Math.ceil((proximaLiberacao - Date.now()) / 60000));
+
+            badge.textContent = t('indicador_creditos_texto', {
+                usados: ativos.length,
+                limite: LIMITE_PEDIDOS_ATIVOS_POR_DEVICE,
+                minutos: minutosRestantes
+            });
+            badge.classList.remove('hidden');
         }
 
         function adicionarPedido(e) {
@@ -2925,6 +2969,7 @@
 
             verificarMinhaVez();
             atualizarMeusPedidos();
+            atualizarIndicadorCreditos();
 
             // UI Cliente
             document.getElementById('cliente-tempo-espera').innerText = `${tempoEstimado} min`;
