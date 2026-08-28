@@ -116,14 +116,14 @@
             padding: clamp(20px, 2.2vw, 44px) clamp(28px, 4.4vw, 84px);
             box-shadow: 0 0 0 1px rgba(255, 212, 59, 0.35), 0 0 0 7px rgba(255, 212, 59, 0.08), 0 30px 70px rgba(0, 0, 0, 0.6);
             text-align: center;
-            max-width: min(60vw, 1180px);
+            max-width: min(66vw, 1320px);
             width: 100%;
             /* Reserva fixa de espaço pro status pill (topo) e pra barra de
                controles (rodapé), que são position:fixed e não empurram
                este container — por isso a reserva é feita aqui, não no
                padding do .main-container (evita ter duas contas pra
                manter sincronizadas em cada resolução). */
-            max-height: calc(100vh - 196px);
+            max-height: calc(100vh - 280px);
             flex: 1 1 480px;
             overflow-y: auto;
             animation: slideIn 0.8s ease-out;
@@ -143,7 +143,7 @@
         /* "Título principal": o estado da tela (Aguardando / Próximo a Cantar /
            Fila Encerrada) — precisa ser lido em 1 segundo a 5+ metros de distância. */
         .titulo-proximo {
-            font-size: clamp(30px, 3vw, 60px);
+            font-size: clamp(34px, 3.6vw, 76px);
             color: var(--cor-ouro);
             margin-bottom: clamp(10px, 1.4vw, 26px);
             font-weight: 700;
@@ -152,7 +152,7 @@
         }
 
         .mensagem-secundaria {
-            font-size: clamp(26px, 2.2vw, 44px);
+            font-size: clamp(30px, 2.6vw, 56px);
             color: var(--cor-marfim);
             font-style: italic;
             font-weight: 300;
@@ -163,7 +163,7 @@
            responde "quem está cantando?" de longe, sem precisar chegar perto. */
         .cantor-nombre {
             font-family: 'Bodoni Moda', serif;
-            font-size: clamp(56px, 5.6vw, 150px);
+            font-size: clamp(64px, 7.5vw, 190px);
             font-weight: 800;
             font-style: italic;
             line-height: 1.05;
@@ -206,7 +206,7 @@
            "dominar a tela" junto com o nome de quem canta. Amarelo, não
            branco, porque é informação de destaque, não texto corrido. */
         .musica-titulo {
-            font-size: clamp(46px, 4.6vw, 116px);
+            font-size: clamp(52px, 6vw, 150px);
             line-height: 1.05;
             font-weight: 700;
             text-transform: uppercase;
@@ -216,7 +216,7 @@
         }
 
         .musica-artista {
-            font-size: clamp(30px, 2.6vw, 54px);
+            font-size: clamp(34px, 3.2vw, 70px);
             color: var(--cor-marfim);
             opacity: 0.85;
             font-weight: 300;
@@ -231,7 +231,7 @@
             color: var(--cor-ouro-claro);
             padding: clamp(6px, 0.6vw, 12px) clamp(16px, 1.6vw, 30px);
             border-radius: 50px;
-            font-size: clamp(18px, 1.4vw, 30px);
+            font-size: clamp(20px, 1.6vw, 34px);
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 1px;
@@ -257,14 +257,14 @@
 
         .stat-numero {
             font-family: 'Bodoni Moda', serif;
-            font-size: clamp(24px, 2.1vw, 44px);
+            font-size: clamp(28px, 2.5vw, 52px);
             font-weight: 700;
             color: var(--cor-ouro-claro);
             line-height: 1;
         }
 
         .stat-label {
-            font-size: clamp(11px, 0.85vw, 15px);
+            font-size: clamp(12px, 0.95vw, 17px);
             color: var(--cor-marfim);
             opacity: 0.75;
             text-transform: uppercase;
@@ -295,10 +295,10 @@
             background: transparent;
             border: 2px solid rgba(255, 212, 59, 0.5);
             color: var(--cor-ouro-claro);
-            min-height: clamp(52px, 4vw, 68px);
-            padding: 0 clamp(20px, 1.8vw, 34px);
+            min-height: clamp(54px, 4.2vw, 72px);
+            padding: 0 clamp(22px, 2vw, 38px);
             border-radius: 50px;
-            font-size: clamp(18px, 1.4vw, 26px);
+            font-size: clamp(19px, 1.5vw, 28px);
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.5px;
@@ -407,20 +407,35 @@
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.35);
         }
 
+        /* Vira só uma bolinha com o emoji dentro — o texto continua existindo
+           (visualmente escondido) pra acessibilidade e pros testes, mas na
+           tela é só um indicador discreto de status, sem competir com nada. */
         .firebase-status {
             position: fixed;
             top: clamp(16px, 1.6vw, 30px);
             left: 50%;
             transform: translateX(-50%);
-            padding: clamp(8px, 0.7vw, 14px) clamp(14px, 1.3vw, 24px);
-            border-radius: 50px;
-            font-size: clamp(13px, 0.95vw, 18px);
-            font-weight: 600;
-            letter-spacing: 0.3px;
+            width: clamp(34px, 2.6vw, 46px);
+            height: clamp(34px, 2.6vw, 46px);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: clamp(16px, 1.3vw, 22px);
             z-index: 100;
-            color: var(--cor-marfim);
             background: rgb(34, 211, 166);
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.35);
+            animation: pulse 2.6s infinite;
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px; height: 1px;
+            padding: 0; margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
         }
 
         /* Fagulhas/notas subindo do palco no fundo */
@@ -473,17 +488,17 @@
             align-items: center;
             text-align: center;
             gap: clamp(10px, 1.2vw, 20px);
-            max-width: min(26vw, 340px);
+            max-width: min(25vw, 380px);
             width: 100%;
-            max-height: calc(100vh - 196px);
+            max-height: calc(100vh - 280px);
             overflow-y: auto;
             flex: 0 1 280px;
             margin: 0;
         }
 
         .qr-card img {
-            width: clamp(110px, 11vw, 200px);
-            height: clamp(110px, 11vw, 200px);
+            width: clamp(120px, 12vw, 220px);
+            height: clamp(120px, 12vw, 220px);
             border-radius: 12px;
             flex-shrink: 0;
             background: #fff;
@@ -492,7 +507,7 @@
 
         .qr-card .qr-texto { text-align: center; }
         .qr-card .qr-titulo {
-            font-size: clamp(24px, 2.1vw, 42px);
+            font-size: clamp(26px, 2.3vw, 46px);
             font-weight: 800;
             color: var(--cor-ouro);
             line-height: 1.15;
@@ -500,7 +515,7 @@
             letter-spacing: 0.5px;
         }
         .qr-card .qr-sub {
-            font-size: clamp(16px, 1.3vw, 24px);
+            font-size: clamp(17px, 1.4vw, 26px);
             color: var(--cor-marfim);
             opacity: 0.85;
             font-weight: 500;
@@ -511,7 +526,7 @@
         /* Lista de próximos na fila, dentro do card principal */
         .mini-fila-lista { margin-top: clamp(10px, 1vw, 20px); text-align: left; }
         .mini-fila-titulo {
-            font-size: clamp(13px, 1vw, 18px);
+            font-size: clamp(14px, 1.1vw, 20px);
             font-weight: 700;
             color: var(--cor-marfim);
             opacity: 0.75;
@@ -527,8 +542,8 @@
             margin-bottom: clamp(4px, 0.5vw, 8px);
             border-left: 3px solid var(--cor-ouro);
         }
-        .mini-fila-item .mini-fila-nome { font-weight: 600; color: var(--cor-marfim); font-size: clamp(15px, 1.2vw, 22px); }
-        .mini-fila-item .mini-fila-musica { color: var(--cor-marfim); opacity: 0.7; font-size: clamp(13px, 1vw, 18px); }
+        .mini-fila-item .mini-fila-nome { font-weight: 600; color: var(--cor-marfim); font-size: clamp(17px, 1.4vw, 26px); }
+        .mini-fila-item .mini-fila-musica { color: var(--cor-marfim); opacity: 0.7; font-size: clamp(15px, 1.15vw, 21px); }
         .mini-fila-posicao {
             background: var(--cor-ouro); color: var(--cor-texto-sobre-destaque);
             width: clamp(20px, 1.6vw, 28px); height: clamp(20px, 1.6vw, 28px);
@@ -564,10 +579,11 @@
     <!-- Fagulhas/notas musicais decorativas -->
     <div class="notas-flutuantes" id="notas-flutuantes"></div>
 
-    <!-- Status Firebase -->
-    <div class="firebase-status" id="firebase-status">
-        <i class="fas fa-circle mr-2" style="animation: pulse 1s infinite;"></i>
-        <span id="status-text">🔥 Conectado ao Firebase</span>
+    <!-- Status Firebase: só a bolinha com emoji é visível; o texto existe
+         pra acessibilidade/leitor de tela e pra checar a conexão nos testes -->
+    <div class="firebase-status" id="firebase-status" role="status" aria-live="polite">
+        <span id="firebase-status-icone" aria-hidden="true">🔥</span>
+        <span id="status-text" class="sr-only">🔥 Conectado ao Firebase</span>
     </div>
 
     <!-- Timer -->
@@ -768,11 +784,14 @@
         function atualizarStatusFirebaseDisplay(connected) {
             const statusText = document.getElementById('status-text');
             const statusEl = document.getElementById('firebase-status');
+            const icone = document.getElementById('firebase-status-icone');
             if (connected) {
                 statusText.innerText = '🔥 Conectado ao Firebase';
+                icone.textContent = '🔥';
                 statusEl.style.background = 'rgb(34, 211, 166)';
             } else {
                 statusText.innerText = '⚠️ Sem conexão com o Firebase';
+                icone.textContent = '⚠️';
                 statusEl.style.background = 'rgb(220, 38, 38)';
             }
         }
