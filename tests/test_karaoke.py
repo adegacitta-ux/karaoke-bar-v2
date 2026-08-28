@@ -535,6 +535,73 @@ def test_cancelamento_admin_libera_credito_imediatamente(browser, base_url):
     context.close()
 
 
+def test_indicador_creditos_nao_aparece_com_poucos_pedidos(browser, base_url):
+    """O indicador visual de créditos deve ficar invisível durante o uso normal —
+    só aparece perto do limite (ver LIMIAR_AVISO_CREDITO), não a cada pedido."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    limiar = page.evaluate("LIMIAR_AVISO_CREDITO")
+    for i in range(limiar - 1):
+        preencher_pedido(page, "MesmoDispositivo", f"Musica{i}")
+
+    escondido = page.evaluate("document.getElementById('indicador-creditos').classList.contains('hidden')")
+
+    ok = escondido and not erros
+    registrar(f"Indicador de créditos fica escondido com menos de {limiar} pedidos ativos", ok,
+               f"pedidos_feitos={limiar - 1}, escondido={escondido}")
+    context.close()
+
+
+def test_indicador_creditos_aparece_no_limiar(browser, base_url):
+    """Ao atingir LIMIAR_AVISO_CREDITO pedidos ativos, o indicador aparece
+    mostrando a contagem correta ("X de 5 pedidos usados")."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    limiar = page.evaluate("LIMIAR_AVISO_CREDITO")
+    limite = page.evaluate("LIMITE_PEDIDOS_ATIVOS_POR_DEVICE")
+    for i in range(limiar):
+        preencher_pedido(page, "MesmoDispositivo", f"Musica{i}")
+
+    visivel = page.evaluate("!document.getElementById('indicador-creditos').classList.contains('hidden')")
+    texto = page.evaluate("document.getElementById('indicador-creditos').textContent")
+
+    ok = visivel and str(limiar) in texto and str(limite) in texto and not erros
+    registrar(f"Indicador de créditos aparece ao atingir {limiar} pedidos ativos, com contagem correta", ok,
+               f"visivel={visivel}, texto='{texto}'")
+    context.close()
+
+
+def test_indicador_creditos_minutos_ate_liberar(browser, base_url):
+    """O texto de "minutos até liberar" é calculado a partir do timestamp MAIS
+    ANTIGO dentro da janela ativa: timestampMaisAntigo + MINUTOS_RECARGA_CREDITO."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    limiar = page.evaluate("LIMIAR_AVISO_CREDITO")
+    minutos_recarga = page.evaluate("MINUTOS_RECARGA_CREDITO")
+
+    for i in range(limiar):
+        preencher_pedido(page, "MesmoDispositivo", f"Musica{i}")
+
+    # Força o pedido mais antigo desse device a ter sido feito há X minutos —
+    # simula a passagem do tempo sem precisar esperar de verdade
+    minutos_passados = 10
+    page.evaluate(f"""
+        const meus = fila.filter(p => p.deviceId === DEVICE_ID);
+        const maisAntigo = meus.reduce((a, b) => a.timestamp < b.timestamp ? a : b);
+        maisAntigo.timestamp = Date.now() - ({minutos_passados} * 60 * 1000);
+        atualizarUI();
+    """)
+
+    texto = page.evaluate("document.getElementById('indicador-creditos').textContent")
+    minutos_esperados = minutos_recarga - minutos_passados
+
+    ok = str(minutos_esperados) in texto and not erros
+    registrar("Minutos até liberar é calculado a partir do pedido mais antigo da janela ativa", ok,
+               f"minutos_passados={minutos_passados}, minutos_recarga={minutos_recarga}, "
+               f"minutos_esperados={minutos_esperados}, texto='{texto}'")
+    context.close()
+
+
 def test_meus_pedidos_posicao_e_cancelamento(browser, base_url):
     """Cartão 'Seus Pedidos': mostra a posição na fila e permite cancelar (com
     confirmação inline clara — 'Sim, cancelar' / 'Manter pedido' — em vez do
@@ -1283,6 +1350,9 @@ def main():
             test_limite_de_creditos_bloqueia_sexto_pedido_com_fila_cheia(browser, base_url)
             test_limite_de_creditos_libera_com_fila_curta(browser, base_url)
             test_cancelamento_admin_libera_credito_imediatamente(browser, base_url)
+            test_indicador_creditos_nao_aparece_com_poucos_pedidos(browser, base_url)
+            test_indicador_creditos_aparece_no_limiar(browser, base_url)
+            test_indicador_creditos_minutos_ate_liberar(browser, base_url)
             test_meus_pedidos_posicao_e_cancelamento(browser, base_url)
             test_historico_paginado_no_cliente(browser, base_url)
             test_aviso_iphone_aparece_so_no_iphone(browser, base_url)
