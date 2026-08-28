@@ -2470,6 +2470,12 @@
             // prioridade calculada em cima do estado MAIS ATUAL da fila no servidor —
             // não da cópia que este celular tem localmente, que pode estar um pouco
             // desatualizada se outra pessoa mandou pedido ao mesmo tempo.
+            // ⚠️ Todo campo que este objeto grava em /fila precisa estar na whitelist
+            // de database.rules.json ($index/$other: false) — um campo novo aqui sem
+            // entrada correspondente nas regras derruba a transação inteira com
+            // permission_denied (já aconteceu com "youtubeUrl", ver commit que corrigiu
+            // esse bug). Lembre de colar as regras atualizadas no Console do Firebase
+            // depois de mexer aqui, já que esse arquivo é só cópia de referência.
             function montarNovoPedido() {
                 // A prioridade ("já cantou X vezes") é contada pelo deviceId, não pelo
                 // nome/mesa digitados — ver obterChaveIdentidade
