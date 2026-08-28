@@ -689,6 +689,45 @@
             return `karaoke_${BAR_ID}_${nome}`;
         }
 
+        // --- IDENTIDADE DO DISPOSITIVO (anti-fraude) ---
+        // Um UUID gerado uma vez e guardado no localStorage deste navegador — é o
+        // que usamos pra saber que dois pedidos vieram do MESMO aparelho, mesmo que
+        // a pessoa digite um nome ou número de mesa diferente da vez anterior (ver
+        // uso em montarNovoPedido, obterChaveIdentidade e nas checagens de crédito).
+        // Não é fingerprinting: é só uma etiqueta que o próprio navegador guarda —
+        // se a pessoa limpar os dados do site ou usar aba anônima, vira um
+        // dispositivo "novo" pro sistema. Isso é uma limitação conhecida e aceita,
+        // não um bug.
+        // OBS: essa chave NÃO passa por chaveLocal() (não é prefixada por bar) de
+        // propósito — o mesmo celular é o mesmo aparelho em qualquer bar que ele use.
+        function gerarUuidV4Fallback() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+                const r = Math.random() * 16 | 0;
+                const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        function obterOuCriarDeviceId() {
+            const CHAVE_DEVICE_ID = 'cantoke_device_id';
+            try {
+                let id = localStorage.getItem(CHAVE_DEVICE_ID);
+                if (!id) {
+                    id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : gerarUuidV4Fallback();
+                    localStorage.setItem(CHAVE_DEVICE_ID, id);
+                }
+                return id;
+            } catch (e) {
+                // localStorage indisponível (ex: navegação privada bloqueando storage) —
+                // gera um id só pra essa carga de página; não persiste entre visitas,
+                // mas não impede o resto do app de funcionar
+                console.warn('⚠️ Não foi possível salvar o deviceId localmente:', e);
+                return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : gerarUuidV4Fallback();
+            }
+        }
+
+        const DEVICE_ID = obterOuCriarDeviceId();
+
         // --- IDIOMA (tradução do lado do cliente para inglês) ---
         // Cobre só a interface do CLIENTE (aba "Pedir Música" + modal do YouTube) —
         // o painel Admin/DJ continua em português, já que é uso interno da equipe.
@@ -773,6 +812,7 @@
                 erro_artista_longo: 'Nome do artista muito longo (máximo 100 caracteres).',
                 fila_encerrada_alert: 'Fila encerrada!',
                 erro_enviar_pedido: 'Não deu pra enviar seu pedido agora. Tente de novo em alguns segundos.',
+                limite_creditos_alert: 'Você já tem músicas suficientes na fila — aguarde ou tente de novo em alguns minutos.',
                 youtube_modal_titulo: 'Buscar Karaokê no YouTube',
                 youtube_fechar_aria: 'Fechar busca do YouTube',
                 youtube_label_musica_sr: 'Nome da música',
@@ -863,6 +903,7 @@
                 erro_artista_longo: 'Artist name too long (maximum 100 characters).',
                 fila_encerrada_alert: 'Queue is closed!',
                 erro_enviar_pedido: "Couldn't send your request right now. Please try again in a few seconds.",
+                limite_creditos_alert: "You already have enough songs in the queue — please wait or try again in a few minutes.",
                 youtube_modal_titulo: 'Search Karaoke on YouTube',
                 youtube_fechar_aria: 'Close YouTube search',
                 youtube_label_musica_sr: 'Song name',
@@ -1336,6 +1377,19 @@
             return mesaNormalizada ? `${primeiroNome}@mesa${mesaNormalizada}` : primeiroNome;
         }
 
+        // Identidade "de verdade" de quem pediu, usada pra prioridade da fila
+        // (vezesCantadas/contagemCantores) e pros créditos por dispositivo —
+        // baseada no deviceId sempre que o pedido tiver um, já que é o dado que
+        // não dá pra falsificar só digitando outro nome ou mesa (ver DEVICE_ID
+        // acima). obterChaveNome() continua existindo separadamente só pra
+        // exibição/lembrança de nome+mesa, não pra controle anti-fraude.
+        // Pedidos de ANTES dessa mudança não têm deviceId — tratamos cada um como
+        // "sem histórico" (chave isolada, baseada no próprio id do pedido): não
+        // bloqueia ninguém, só não participa do agrupamento por identidade.
+        function obterChaveIdentidade(pedido) {
+            return pedido.deviceId ? `device:${pedido.deviceId}` : `legado:${pedido.id}`;
+        }
+
         // --- NOTIFICAÇÃO "É A SUA VEZ" (via Notification API do navegador + som) ---
         // Não depende de servidor/API paga: funciona enquanto o cliente mantiver
         // a aba do site aberta no celular/computador.
@@ -1672,7 +1726,7 @@
             // "bonito" pra exibir a partir do histórico
             const nomeOriginalPorChave = {};
             historico.forEach(h => {
-                const chave = obterChaveNome(h.nome, h.mesa);
+                const chave = obterChaveIdentidade(h);
                 nomeOriginalPorChave[chave] = h.nome;
             });
             const topCantores = Object.entries(contagemCantores || {})
@@ -2295,9 +2349,49 @@
 
         // --- LÓGICA PRINCIPAL ---
 
+        // --- CRÉDITOS DE PEDIDO POR DISPOSITIVO (anti-spam) ---
+        // Evita que uma pessoa peça um monte de músicas de uma vez e tome a vez dos
+        // outros. Cada dispositivo tem um teto de pedidos "ativos" (ainda na fila —
+        // não cantados nem removidos); cada pedido gasto libera a vaga sozinho
+        // MINUTOS_RECARGA_CREDITO minutos depois de ter sido feito (janela deslizante
+        // por pedido, não um saldo único que recarrega tudo de uma vez). Não precisa
+        // de cron job nem Cloud Function: como a contagem é sempre feita consultando
+        // a fila atual (nunca um contador separado), um pedido cancelado pelo admin
+        // já libera o crédito na hora — ele simplesmente some da fila e para de contar.
+        // ⚠️ Números ainda não validados com o dono do bar — ajuste aqui depois dos
+        // primeiros testes reais (ver auditoria/relatório desta tarefa).
+        const LIMITE_PEDIDOS_ATIVOS_POR_DEVICE = 5;
+        const MINUTOS_RECARGA_CREDITO = 50;
+        const LIMIAR_FILA_CURTA = 3; // menos que isso de OUTRAS pessoas esperando ignora o limite de créditos
+        // Mensagem traduzida — ver chave "limite_creditos_alert" em TRADUCOES (pt/en)
+
+        // Quantos pedidos deste deviceId ainda "contam" como crédito gasto: estão na
+        // lista passada (fila atual — não cantados nem removidos) E foram feitos há
+        // menos de MINUTOS_RECARGA_CREDITO minutos. Pedidos mais antigos que isso já
+        // recarregaram o crédito, mesmo que ainda não tenham sido cantados.
+        function contarPedidosAtivosDoDevice(lista, deviceId) {
+            const agora = Date.now();
+            const janelaMs = MINUTOS_RECARGA_CREDITO * 60000;
+            return lista.filter(p => p.deviceId === deviceId && (agora - p.timestamp) < janelaMs).length;
+        }
+
+        // true = pode adicionar; false = bloqueado (estourou o teto de créditos e a
+        // fila não está curta o suficiente pra liberar mesmo assim).
+        // ⚠️ Escolha de implementação (marcar pra revisão): "fila curta" é comparada
+        // contra o número de OUTRAS pessoas esperando, não o total da fila — assim
+        // um cliente sozinho (ou quase) no bar nunca fica travado só porque os
+        // próprios pedidos dele já preencheram a fila. Com os números padrão daqui
+        // (5 créditos / limiar 3), comparar contra o total incluiria os próprios
+        // pedidos do device e tornaria essa exceção praticamente inatingível.
+        function podeAdicionarPedido(lista, deviceId) {
+            if (contarPedidosAtivosDoDevice(lista, deviceId) < LIMITE_PEDIDOS_ATIVOS_POR_DEVICE) return true;
+            const outrasPessoasNaFila = lista.filter(p => p.deviceId !== deviceId).length;
+            return outrasPessoasNaFila < LIMIAR_FILA_CURTA;
+        }
+
         function adicionarPedido(e) {
             e.preventDefault();
-            
+
             if (isFilaBloqueada()) {
                 alert(t('fila_encerrada_alert'));
                 return;
@@ -2308,6 +2402,14 @@
                 // as mensagens de erro e deixar a pessoa procurar qual campo está errado
                 const primeiroCampoComErro = document.querySelector('#form-pedido [aria-invalid="true"]');
                 if (primeiroCampoComErro) primeiroCampoComErro.focus();
+                return;
+            }
+
+            // Checagem "rápida" com a cópia local da fila, só pra dar feedback sem
+            // esperar o servidor — a checagem que realmente vale (contra o dado mais
+            // atual) acontece de novo dentro da transação/gravação logo abaixo.
+            if (!podeAdicionarPedido(fila, DEVICE_ID)) {
+                alert(t('limite_creditos_alert'));
                 return;
             }
 
@@ -2325,7 +2427,9 @@
             // não da cópia que este celular tem localmente, que pode estar um pouco
             // desatualizada se outra pessoa mandou pedido ao mesmo tempo.
             function montarNovoPedido() {
-                const key = obterChaveNome(nome, mesa);
+                // A prioridade ("já cantou X vezes") é contada pelo deviceId, não pelo
+                // nome/mesa digitados — ver obterChaveIdentidade
+                const key = obterChaveIdentidade({ deviceId: DEVICE_ID });
                 const prioridadeCalculada = contagemCantores[key] || 0;
                 const agora = new Date().getTime();
                 return {
@@ -2334,6 +2438,7 @@
                     mesa: mesa || null,
                     musica: musica,
                     artista: artista,
+                    deviceId: DEVICE_ID,
                     // "timestamp" é a hora em que a música foi PEDIDA — nunca muda depois
                     // disso, é o que o relatório de horário de pico usa. Já
                     // "timestampFila" é o "relógio de espera" da fila (usado pra
@@ -2357,8 +2462,19 @@
                 // Isso é o que evita a corrida de gravação (dois pedidos simultâneos
                 // apagando um ao outro), que estava fazendo nomes sumirem/reaparecerem.
                 let ultimoPedidoCriado = null;
+                let bloqueadoPorCreditos = false;
                 db.ref(caminhoBar('fila')).transaction((filaAtualDoServidor) => {
                     const listaAtual = filaAtualDoServidor || [];
+                    // Re-checa os créditos contra o dado MAIS ATUAL do servidor (não a
+                    // cópia local, que já foi checada acima mas pode estar desatualizada
+                    // se outro pedido do mesmo device foi enviado bem nesse meio-tempo,
+                    // ex: duas abas). Retornar undefined aqui aborta a transação sem
+                    // gravar nada — é a forma do Firebase de "desistir" de uma transação.
+                    if (!podeAdicionarPedido(listaAtual, DEVICE_ID)) {
+                        bloqueadoPorCreditos = true;
+                        return;
+                    }
+                    bloqueadoPorCreditos = false;
                     ultimoPedidoCriado = montarNovoPedido();
                     return [...listaAtual, ultimoPedidoCriado];
                 }, (error, comprometido, snapshot) => {
@@ -2369,9 +2485,8 @@
                         return;
                     }
                     if (!comprometido) {
-                        // Não deveria acontecer (a função sempre retorna um valor), mas por
-                        // segurança avisa em vez de deixar o botão travado silenciosamente
                         if (btnEnviar) { btnEnviar.disabled = false; }
+                        alert(bloqueadoPorCreditos ? t('limite_creditos_alert') : t('erro_enviar_pedido'));
                         return;
                     }
 
@@ -2519,10 +2634,10 @@
                 // mesma pessoa tivesse outras músicas pedidas, elas continuavam com
                 // prioridade desatualizada (mais alta do que deveriam) até o DJ
                 // clicar em "Finalizar Apresentação", que podia demorar.
-                const key = obterChaveNome(pedido.nome, pedido.mesa);
+                const key = obterChaveIdentidade(pedido);
                 contagemCantores[key] = (contagemCantores[key] || 0) + 1;
                 fila.forEach(p => {
-                    if (obterChaveNome(p.nome, p.mesa) === key) {
+                    if (obterChaveIdentidade(p) === key) {
                         p.vezesCantadas = contagemCantores[key];
                     }
                 });

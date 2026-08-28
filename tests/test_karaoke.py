@@ -330,9 +330,21 @@ def test_espera_longa_faz_pessoa_furar_a_fila(browser, base_url):
     page.evaluate("acaoFinalizarApresentacao()")
     page.wait_for_timeout(100)
 
-    # Pessoa A pede de novo (já com vezesCantadas=1) e Pessoa B, nova, entra depois
+    # Pessoa A pede de novo (já com vezesCantadas=1) e Pessoa B, nova, entra depois.
+    # Pessoa B precisa ser um deviceId DIFERENTE: a identidade da fila agora é por
+    # deviceId (ver test_deviceid_impede_burlar_cooldown_trocando_nome), então se
+    # ela viesse pelo mesmo formulário/navegador desta página ela contaria como o
+    # MESMO dispositivo de Pessoa A, o que não é o que este teste quer simular.
     preencher_pedido(page, "PessoaA", "MusicaA2")
-    preencher_pedido(page, "PessoaB", "MusicaB1")
+    page.evaluate("""
+        fila.push({
+            id: 777001, nome: 'PessoaB', mesa: null, musica: 'MusicaB1', artista: 'X',
+            deviceId: 'device-pessoab-outro-aparelho',
+            timestamp: Date.now(), timestampFila: Date.now(), vezesCantadas: 0, youtubeUrl: null
+        });
+        ordenarFila();
+        atualizarUI();
+    """)
     ordem_normal = page.evaluate("fila.map(p => p.nome)")
 
     # Simula 20 minutos de espera no pedido da Pessoa A (mais que o limite de
@@ -355,6 +367,30 @@ def test_espera_longa_faz_pessoa_furar_a_fila(browser, base_url):
     ok = (ordem_normal[0] == "PessoaB" and ordem_apos_espera[0] == "PessoaA" and not erros)
     registrar("Espera longa faz quem já cantou furar a frente de quem é novo", ok,
                f"sem_esperar={ordem_normal}, apos_20min={ordem_apos_espera}")
+    context.close()
+
+
+def test_deviceid_impede_burlar_cooldown_trocando_nome(browser, base_url):
+    """Anti-fraude (deviceId): antes, "vezesCantadas" era agrupado por nome+mesa
+    digitados — bastava digitar um nome diferente pra "resetar" a prioridade de
+    quem já cantou. Agora a identidade real é o deviceId (o mesmo navegador),
+    então trocar nome e mesa não deve mais ter esse efeito."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    preencher_pedido(page, "PessoaOriginal", "Musica1", mesa="1")
+    id1 = page.evaluate("fila[0].id")
+    page.evaluate(f"acaoProximo({id1})")
+    page.evaluate("acaoFinalizarApresentacao()")
+    page.wait_for_timeout(100)
+
+    # Mesmo dispositivo/navegador, mas nome E mesa completamente diferentes
+    preencher_pedido(page, "NomeTotalmenteDiferente", "Musica2", mesa="99")
+    pedido2 = page.evaluate("fila.find(p => p.musica === 'Musica2')")
+    device_id_bate = page.evaluate("fila.find(p => p.musica === 'Musica2').deviceId === DEVICE_ID")
+
+    ok = pedido2 is not None and pedido2["vezesCantadas"] == 1 and device_id_bate and not erros
+    registrar("Trocar nome/mesa não reseta a prioridade — deviceId é a identidade real", ok,
+               f"vezesCantadas={pedido2 and pedido2.get('vezesCantadas')}, deviceId_bate={device_id_bate}")
     context.close()
 
 
@@ -403,6 +439,99 @@ def test_dois_pedidos_simultaneos_nao_se_perdem(browser, base_url):
     ok = fila_servidor == ["PessoaX", "PessoaY"] and fila_local == ["PessoaX", "PessoaY"] and not erros
     registrar("Dois pedidos simultâneos não se perdem (corrida de gravação)", ok,
                f"servidor={fila_servidor}, local={fila_local}")
+    context.close()
+
+
+def test_limite_de_creditos_bloqueia_sexto_pedido_com_fila_cheia(browser, base_url):
+    """Teto de créditos por dispositivo: depois de LIMITE_PEDIDOS_ATIVOS_POR_DEVICE
+    pedidos pendentes do mesmo device, o próximo é bloqueado — desde que haja
+    gente suficiente de FORA desse device esperando (senão a fila é considerada
+    "curta" e o limite é ignorado, ver o teste seguinte)."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    limite = page.evaluate("LIMITE_PEDIDOS_ATIVOS_POR_DEVICE")
+    limiar_fila_curta = page.evaluate("LIMIAR_FILA_CURTA")
+
+    # Gente de OUTROS dispositivos esperando, o suficiente pra fila não ser "curta"
+    page.evaluate(f"""
+        fila = Array.from({{length: {limiar_fila_curta}}}, (_, i) => ({{
+            id: 9000 + i, nome: 'Outro' + i, mesa: null, musica: 'MusicaOutro' + i,
+            artista: 'X', deviceId: 'outro-device-' + i,
+            timestamp: Date.now(), timestampFila: Date.now(), vezesCantadas: 0, youtubeUrl: null
+        }}));
+        atualizarUI();
+    """)
+
+    for i in range(limite):
+        preencher_pedido(page, "MesmoDispositivo", f"MinhaMusica{i}")
+    total_antes = page.evaluate("fila.filter(p => p.deviceId === DEVICE_ID).length")
+
+    bloqueou = {"sim": False}
+    page.on("dialog", lambda dialog: (bloqueou.__setitem__("sim", True), dialog.accept()))
+    preencher_pedido(page, "MesmoDispositivo", "MusicaQueDeveriaSerBloqueada")
+    total_depois = page.evaluate("fila.filter(p => p.deviceId === DEVICE_ID).length")
+
+    ok = total_antes == limite and total_depois == limite and bloqueou["sim"] and not erros
+    registrar(f"{limite + 1}º pedido pendente do mesmo device é bloqueado (fila não está curta)", ok,
+               f"antes={total_antes}, depois={total_depois}, bloqueou={bloqueou['sim']}")
+    context.close()
+
+
+def test_limite_de_creditos_libera_com_fila_curta(browser, base_url):
+    """Mesmo cenário do teste acima, mas sem gente de outros dispositivos
+    esperando — a fila "curta" deve liberar o pedido mesmo tendo estourado o
+    teto de créditos, pra não travar um cliente sozinho num bar vazio."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    limite = page.evaluate("LIMITE_PEDIDOS_ATIVOS_POR_DEVICE")
+
+    for i in range(limite):
+        preencher_pedido(page, "MesmoDispositivo", f"MinhaMusica{i}")
+    total_antes = page.evaluate("fila.filter(p => p.deviceId === DEVICE_ID).length")
+
+    preencher_pedido(page, "MesmoDispositivo", "MusicaQueDeveriaSerLiberada")
+    total_depois = page.evaluate("fila.filter(p => p.deviceId === DEVICE_ID).length")
+
+    ok = total_antes == limite and total_depois == limite + 1 and not erros
+    registrar("Limite de créditos é ignorado quando a fila está curta (não trava cliente sozinho)", ok,
+               f"antes={total_antes}, depois={total_depois}")
+    context.close()
+
+
+def test_cancelamento_admin_libera_credito_imediatamente(browser, base_url):
+    """Se o DJ/admin remove (cancela) um pedido, o crédito correspondente deve
+    voltar na hora — sem esperar os MINUTOS_RECARGA_CREDITO minutos — já que a
+    contagem é sempre feita consultando a fila atual, não um contador separado."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    limite = page.evaluate("LIMITE_PEDIDOS_ATIVOS_POR_DEVICE")
+    limiar_fila_curta = page.evaluate("LIMIAR_FILA_CURTA")
+
+    page.evaluate(f"""
+        fila = Array.from({{length: {limiar_fila_curta}}}, (_, i) => ({{
+            id: 9000 + i, nome: 'Outro' + i, mesa: null, musica: 'MusicaOutro' + i,
+            artista: 'X', deviceId: 'outro-device-' + i,
+            timestamp: Date.now(), timestampFila: Date.now(), vezesCantadas: 0, youtubeUrl: null
+        }}));
+        atualizarUI();
+    """)
+
+    for i in range(limite):
+        preencher_pedido(page, "MesmoDispositivo", f"MinhaMusica{i}")
+
+    # Admin cancela (remove) um dos pedidos desse dispositivo
+    id_para_remover = page.evaluate("fila.find(p => p.deviceId === DEVICE_ID).id")
+    page.evaluate(f"acaoRemover({id_para_remover})")
+    page.wait_for_timeout(100)
+
+    # Agora deveria caber mais um pedido desse mesmo dispositivo, sem esperar nada
+    preencher_pedido(page, "MesmoDispositivo", "MusicaAposCancelamento")
+    conseguiu_pedir_de_novo = page.evaluate(
+        "fila.some(p => p.deviceId === DEVICE_ID && p.musica === 'MusicaAposCancelamento')")
+
+    ok = conseguiu_pedir_de_novo and not erros
+    registrar("Cancelamento pelo admin libera o crédito na hora (sem esperar a janela de recarga)", ok,
+               f"conseguiu_pedir_de_novo={conseguiu_pedir_de_novo}")
     context.close()
 
 
@@ -774,14 +903,17 @@ def test_relatorios_da_noite(browser, base_url):
     sem nenhuma consulta nova ao Firebase."""
     context, page, erros = nova_pagina(browser, base_url)
 
+    # A identidade usada por contagemCantores agora é baseada em deviceId (ver
+    # obterChaveIdentidade) — os registros do histórico precisam de "id" e
+    # "deviceId" pra bater com as chaves de contagemCantores abaixo.
     page.evaluate("""
         historico = [
-            {nome: 'Carlos', mesa: '5', musica: 'Evidencias', artista: 'X', horario: '20:00', mediaAvaliacao: 4.5, totalVotos: 4},
-            {nome: 'Maria', mesa: '3', musica: 'Numb', artista: 'Linkin Park', horario: '20:15', mediaAvaliacao: 5.0, totalVotos: 6},
-            {nome: 'Carlos', mesa: '5', musica: 'Evidencias', artista: 'X', horario: '20:30', mediaAvaliacao: 3.0, totalVotos: 2},
-            {nome: 'Joao', mesa: '8', musica: 'Numb', artista: 'Linkin Park', horario: '20:45', mediaAvaliacao: null, totalVotos: 0}
+            {id: 1, deviceId: 'dev-carlos', nome: 'Carlos', mesa: '5', musica: 'Evidencias', artista: 'X', horario: '20:00', mediaAvaliacao: 4.5, totalVotos: 4},
+            {id: 2, deviceId: 'dev-maria', nome: 'Maria', mesa: '3', musica: 'Numb', artista: 'Linkin Park', horario: '20:15', mediaAvaliacao: 5.0, totalVotos: 6},
+            {id: 3, deviceId: 'dev-carlos', nome: 'Carlos', mesa: '5', musica: 'Evidencias', artista: 'X', horario: '20:30', mediaAvaliacao: 3.0, totalVotos: 2},
+            {id: 4, deviceId: 'dev-joao', nome: 'Joao', mesa: '8', musica: 'Numb', artista: 'Linkin Park', horario: '20:45', mediaAvaliacao: null, totalVotos: 0}
         ];
-        contagemCantores = {'carlos@mesa5': 2, 'maria@mesa3': 1, 'joao@mesa8': 1};
+        contagemCantores = {'device:dev-carlos': 2, 'device:dev-maria': 1, 'device:dev-joao': 1};
         atualizarUI();
     """)
     page.wait_for_timeout(200)
@@ -1146,7 +1278,11 @@ def main():
             test_youtube_preenche_musica_e_libera_artista(browser, base_url)
             test_media_de_avaliacoes(browser, base_url)
             test_espera_longa_faz_pessoa_furar_a_fila(browser, base_url)
+            test_deviceid_impede_burlar_cooldown_trocando_nome(browser, base_url)
             test_dois_pedidos_simultaneos_nao_se_perdem(browser, base_url)
+            test_limite_de_creditos_bloqueia_sexto_pedido_com_fila_cheia(browser, base_url)
+            test_limite_de_creditos_libera_com_fila_curta(browser, base_url)
+            test_cancelamento_admin_libera_credito_imediatamente(browser, base_url)
             test_meus_pedidos_posicao_e_cancelamento(browser, base_url)
             test_historico_paginado_no_cliente(browser, base_url)
             test_aviso_iphone_aparece_so_no_iphone(browser, base_url)
