@@ -111,6 +111,13 @@
 
         /* Cartaz principal: cara de "passe de bastidor", não de card de app */
         .display-card {
+            /* Multiplicador de fonte ajustado via JS (ajustarEscalaConteudo)
+               depois de renderizar — o clamp() sozinho só reage ao tamanho da
+               tela, não ao tamanho do texto de verdade (nome de dupla longo,
+               música com título grande...), então às vezes sobrava espaço e
+               às vezes precisava rolar. Isso encolhe só o necessário pra
+               nunca precisar de barra de rolagem. */
+            --escala-conteudo: 1;
             background: var(--cor-painel);
             border-radius: clamp(18px, 1.4vw, 32px);
             padding: clamp(20px, 2.2vw, 44px) clamp(28px, 4.4vw, 84px);
@@ -143,7 +150,7 @@
         /* "Título principal": o estado da tela (Aguardando / Próximo a Cantar /
            Fila Encerrada) — precisa ser lido em 1 segundo a 5+ metros de distância. */
         .titulo-proximo {
-            font-size: clamp(34px, 3.6vw, 76px);
+            font-size: calc(clamp(28px, 2.7vw, 58px) * var(--escala-conteudo, 1));
             color: var(--cor-ouro);
             margin-bottom: clamp(10px, 1.4vw, 26px);
             font-weight: 700;
@@ -152,7 +159,7 @@
         }
 
         .mensagem-secundaria {
-            font-size: clamp(30px, 2.6vw, 56px);
+            font-size: calc(clamp(26px, 2vw, 44px) * var(--escala-conteudo, 1));
             color: var(--cor-marfim);
             font-style: italic;
             font-weight: 300;
@@ -163,7 +170,7 @@
            responde "quem está cantando?" de longe, sem precisar chegar perto. */
         .cantor-nombre {
             font-family: 'Bodoni Moda', serif;
-            font-size: clamp(64px, 7.5vw, 190px);
+            font-size: calc(clamp(52px, 5.6vw, 148px) * var(--escala-conteudo, 1));
             font-weight: 800;
             font-style: italic;
             line-height: 1.05;
@@ -206,7 +213,7 @@
            "dominar a tela" junto com o nome de quem canta. Amarelo, não
            branco, porque é informação de destaque, não texto corrido. */
         .musica-titulo {
-            font-size: clamp(52px, 6vw, 150px);
+            font-size: calc(clamp(44px, 4.5vw, 118px) * var(--escala-conteudo, 1));
             line-height: 1.05;
             font-weight: 700;
             text-transform: uppercase;
@@ -216,7 +223,7 @@
         }
 
         .musica-artista {
-            font-size: clamp(34px, 3.2vw, 70px);
+            font-size: calc(clamp(28px, 2.4vw, 54px) * var(--escala-conteudo, 1));
             color: var(--cor-marfim);
             opacity: 0.85;
             font-weight: 300;
@@ -231,7 +238,7 @@
             color: var(--cor-ouro-claro);
             padding: clamp(6px, 0.6vw, 12px) clamp(16px, 1.6vw, 30px);
             border-radius: 50px;
-            font-size: clamp(20px, 1.6vw, 34px);
+            font-size: calc(clamp(17px, 1.2vw, 27px) * var(--escala-conteudo, 1));
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 1px;
@@ -257,7 +264,7 @@
 
         .stat-numero {
             font-family: 'Bodoni Moda', serif;
-            font-size: clamp(28px, 2.5vw, 52px);
+            font-size: calc(clamp(24px, 1.9vw, 42px) * var(--escala-conteudo, 1));
             font-weight: 700;
             color: var(--cor-ouro-claro);
             line-height: 1;
@@ -526,7 +533,7 @@
         /* Lista de próximos na fila, dentro do card principal */
         .mini-fila-lista { margin-top: clamp(10px, 1vw, 20px); text-align: left; }
         .mini-fila-titulo {
-            font-size: clamp(14px, 1.1vw, 20px);
+            font-size: calc(clamp(12px, 0.85vw, 16px) * var(--escala-conteudo, 1));
             font-weight: 700;
             color: var(--cor-marfim);
             opacity: 0.75;
@@ -542,8 +549,8 @@
             margin-bottom: clamp(4px, 0.5vw, 8px);
             border-left: 3px solid var(--cor-ouro);
         }
-        .mini-fila-item .mini-fila-nome { font-weight: 600; color: var(--cor-marfim); font-size: clamp(17px, 1.4vw, 26px); }
-        .mini-fila-item .mini-fila-musica { color: var(--cor-marfim); opacity: 0.7; font-size: clamp(15px, 1.15vw, 21px); }
+        .mini-fila-item .mini-fila-nome { font-weight: 600; color: var(--cor-marfim); font-size: calc(clamp(15px, 1.1vw, 21px) * var(--escala-conteudo, 1)); }
+        .mini-fila-item .mini-fila-musica { color: var(--cor-marfim); opacity: 0.7; font-size: calc(clamp(13px, 0.9vw, 17px) * var(--escala-conteudo, 1)); }
         .mini-fila-posicao {
             background: var(--cor-ouro); color: var(--cor-texto-sobre-destaque);
             width: clamp(20px, 1.6vw, 28px); height: clamp(20px, 1.6vw, 28px);
@@ -865,6 +872,7 @@
                 popularMiniFila(fila, 0);
 
                 document.getElementById('proximo-cantor').classList.remove('hidden');
+                ajustarEscalaConteudo();
                 return;
             }
 
@@ -897,6 +905,30 @@
             popularMiniFila(fila, 1);
 
             document.getElementById('proximo-cantor').classList.remove('hidden');
+            ajustarEscalaConteudo();
+        }
+
+        // Depois de renderizar o card, encolhe a fonte (via --escala-conteudo)
+        // só o suficiente pra caber sem barra de rolagem — o clamp() do CSS
+        // reage ao tamanho da TELA, não ao tamanho do TEXTO (nome de dupla
+        // longo, música com título grande...), então o quanto precisa
+        // encolher varia a cada apresentação, não dá pra fixar um valor só.
+        function ajustarEscalaConteudo() {
+            const card = document.getElementById('display-card');
+            if (!card) return;
+            requestAnimationFrame(() => {
+                card.style.setProperty('--escala-conteudo', '1');
+                const PASSO = 0.05;
+                const MINIMO = 0.5;
+                let escala = 1;
+                // scrollHeight/clientHeight forçam layout — funciona porque
+                // a fonte menor reduz a altura do conteúdo, nunca a largura
+                // do card (que continua fixa pelo max-width).
+                while (card.scrollHeight > card.clientHeight + 1 && escala > MINIMO) {
+                    escala = Math.round((escala - PASSO) * 100) / 100;
+                    card.style.setProperty('--escala-conteudo', String(escala));
+                }
+            });
         }
 
         // Preenche a lista "A Seguir" com os próximos da fila (a partir do índice 'partirDe'),
@@ -942,6 +974,21 @@
                 }
             }
         }
+
+        // Reaplica o auto-ajuste quando a janela muda de tamanho (inclui
+        // entrar/sair de tela cheia) — o clamp() do CSS depende da largura
+        // da tela, então uma mudança de resolução muda quanto precisa
+        // encolher. Só mexe se o card de "próximo a cantar" estiver visível.
+        let debounceResize;
+        window.addEventListener('resize', () => {
+            clearTimeout(debounceResize);
+            debounceResize = setTimeout(() => {
+                const proximoCantor = document.getElementById('proximo-cantor');
+                if (proximoCantor && !proximoCantor.classList.contains('hidden')) {
+                    ajustarEscalaConteudo();
+                }
+            }, 200);
+        });
 
         // Inicialización
         window.addEventListener('load', () => {
