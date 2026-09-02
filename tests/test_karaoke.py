@@ -939,6 +939,61 @@ def test_validacao_de_formulario(browser, base_url):
     context.close()
 
 
+def test_link_colado_no_campo_musica_e_bloqueado(browser, base_url):
+    """Gente às vezes cola o link do YouTube direto no campo "Nome da Música"
+    em vez de usar o botão "Buscar no YouTube". As regras do Firebase já
+    rejeitam isso (database.rules.json, campo "musica"), mas antes dessa
+    mudança o resultado era o erro genérico de permission_denied — agora o
+    front-end bloqueia ANTES de tentar enviar, com uma mensagem explicando o
+    motivo. Confere pt e en, e que música com nome normal não vira falso
+    positivo."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    def clicar_enviar():
+        page.evaluate("document.getElementById('btn-enviar').click()")
+
+    page.fill("#input-nome", "Pessoa")
+    page.fill("#input-artista", "X")
+
+    # Link colado (sem espaço) -> bloqueado no front-end, mensagem certa, nada na fila
+    page.fill("#input-musica", "https://youtube.com/watch?v=abc123")
+    clicar_enviar()
+    page.wait_for_timeout(150)
+    bloqueado_pt = page.evaluate("fila.length === 0")
+    mensagem_pt = page.evaluate("document.getElementById('erro-musica').innerText")
+    esperado_pt = page.evaluate("t('erro_musica_link')")
+
+    # Link com espaço na frente (" https://...") -> trim() ainda pega o caso
+    page.fill("#input-musica", "   https://youtu.be/xyz789")
+    clicar_enviar()
+    page.wait_for_timeout(150)
+    bloqueado_com_espaco = page.evaluate("fila.length === 0")
+
+    # Nome de música normal -> continua funcionando (sem falso positivo)
+    page.fill("#input-musica", "Evidências")
+    clicar_enviar()
+    page.wait_for_timeout(150)
+    enviou_nome_normal = page.evaluate("fila.length === 1")
+
+    # Troca pro inglês e repete a checagem do link
+    page.evaluate("aplicarIdioma('en')")
+    page.fill("#input-musica", "https://youtube.com/watch?v=abc123")
+    clicar_enviar()
+    page.wait_for_timeout(150)
+    bloqueado_en = page.evaluate("fila.length === 1")  # continua 1 (não deixou enviar de novo)
+    mensagem_en = page.evaluate("document.getElementById('erro-musica').innerText")
+    esperado_en = page.evaluate("t('erro_musica_link')")
+
+    ok = (bloqueado_pt and mensagem_pt == esperado_pt and bloqueado_com_espaco
+          and enviou_nome_normal and bloqueado_en and mensagem_en == esperado_en
+          and mensagem_pt != mensagem_en and not erros)
+    registrar("Link colado no campo música é bloqueado no envio (pt/en), sem falso positivo em nome normal", ok,
+               f"bloqueado_pt={bloqueado_pt}, mensagem_pt={mensagem_pt!r}, bloqueado_com_espaco={bloqueado_com_espaco}, "
+               f"enviou_nome_normal={enviou_nome_normal}, bloqueado_en={bloqueado_en}, mensagem_en={mensagem_en!r}, "
+               f"erros JS={erros}")
+    context.close()
+
+
 def test_acessibilidade_basica(browser, base_url):
     """Labels associados aos campos (via for/id), ícones decorativos marcados
     como aria-hidden, e áreas dinâmicas com aria-live — checagens estruturais
@@ -1400,6 +1455,7 @@ def main():
             test_listeners_separados_por_pedaco(browser, base_url)
             test_historico_completo_sob_demanda(browser, base_url)
             test_validacao_de_formulario(browser, base_url)
+            test_link_colado_no_campo_musica_e_bloqueado(browser, base_url)
             test_acessibilidade_basica(browser, base_url)
             test_relatorios_da_noite(browser, base_url)
             test_horario_de_pico(browser, base_url)

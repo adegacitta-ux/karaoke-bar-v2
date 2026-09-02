@@ -810,6 +810,7 @@
                 erro_mesa_invalida: 'Use só letras, números e hífen.',
                 erro_musica_vazia: 'Digite o nome da música.',
                 erro_musica_longa: 'Nome da música muito longo (máximo 100 caracteres).',
+                erro_musica_link: 'Isso parece um link, não o nome da música. Digite o nome ou use o botão Buscar no YouTube.',
                 erro_artista_vazio: 'Digite o nome do artista (ou busque a música no YouTube).',
                 erro_artista_longo: 'Nome do artista muito longo (máximo 100 caracteres).',
                 fila_encerrada_alert: 'Fila encerrada!',
@@ -902,6 +903,7 @@
                 erro_mesa_invalida: 'Use only letters, numbers, and hyphens.',
                 erro_musica_vazia: 'Enter the song name.',
                 erro_musica_longa: 'Song name too long (maximum 100 characters).',
+                erro_musica_link: 'That looks like a link, not a song name. Type the song title or use the Search YouTube button.',
                 erro_artista_vazio: "Enter the artist's name (or search for the song on YouTube).",
                 erro_artista_longo: 'Artist name too long (maximum 100 characters).',
                 fila_encerrada_alert: 'Queue is closed!',
@@ -1273,6 +1275,10 @@
                 const v = (valor || '').trim();
                 if (v.length === 0) return { valido: false, mensagem: t('erro_musica_vazia') };
                 if (v.length > 100) return { valido: false, mensagem: t('erro_musica_longa') };
+                // Mesmo padrão da regra do Firebase (database.rules.json, campo
+                // "musica"): bloqueia aqui, com mensagem explicando o motivo, em vez
+                // de deixar a transação falhar lá atrás com um permission_denied genérico.
+                if (/^https?:\/\//.test(v)) return { valido: false, mensagem: t('erro_musica_link') };
                 return { valido: true };
             },
             artista: (valor, campoObrigatorio) => {
