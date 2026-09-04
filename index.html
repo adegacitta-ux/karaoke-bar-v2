@@ -1414,7 +1414,7 @@
 
         function getMeusPedidos() {
             try { return JSON.parse(localStorage.getItem(chaveLocal('meus_pedidos'))) || []; }
-            catch (e) { return []; }
+            catch (e) { console.warn('⚠️ Não foi possível ler seus pedidos lembrados localmente:', e); return []; }
         }
 
         function salvarMeusPedidos(lista) {
@@ -1424,7 +1424,7 @@
 
         function getNotificados() {
             try { return JSON.parse(localStorage.getItem(chaveLocal('notificados'))) || []; }
-            catch (e) { return []; }
+            catch (e) { console.warn('⚠️ Não foi possível ler as notificações já enviadas localmente:', e); return []; }
         }
 
         function salvarNotificados(lista) {
@@ -1920,8 +1920,12 @@
         // normalmente pra quem for usar o computador/celular como cliente depois)
         function sairDoAdmin() {
             firebase.auth().signOut().then(() => {
-                firebase.auth().signInAnonymously();
+                firebase.auth().signInAnonymously().catch((error) => {
+                    console.error('❌ Erro ao criar sessão anônima após sair do admin:', error);
+                });
                 switchTab('cliente');
+            }).catch((error) => {
+                console.error('❌ Erro ao sair do modo admin:', error);
             });
         }
 
@@ -2174,11 +2178,13 @@
             try {
                 filaManualFechada = JSON.parse(localStorage.getItem(chaveLocal('manual_fechada'))) || false;
             } catch (error) {
+                console.warn('⚠️ Dado salvo do fechamento manual estava corrompido, recomeçando vazio:', error);
                 filaManualFechada = false;
             }
             try {
                 apresentacaoAtual = JSON.parse(localStorage.getItem(chaveLocal('apresentacao_atual'))) || null;
             } catch (error) {
+                console.warn('⚠️ Dado salvo da apresentação atual estava corrompido, recomeçando vazio:', error);
                 apresentacaoAtual = null;
             }
         }
