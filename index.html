@@ -412,6 +412,10 @@
                     <div class="bg-gray-800 p-6 rounded-2xl shadow-md text-white">
                         <h3 class="text-lg font-bold mb-4 border-b border-gray-700 pb-2">Configurações</h3>
                         <p class="text-xs text-gray-400 mb-4">A fila prioriza automaticamente quem cantou menos vezes. Em caso de empate, vale a ordem de chegada.</p>
+                        <label class="mb-4 flex items-center justify-between bg-gray-700 border border-gray-600 p-3 rounded-lg text-sm cursor-pointer select-none">
+                            <span><i class="fas fa-forward mr-2 text-indigo-400" aria-hidden="true"></i>Chamar próximo automaticamente</span>
+                            <input type="checkbox" id="auto-proximo-toggle" class="w-5 h-5 accent-indigo-500" />
+                        </label>
                         <button type="button" onclick="resetarNoite()" class="w-full bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg text-sm font-medium transition-colors">
                             LIMPAR TODOS OS DADOS DA NOITE
                         </button>
@@ -441,6 +445,15 @@
                                 <i class="fas fa-flag-checkered mr-2" aria-hidden="true"></i>Finalizar Apresentação
                             </button>
                         </div>
+                    </div>
+
+                    <div id="admin-auto-proximo-aviso" class="hidden bg-indigo-50 border-2 border-indigo-300 rounded-2xl shadow-md p-4 flex items-center justify-between gap-4">
+                        <div class="text-indigo-800 font-semibold text-sm">
+                            <i class="fas fa-forward mr-2" aria-hidden="true"></i><span id="admin-auto-proximo-texto"></span>
+                        </div>
+                        <button type="button" id="btn-cancelar-auto-proximo" onclick="cancelarChamadaAutomatica()" class="bg-white border border-indigo-300 text-indigo-700 hover:bg-indigo-100 font-semibold px-4 py-2 rounded-lg whitespace-nowrap text-sm">
+                            Cancelar
+                        </button>
                     </div>
 
                     <div class="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
@@ -2787,6 +2800,61 @@
             desfazerSequenciasConsecutivas();
         }
 
+        // --- Modo "semi-automático": chamar o próximo sozinho após finalizar ---
+        // Preferência só deste dispositivo/DJ (não vai pro Firebase), ligada pelo
+        // toggle #auto-proximo-toggle. Ver agendarChamadaAutomatica().
+        const SEGUNDOS_AUTO_CHAMAR_PROXIMO = 5;
+        let autoChamarProximoTimeoutId = null;
+        let autoChamarProximoIntervalId = null;
+
+        function autoChamarProximoAtivo() {
+            try { return localStorage.getItem(chaveLocal('auto_chamar_proximo')) === '1'; }
+            catch (e) { return false; }
+        }
+
+        // Chamado depois que acaoFinalizarApresentacao() termina com sucesso. Se o
+        // modo estiver ligado e houver alguém na fila (já ordenada por ordenarFila),
+        // mostra a contagem regressiva e chama acaoProximo() sozinho ao final —
+        // a menos que o DJ clique em "Cancelar" antes disso.
+        function agendarChamadaAutomatica() {
+            if (!autoChamarProximoAtivo() || fila.length === 0) return;
+
+            const proximo = fila[0];
+            const aviso = document.getElementById('admin-auto-proximo-aviso');
+            const texto = document.getElementById('admin-auto-proximo-texto');
+            if (!aviso || !texto) return;
+
+            let segundosRestantes = SEGUNDOS_AUTO_CHAMAR_PROXIMO;
+            const atualizarTexto = () => {
+                texto.innerText = `Chamando ${proximo.nome} em ${segundosRestantes}s...`;
+            };
+
+            atualizarTexto();
+            aviso.classList.remove('hidden');
+
+            autoChamarProximoIntervalId = setInterval(() => {
+                segundosRestantes--;
+                if (segundosRestantes > 0) atualizarTexto();
+            }, 1000);
+
+            autoChamarProximoTimeoutId = setTimeout(() => {
+                autoChamarProximoTimeoutId = null;
+                cancelarChamadaAutomatica();
+                if (!apresentacaoAtual) {
+                    acaoProximo(proximo.id);
+                }
+            }, SEGUNDOS_AUTO_CHAMAR_PROXIMO * 1000);
+        }
+
+        // Cancela a contagem regressiva pendente (clique em "Cancelar", ou o DJ
+        // agindo manualmente antes dela terminar) e esconde o aviso.
+        function cancelarChamadaAutomatica() {
+            if (autoChamarProximoTimeoutId) { clearTimeout(autoChamarProximoTimeoutId); autoChamarProximoTimeoutId = null; }
+            if (autoChamarProximoIntervalId) { clearInterval(autoChamarProximoIntervalId); autoChamarProximoIntervalId = null; }
+            const aviso = document.getElementById('admin-auto-proximo-aviso');
+            if (aviso) aviso.classList.add('hidden');
+        }
+
         // Ações do DJ
         // --- ANÚNCIO POR VOZ (Web Speech API) ---
         // Preferência só desse aparelho (localStorage), default desligado. Tudo aqui é
@@ -2835,6 +2903,10 @@
         }
 
         function acaoProximo(id) {
+            // Se o DJ chamar o próximo manualmente (ou for a própria chamada
+            // automática), cancela qualquer contagem regressiva pendente.
+            cancelarChamadaAutomatica();
+
             if (apresentacaoAtual) {
                 alert('Já existe uma apresentação em andamento. Finalize-a antes de chamar o próximo.');
                 return;
@@ -2920,6 +2992,7 @@
             ordenarFila();
             salvarNoFirebase();
             atualizarUI();
+            agendarChamadaAutomatica();
         }
 
         // Guarda um registro permanente de cada apresentação — separado do "historico"
@@ -3101,6 +3174,7 @@
 
         function resetarNoite() {
             if(confirm("Tem certeza que deseja apagar todos os dados da noite?")) {
+                cancelarChamadaAutomatica();
                 fila = [];
                 historico = [];
                 contagemCantores = {};
@@ -3379,6 +3453,22 @@
         });
 
         document.getElementById('btn-nao-e-voce').addEventListener('click', esquecerDadosLembrados);
+
+        // Toggle "Chamar próximo automaticamente" (painel do DJ)
+        const autoProximoToggle = document.getElementById('auto-proximo-toggle');
+        if (autoProximoToggle) {
+            autoProximoToggle.checked = autoChamarProximoAtivo();
+            autoProximoToggle.addEventListener('change', function() {
+                try {
+                    localStorage.setItem(chaveLocal('auto_chamar_proximo'), this.checked ? '1' : '0');
+                } catch (e) {
+                    console.warn('⚠️ Não foi possível lembrar a preferência de chamar próximo automaticamente:', e);
+                }
+                if (!this.checked) {
+                    cancelarChamadaAutomatica();
+                }
+            });
+        }
 
         // Toggle "Avisar quando for minha vez"
         const notifToggle = document.getElementById('notif-toggle');

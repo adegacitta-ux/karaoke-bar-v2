@@ -569,6 +569,81 @@ def test_deviceid_impede_burlar_cooldown_trocando_nome(browser, base_url):
     context.close()
 
 
+def test_modo_semi_automatico_chama_proximo_sozinho(browser, base_url):
+    """Modo semi-automático do DJ (toggle #auto-proximo-toggle, preferência só
+    deste dispositivo em localStorage, default desligado): com o modo ligado,
+    finalizar uma apresentação com gente na fila deve mostrar o aviso de
+    contagem regressiva e, sem cancelar, chamar o próximo sozinho ao final —
+    sem precisar de um segundo clique manual do DJ em "Próximo"."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    preencher_pedido(page, "PessoaAuto1", "MusicaAuto1")
+    preencher_pedido(page, "PessoaAuto2", "MusicaAuto2")
+
+    # Liga a preferência (é só isso que autoChamarProximoAtivo() olha).
+    page.evaluate("localStorage.setItem(chaveLocal('auto_chamar_proximo'), '1')")
+
+    id1 = page.evaluate("fila[0].id")
+    page.evaluate(f"acaoProximo({id1})")
+    page.evaluate("acaoFinalizarApresentacao()")
+    page.wait_for_timeout(200)
+
+    aviso_visivel = page.evaluate(
+        "!document.getElementById('admin-auto-proximo-aviso').classList.contains('hidden')"
+    )
+    texto_aviso = page.evaluate("document.getElementById('admin-auto-proximo-texto').innerText")
+    tem_botao_cancelar = page.evaluate("!!document.getElementById('btn-cancelar-auto-proximo')")
+
+    # Espera a contagem regressiva terminar de verdade (sem cancelar) e confirma
+    # que o próximo da fila foi chamado sozinho.
+    segundos = page.evaluate("SEGUNDOS_AUTO_CHAMAR_PROXIMO")
+    page.wait_for_timeout(segundos * 1000 + 500)
+
+    apresentacao_iniciada_sozinha = page.evaluate(
+        "apresentacaoAtual !== null && apresentacaoAtual.musica === 'MusicaAuto2'"
+    )
+    aviso_escondido_depois = page.evaluate(
+        "document.getElementById('admin-auto-proximo-aviso').classList.contains('hidden')"
+    )
+
+    ok = (aviso_visivel and "PessoaAuto2" in texto_aviso and tem_botao_cancelar
+          and apresentacao_iniciada_sozinha and aviso_escondido_depois and not erros)
+    registrar("Modo semi-automático (ligado) chama o próximo sozinho após finalizar, com opção de cancelar", ok,
+               f"aviso_visivel={aviso_visivel}, texto={texto_aviso!r}, tem_cancelar={tem_botao_cancelar}, "
+               f"iniciou_sozinha={apresentacao_iniciada_sozinha}, aviso_escondido_depois={aviso_escondido_depois}")
+    context.close()
+
+
+def test_modo_semi_automatico_desligado_nao_chama_sozinho(browser, base_url):
+    """Default é desligado — sem a preferência ligada, finalizar não deve
+    mostrar aviso nem chamar ninguém sozinho (comportamento de quem não usa o
+    modo semi-automático continua exatamente como era antes)."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    preencher_pedido(page, "PessoaManual1", "MusicaManual1")
+    preencher_pedido(page, "PessoaManual2", "MusicaManual2")
+
+    toggle_ligado_por_padrao = page.evaluate("autoChamarProximoAtivo()")
+
+    id1 = page.evaluate("fila[0].id")
+    page.evaluate(f"acaoProximo({id1})")
+    page.evaluate("acaoFinalizarApresentacao()")
+
+    segundos = page.evaluate("SEGUNDOS_AUTO_CHAMAR_PROXIMO")
+    page.wait_for_timeout(segundos * 1000 + 500)
+
+    aviso_visivel = page.evaluate(
+        "!document.getElementById('admin-auto-proximo-aviso').classList.contains('hidden')"
+    )
+    ninguem_chamado_sozinho = page.evaluate("apresentacaoAtual === null")
+
+    ok = (not toggle_ligado_por_padrao and not aviso_visivel and ninguem_chamado_sozinho and not erros)
+    registrar("Modo semi-automático desligado por padrão — finalizar continua esperando clique manual", ok,
+               f"ligado_por_padrao={toggle_ligado_por_padrao}, aviso_visivel={aviso_visivel}, "
+               f"ninguem_chamado_sozinho={ninguem_chamado_sozinho}")
+    context.close()
+
+
 def test_dois_pedidos_simultaneos_nao_se_perdem(browser, base_url):
     """Regra crítica: reproduz o bug relatado de nomes "sumindo e reaparecendo".
     Causa era uma corrida de gravação — dois pedidos quase ao mesmo tempo podiam
@@ -1735,6 +1810,8 @@ def main():
             test_teto_de_espera_maxima_fura_mesmo_com_vezes_cantadas_alto(browser, base_url)
             test_teto_de_espera_maxima_empate_por_ordem_de_chegada(browser, base_url)
             test_deviceid_impede_burlar_cooldown_trocando_nome(browser, base_url)
+            test_modo_semi_automatico_chama_proximo_sozinho(browser, base_url)
+            test_modo_semi_automatico_desligado_nao_chama_sozinho(browser, base_url)
             test_dois_pedidos_simultaneos_nao_se_perdem(browser, base_url)
             test_limite_de_creditos_bloqueia_sexto_pedido_com_fila_cheia(browser, base_url)
             test_limite_de_creditos_libera_com_fila_curta(browser, base_url)
