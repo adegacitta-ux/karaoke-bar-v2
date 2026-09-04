@@ -2641,6 +2641,15 @@
         // número se quiser que a fila "perdoe" mais rápido ou mais devagar.
         const MINUTOS_PARA_PERDOAR_UMA_VEZ_CANTADA = 25;
 
+        // Teto de espera: como o desconto acima é linear e na MESMA taxa pra todo
+        // mundo, a diferença de prioridade entre dois pedidos que já estão na fila
+        // nunca muda com o tempo (os dois descontos crescem juntos, o gap fica igual).
+        // Ou seja, sem um teto, alguém com vezesCantadas alto (ex: 6-7x) pode ficar
+        // preso atrás de quem tem vezesCantadas baixo pra sempre, não importa quanto
+        // tempo espere. Esse teto quebra esse travamento: depois dele, o pedido fura
+        // pra frente ignorando vezesCantadas.
+        const MINUTOS_ESPERA_MAXIMA = 40; // acima disso, o pedido fura pra frente
+
         // Calcula a prioridade "de verdade" de um pedido NESTE momento: começa igual a
         // quantas vezes a pessoa já cantou, e vai descontando conforme o tempo de espera
         // desse pedido específico passa. Quanto MENOR o número, mais cedo ela canta.
@@ -2650,6 +2659,14 @@
             // pedidos que já estavam na fila antes desse campo existir.
             const referencia = pedido.timestampFila || pedido.timestamp;
             const minutosEsperando = (Date.now() - referencia) / 60000;
+
+            // Passou do teto: força a prioridade pro mínimo possível, furando todo
+            // mundo independente de vezesCantadas. Empate entre vários pedidos acima
+            // do teto é resolvido pelo tie-break de timestampFila em ordenarFila().
+            if (minutosEsperando > MINUTOS_ESPERA_MAXIMA) {
+                return -Infinity;
+            }
+
             return pedido.vezesCantadas - (minutosEsperando / MINUTOS_PARA_PERDOAR_UMA_VEZ_CANTADA);
         }
 

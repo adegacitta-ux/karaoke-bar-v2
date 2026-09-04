@@ -466,6 +466,85 @@ def test_fila_nao_fura_prioridade_pra_desfazer_sequencia(browser, base_url):
     context.close()
 
 
+def test_teto_de_espera_maxima_fura_mesmo_com_vezes_cantadas_alto(browser, base_url):
+    """O desconto de calcularPrioridadeEfetiva é linear e na mesma taxa pra
+    todo mundo — então a DIFERENÇA de prioridade entre dois pedidos que já
+    estão na fila nunca muda com o tempo, só porque os dois descontos crescem
+    juntos. Sem um teto, alguém com vezesCantadas bem alto (ex: 7x) ficaria
+    preso atrás de gente com vezesCantadas baixo pra sempre, não importa
+    quanto tempo espere. MINUTOS_ESPERA_MAXIMA existe pra quebrar esse
+    travamento: passado esse teto, o pedido fura pra frente de qualquer um."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    teto_minutos = page.evaluate("MINUTOS_ESPERA_MAXIMA")
+
+    # PessoaVeterana já cantou muitas vezes (prioridade efetiva ruim mesmo sem
+    # o teto) e está esperando bem mais que o teto configurado.
+    # PessoaRecente é nova (vezesCantadas=0) e chegou bem depois — sem o teto,
+    # ela ficaria na frente pra sempre, já que a diferença de prioridade entre
+    # os dois nunca diminui com o tempo (só o próprio teto quebra isso).
+    page.evaluate(f"""
+        fila.length = 0;
+        fila.push({{
+            id: 777101, nome: 'PessoaVeterana', mesa: null, musica: 'MusicaV', artista: 'X',
+            deviceId: 'device-veterana',
+            timestamp: Date.now() - ({teto_minutos} * 2 * 60 * 1000),
+            timestampFila: Date.now() - ({teto_minutos} * 2 * 60 * 1000),
+            vezesCantadas: 7, youtubeUrl: null
+        }});
+        fila.push({{
+            id: 777102, nome: 'PessoaRecente', mesa: null, musica: 'MusicaR', artista: 'X',
+            deviceId: 'device-recente',
+            timestamp: Date.now(), timestampFila: Date.now(),
+            vezesCantadas: 0, youtubeUrl: null
+        }});
+        atualizarUI();
+    """)
+    page.wait_for_timeout(100)
+    ordem_apos_teto = page.evaluate("fila.map(p => p.nome)")
+
+    ok = (ordem_apos_teto[0] == "PessoaVeterana" and not erros)
+    registrar("Teto de espera máxima fura a fila mesmo com vezesCantadas alto", ok,
+               f"teto_minutos={teto_minutos}, ordem={ordem_apos_teto}")
+    context.close()
+
+
+def test_teto_de_espera_maxima_empate_por_ordem_de_chegada(browser, base_url):
+    """Quando MÚLTIPLOS pedidos passam do teto ao mesmo tempo (todos com
+    prioridade forçada a -Infinity), o empate deve ser resolvido por quem
+    está esperando há mais tempo (timestampFila mais antigo primeiro) —
+    mesmo tie-break de sempre, usado em qualquer empate de ordenarFila()."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    teto_minutos = page.evaluate("MINUTOS_ESPERA_MAXIMA")
+
+    page.evaluate(f"""
+        fila.length = 0;
+        fila.push({{
+            id: 777201, nome: 'MaisAntiga', mesa: null, musica: 'M1', artista: 'X',
+            deviceId: 'device-mais-antiga',
+            timestamp: Date.now() - ({teto_minutos} * 3 * 60 * 1000),
+            timestampFila: Date.now() - ({teto_minutos} * 3 * 60 * 1000),
+            vezesCantadas: 0, youtubeUrl: null
+        }});
+        fila.push({{
+            id: 777202, nome: 'MaisNova', mesa: null, musica: 'M2', artista: 'X',
+            deviceId: 'device-mais-nova',
+            timestamp: Date.now() - ({teto_minutos} * 2 * 60 * 1000),
+            timestampFila: Date.now() - ({teto_minutos} * 2 * 60 * 1000),
+            vezesCantadas: 5, youtubeUrl: null
+        }});
+        atualizarUI();
+    """)
+    page.wait_for_timeout(100)
+    ordem = page.evaluate("fila.map(p => p.nome)")
+
+    ok = (ordem == ["MaisAntiga", "MaisNova"] and not erros)
+    registrar("Empate entre pedidos acima do teto respeita ordem de chegada", ok,
+               f"teto_minutos={teto_minutos}, ordem={ordem}")
+    context.close()
+
+
 def test_deviceid_impede_burlar_cooldown_trocando_nome(browser, base_url):
     """Anti-fraude (deviceId): antes, "vezesCantadas" era agrupado por nome+mesa
     digitados — bastava digitar um nome diferente pra "resetar" a prioridade de
@@ -1534,6 +1613,8 @@ def main():
             test_fila_evita_pedidos_consecutivos_da_mesma_pessoa(browser, base_url)
             test_fila_mantem_sequencia_quando_so_sobra_a_mesma_pessoa(browser, base_url)
             test_fila_nao_fura_prioridade_pra_desfazer_sequencia(browser, base_url)
+            test_teto_de_espera_maxima_fura_mesmo_com_vezes_cantadas_alto(browser, base_url)
+            test_teto_de_espera_maxima_empate_por_ordem_de_chegada(browser, base_url)
             test_deviceid_impede_burlar_cooldown_trocando_nome(browser, base_url)
             test_dois_pedidos_simultaneos_nao_se_perdem(browser, base_url)
             test_limite_de_creditos_bloqueia_sexto_pedido_com_fila_cheia(browser, base_url)
