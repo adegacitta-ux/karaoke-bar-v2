@@ -1065,6 +1065,41 @@ def test_relatorios_da_noite(browser, base_url):
     context.close()
 
 
+def test_ranking_cantores_mostra_nome_de_apresentacao_nao_finalizada(browser, base_url):
+    """contagemCantores é incrementado quando a apresentação COMEÇA
+    (acaoProximo), mas um registro só entra em "historico" quando ela é
+    FINALIZADA (acaoFinalizarApresentacao). Se alguém começou a cantar mas a
+    apresentação nunca foi finalizada (ainda em andamento, ou abandonada), o
+    nome não existia em historico e o ranking mostrava a chave crua tipo
+    "device:56046966-...". atualizarRelatorios() agora também busca o nome
+    em `fila` e em `apresentacaoAtual`, não só em `historico`."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    page.evaluate("""
+        historico = [
+            {id: 1, deviceId: 'dev-carlos', nome: 'Carlos', mesa: '5', musica: 'Evidencias', artista: 'X', horario: '20:00', mediaAvaliacao: 4.5, totalVotos: 4}
+        ];
+        // dev-maria: apresentação em andamento (apresentacaoAtual), nunca finalizada.
+        apresentacaoAtual = {id: 2, deviceId: 'dev-maria', nome: 'Maria', mesa: '3', musica: 'Numb', artista: 'Linkin Park'};
+        // dev-joao: já cantou uma vez (registrado em historico) e pediu de novo,
+        // o novo pedido ainda está só na fila, não finalizado.
+        fila = [
+            {id: 3, deviceId: 'dev-joao', nome: 'Joao', mesa: '8', musica: 'Garota de Ipanema', artista: 'Y', timestamp: Date.now()}
+        ];
+        contagemCantores = {'device:dev-carlos': 1, 'device:dev-maria': 1, 'device:dev-joao': 1};
+        atualizarUI();
+    """)
+    page.wait_for_timeout(200)
+
+    ranking_cantores = page.evaluate("document.getElementById('rel-ranking-cantores').innerText")
+
+    ok = ("Carlos" in ranking_cantores and "Maria" in ranking_cantores and "Joao" in ranking_cantores
+          and "device:" not in ranking_cantores and not erros)
+    registrar("Ranking de cantores mostra o nome mesmo sem apresentação finalizada (fila/apresentacaoAtual)", ok,
+               f"ranking_cantores={ranking_cantores!r}, erros JS={erros}")
+    context.close()
+
+
 def test_horario_de_pico(browser, base_url):
     """O gráfico 'Pedidos por horário' agrupa os pedidos pela hora do timestamp
     e identifica corretamente qual horário teve mais movimento."""
@@ -1458,6 +1493,7 @@ def main():
             test_link_colado_no_campo_musica_e_bloqueado(browser, base_url)
             test_acessibilidade_basica(browser, base_url)
             test_relatorios_da_noite(browser, base_url)
+            test_ranking_cantores_mostra_nome_de_apresentacao_nao_finalizada(browser, base_url)
             test_horario_de_pico(browser, base_url)
             test_catalogo_pagina_separada_lista_por_letra(browser, base_url)
             test_catalogo_escolher_musica_preenche_index(browser, base_url)

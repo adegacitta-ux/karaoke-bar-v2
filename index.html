@@ -1733,12 +1733,26 @@
 
             // Ranking de cantores — usa contagemCantores (fonte de verdade de "quantas
             // vezes já cantou", já usada pra prioridade da fila), só busca o nome
-            // "bonito" pra exibir a partir do histórico
+            // "bonito" pra exibir. contagemCantores é incrementado quando a
+            // apresentação COMEÇA (acaoProximo), mas só entra em "historico" quando
+            // é FINALIZADA (acaoFinalizarApresentacao) — então uma apresentação em
+            // andamento (ou abandonada sem finalizar) já conta no ranking, mas ainda
+            // não tem nome em historico. Por isso também buscamos o nome em "fila" e
+            // em "apresentacaoAtual", pra não cair no fallback de mostrar o deviceId
+            // cru enquanto o pedido não é finalizado.
             const nomeOriginalPorChave = {};
             historico.forEach(h => {
                 const chave = obterChaveIdentidade(h);
                 nomeOriginalPorChave[chave] = h.nome;
             });
+            fila.forEach(p => {
+                const chave = obterChaveIdentidade(p);
+                if (!nomeOriginalPorChave[chave]) nomeOriginalPorChave[chave] = p.nome;
+            });
+            if (apresentacaoAtual) {
+                const chave = obterChaveIdentidade(apresentacaoAtual);
+                if (!nomeOriginalPorChave[chave]) nomeOriginalPorChave[chave] = apresentacaoAtual.nome;
+            }
             const topCantores = Object.entries(contagemCantores || {})
                 .filter(([, qtd]) => qtd > 0)
                 .sort((a, b) => b[1] - a[1])
