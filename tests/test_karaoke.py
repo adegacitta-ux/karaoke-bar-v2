@@ -785,6 +785,42 @@ def test_cancelamento_admin_libera_credito_imediatamente(browser, base_url):
     context.close()
 
 
+def test_dispositivo_bloqueado_nao_consegue_adicionar_pedido(browser, base_url):
+    """Ferramenta de moderação do DJ: bloquear um deviceId (acaoBloquearDispositivo,
+    botão na tabela da fila) impede esse dispositivo de enviar pedidos novos pelo
+    resto da noite — checado ANTES de qualquer outra regra (mesmo com a fila
+    curta, que normalmente ignora o limite de créditos). A mensagem mostrada
+    precisa ser diferente da de limite de créditos, sem entregar pro cliente que
+    o motivo real foi um bloqueio. acaoDesbloquearDispositivo (botão "Desbloquear"
+    do card "Dispositivos Bloqueados") deve reverter isso a qualquer momento."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    mensagens = []
+    page.on("dialog", lambda dialog: (mensagens.append(dialog.message), dialog.accept()))
+
+    # Simula o DJ bloqueando este dispositivo (mesmo efeito do botão na tabela)
+    page.evaluate("dispositivosBloqueados[DEVICE_ID] = true;")
+    preencher_pedido(page, "PessoaBloqueada", "MusicaBloqueada")
+
+    nao_entrou_na_fila = page.evaluate("fila.length === 0")
+    mensagem_recebida = mensagens[0] if mensagens else None
+    mensagem_esperada = page.evaluate("t('dispositivo_bloqueado_alert')")
+    mensagem_de_credito = page.evaluate("t('limite_creditos_alert')")
+
+    # Desbloqueando (mesma função usada pelo botão "Desbloquear" do painel Admin),
+    # o mesmo dispositivo volta a conseguir pedir normalmente
+    page.evaluate("acaoDesbloquearDispositivo(DEVICE_ID)")
+    preencher_pedido(page, "PessoaBloqueada", "MusicaAposDesbloqueio")
+    conseguiu_apos_desbloqueio = page.evaluate("fila.some(p => p.musica === 'MusicaAposDesbloqueio')")
+
+    ok = (nao_entrou_na_fila and mensagem_recebida == mensagem_esperada
+          and mensagem_esperada != mensagem_de_credito and conseguiu_apos_desbloqueio and not erros)
+    registrar("Dispositivo bloqueado pelo DJ não consegue enviar pedido (mensagem diferente da de limite de créditos)", ok,
+               f"nao_entrou_na_fila={nao_entrou_na_fila}, mensagem={mensagem_recebida!r}, "
+               f"mensagem_esperada={mensagem_esperada!r}, conseguiu_apos_desbloqueio={conseguiu_apos_desbloqueio}")
+    context.close()
+
+
 def test_indicador_creditos_nao_aparece_com_poucos_pedidos(browser, base_url):
     """O indicador visual de créditos deve ficar invisível durante o uso normal —
     só aparece perto do limite (ver LIMIAR_AVISO_CREDITO), não a cada pedido."""
@@ -1816,6 +1852,7 @@ def main():
             test_limite_de_creditos_bloqueia_sexto_pedido_com_fila_cheia(browser, base_url)
             test_limite_de_creditos_libera_com_fila_curta(browser, base_url)
             test_cancelamento_admin_libera_credito_imediatamente(browser, base_url)
+            test_dispositivo_bloqueado_nao_consegue_adicionar_pedido(browser, base_url)
             test_indicador_creditos_nao_aparece_com_poucos_pedidos(browser, base_url)
             test_indicador_creditos_aparece_no_limiar(browser, base_url)
             test_indicador_creditos_minutos_ate_liberar(browser, base_url)
