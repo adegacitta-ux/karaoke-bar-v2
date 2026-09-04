@@ -15,6 +15,7 @@
             ".write": "auth != null",
             "$index": {
               ".validate": "newData.hasChildren(['id', 'nome', 'musica', 'deviceId', 'timestamp', 'timestampFila', 'vezesCantadas'])",
+              "ausenteDesde": { ".validate": "newData.val() == null || newData.isNumber()" },
               "id": { ".validate": "newData.isNumber()" },
               "nome": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60" },
               "mesa": { ".validate": "newData.val() == null || (newData.isString() && newData.val().length <= 20)" },

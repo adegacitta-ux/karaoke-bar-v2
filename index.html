@@ -483,6 +483,17 @@
                         </div>
                     </div>
 
+                    <!-- Ausentes: pedidos que o DJ chamou e a pessoa não apareceu (ver
+                         acaoMarcarAusente). Ficam fora da fila normal até a pessoa
+                         voltar (acaoVoltouAusencia) ou passar de MINUTOS_MAX_AUSENTE. -->
+                    <div id="card-ausentes" class="hidden bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
+                        <div class="bg-gray-50 px-6 py-4 border-b">
+                            <h3 class="font-bold text-gray-800"><i class="fas fa-user-clock mr-2 text-yellow-600" aria-hidden="true"></i>Ausentes</h3>
+                            <p class="text-xs text-gray-400 mt-1">Chamados que não apareceram. Não contam na fila até voltar — clique em "Voltou" pra devolver o lugar dela.</p>
+                        </div>
+                        <ul id="lista-ausentes" class="divide-y divide-gray-100"></ul>
+                    </div>
+
                     <!-- Dispositivos Bloqueados: moderação manual pra casos que o algoritmo
                          de créditos não previu. Bloqueio vale só pra esta noite (ver
                          resetarNoite) e pode ser desfeito aqui a qualquer momento. -->
@@ -875,6 +886,7 @@
                 meu_pedido_proximo: '🎤 Você é o próximo!',
                 meu_pedido_falta_singular: 'Falta {n} pessoa antes de você',
                 meu_pedido_falta_plural: 'Faltam {n} pessoas antes de você',
+                meu_pedido_aguardando_dj: 'Aguardando o DJ',
                 remover_pedido_pergunta: 'Remover esse pedido da fila?',
                 sim_cancelar: 'Sim, cancelar',
                 manter_pedido: 'Manter pedido',
@@ -969,6 +981,7 @@
                 meu_pedido_proximo: "🎤 You're next!",
                 meu_pedido_falta_singular: '{n} person ahead of you',
                 meu_pedido_falta_plural: '{n} people ahead of you',
+                meu_pedido_aguardando_dj: 'Waiting for the DJ',
                 remover_pedido_pergunta: 'Remove this request from the queue?',
                 sim_cancelar: 'Yes, cancel',
                 manter_pedido: 'Keep request',
@@ -1648,14 +1661,17 @@
             meus = meus.filter(id => idsNaFila.has(id) || idsEmAndamento.has(id));
             salvarMeusPedidos(meus);
 
-            if (fila.length === 0) return;
-            const proximoId = fila[0].id;
+            // Usa só a fila ATIVA — um pedido ausente (ver acaoMarcarAusente) não
+            // conta como "próximo da vez" mesmo se sobrar sozinho no topo do array.
+            const ativos = filaAtiva();
+            if (ativos.length === 0) return;
+            const proximoId = ativos[0].id;
             if (!meus.includes(proximoId)) return;
 
             let notificados = getNotificados();
             if (notificados.includes(proximoId)) return; // já avisamos para este pedido
 
-            const pedido = fila[0];
+            const pedido = ativos[0];
             dispararAvisoDeVez(pedido);
 
             notificados.push(proximoId);
@@ -1670,9 +1686,16 @@
             const secao = document.getElementById('secao-meus-pedidos');
             const lista = document.getElementById('lista-meus-pedidos');
 
+            // Posição calculada só dentro da fila ATIVA — um pedido ausente (ver
+            // acaoMarcarAusente) não tem posição numérica nenhuma, já que não
+            // participa da ordenação normal enquanto durar a ausência.
+            const filaAtivos = filaAtiva();
             const meusNaFila = fila
-                .map((pedido, indice) => ({ pedido, posicao: indice }))
-                .filter(({ pedido }) => meus.includes(pedido.id));
+                .filter(pedido => meus.includes(pedido.id))
+                .map(pedido => ({
+                    pedido,
+                    posicao: pedido.ausenteDesde ? null : filaAtivos.findIndex(p => p.id === pedido.id)
+                }));
 
             const meuEmAndamento = apresentacaoAtual && meus.includes(apresentacaoAtual.id)
                 ? apresentacaoAtual : null;
@@ -1695,10 +1718,12 @@
             }
 
             meusNaFila.forEach(({ pedido, posicao }) => {
-                const textoPosicao = posicao === 0
-                    ? t('meu_pedido_proximo')
-                    : t(posicao === 1 ? 'meu_pedido_falta_singular' : 'meu_pedido_falta_plural', { n: posicao });
-                const corFundo = posicao === 0 ? 'bg-indigo-50 border-indigo-200' : 'bg-gray-50 border-gray-200';
+                const textoPosicao = pedido.ausenteDesde
+                    ? t('meu_pedido_aguardando_dj')
+                    : (posicao === 0
+                        ? t('meu_pedido_proximo')
+                        : t(posicao === 1 ? 'meu_pedido_falta_singular' : 'meu_pedido_falta_plural', { n: posicao }));
+                const corFundo = (!pedido.ausenteDesde && posicao === 0) ? 'bg-indigo-50 border-indigo-200' : 'bg-gray-50 border-gray-200';
 
                 html += `
                     <li id="meu-pedido-${pedido.id}" class="p-3 ${corFundo} border rounded-lg">
@@ -2700,7 +2725,11 @@
                     timestamp: agora,
                     timestampFila: agora,
                     vezesCantadas: prioridadeCalculada,
-                    youtubeUrl: youtubeUrlDoPedido
+                    youtubeUrl: youtubeUrlDoPedido,
+                    // null enquanto o pedido está esperando normalmente; vira um
+                    // timestamp quando o DJ chama e a pessoa não aparece (ver
+                    // acaoMarcarAusente) — timeout automático em MINUTOS_MAX_AUSENTE
+                    ausenteDesde: null
                 };
             }
 
@@ -2890,17 +2919,27 @@
         // prioridade entre os dois seja pequena (LIMITE_TROCA_ANTI_SEQUENCIA).
         // Se todos os pedidos restantes forem da mesma pessoa, não tem outra
         // pessoa pra trazer pra frente — a sequência é mantida (não dá pra evitar).
+        // Ausentes ficam sempre no final de "fila" (ver ordenarFila) — esse limite é
+        // o índice onde a parte ativa (participa da ordenação normal) termina e os
+        // ausentes começam. Usado pra impedir que desfazerSequenciasConsecutivas
+        // mexa com eles.
+        function limiteFilaAtiva() {
+            const primeiroAusente = fila.findIndex(p => p.ausenteDesde);
+            return primeiroAusente === -1 ? fila.length : primeiroAusente;
+        }
+
         function desfazerSequenciasConsecutivas() {
-            for (let i = 1; i < fila.length; i++) {
+            const limite = limiteFilaAtiva();
+            for (let i = 1; i < limite; i++) {
                 if (obterChaveIdentidade(fila[i]) !== obterChaveIdentidade(fila[i - 1])) {
                     continue;
                 }
 
                 let j = i + 1;
-                while (j < fila.length && obterChaveIdentidade(fila[j]) === obterChaveIdentidade(fila[i])) {
+                while (j < limite && obterChaveIdentidade(fila[j]) === obterChaveIdentidade(fila[i])) {
                     j++;
                 }
-                if (j >= fila.length) {
+                if (j >= limite) {
                     break; // só sobrou pedido da mesma pessoa: mantém a sequência
                 }
 
@@ -2918,7 +2957,20 @@
             // Regra: menos vezes cantadas primeiro — mas o "peso" de já ter cantado
             // vai diminuindo com o tempo de espera (ver calcularPrioridadeEfetiva).
             // Em empate, ordem de chegada na fila (timestampFila).
+            //
+            // Pedidos ausentes (ver acaoMarcarAusente) NÃO entram nessa conta: vão
+            // sempre pro final, fora da ordenação normal — é isso que os tira da
+            // fila visível/ordenada enquanto o DJ espera a pessoa voltar.
             fila.sort((a, b) => {
+                const ausenteA = !!a.ausenteDesde;
+                const ausenteB = !!b.ausenteDesde;
+                if (ausenteA !== ausenteB) {
+                    return ausenteA ? 1 : -1;
+                }
+                if (ausenteA && ausenteB) {
+                    return 0; // ordem entre ausentes não importa, eles não aparecem na fila normal
+                }
+
                 const diferenca = calcularPrioridadeEfetiva(a) - calcularPrioridadeEfetiva(b);
                 if (Math.abs(diferenca) > 0.0001) {
                     return diferenca;
@@ -2927,6 +2979,18 @@
             });
 
             desfazerSequenciasConsecutivas();
+        }
+
+        // Pedidos que participam da fila normal (visível/ordenada) — exclui quem
+        // está marcado como ausente (ver acaoMarcarAusente). Não depende de "fila"
+        // já estar ordenada.
+        function filaAtiva() {
+            return fila.filter(p => !p.ausenteDesde);
+        }
+
+        // Pedidos marcados como ausentes no momento (seção "Ausentes" do painel do DJ).
+        function filaAusentes() {
+            return fila.filter(p => p.ausenteDesde);
         }
 
         // --- Modo "semi-automático": chamar o próximo sozinho após finalizar ---
@@ -2946,9 +3010,12 @@
         // mostra a contagem regressiva e chama acaoProximo() sozinho ao final —
         // a menos que o DJ clique em "Cancelar" antes disso.
         function agendarChamadaAutomatica() {
-            if (!autoChamarProximoAtivo() || fila.length === 0) return;
+            // Usa a fila ATIVA — nunca chama sozinho quem está marcado como
+            // ausente (ver acaoMarcarAusente/filaAtiva).
+            const ativos = filaAtiva();
+            if (!autoChamarProximoAtivo() || ativos.length === 0) return;
 
-            const proximo = fila[0];
+            const proximo = ativos[0];
             const aviso = document.getElementById('admin-auto-proximo-aviso');
             const texto = document.getElementById('admin-auto-proximo-texto');
             if (!aviso || !texto) return;
@@ -3327,6 +3394,33 @@
             }).join('');
         }
 
+        // Seção "Ausentes" do painel do DJ — quem foi chamado e não apareceu (ver
+        // acaoMarcarAusente). Some sozinho quando a pessoa volta (acaoVoltouAusencia)
+        // ou quando passa de MINUTOS_MAX_AUSENTE (verificarTimeoutAusentes).
+        function renderizarAusentes() {
+            const card = document.getElementById('card-ausentes');
+            const lista = document.getElementById('lista-ausentes');
+            if (!card || !lista) return;
+
+            const ausentes = filaAusentes();
+            card.classList.toggle('hidden', ausentes.length === 0);
+            lista.innerHTML = ausentes.map(pedido => {
+                const minutosAusente = Math.floor((Date.now() - pedido.ausenteDesde) / 60000);
+                return `<li class="px-6 py-3 flex items-center justify-between gap-3">
+                    <div class="min-w-0">
+                        <div class="font-semibold text-gray-800 truncate">
+                            ${escaparHtml(pedido.nome)}
+                            ${pedido.mesa ? `<span class="text-xs text-gray-400 ml-1">(Mesa: ${escaparHtml(pedido.mesa)})</span>` : ''}
+                        </div>
+                        <div class="text-xs text-gray-400 truncate">${escaparHtml(pedido.musica)} — ausente há ${minutosAusente} min</div>
+                    </div>
+                    <button type="button" onclick="acaoVoltouAusencia(${pedido.id})" class="text-sm font-semibold text-green-700 border border-green-200 rounded-lg px-3 py-1.5 hover:bg-green-50 transition-colors whitespace-nowrap flex-shrink-0">
+                        <i class="fas fa-undo mr-1" aria-hidden="true"></i>Voltou
+                    </button>
+                </li>`;
+            }).join('');
+        }
+
         function acaoPular(id) {
             const index = fila.findIndex(p => p.id === id);
             if (index !== -1) {
@@ -3336,6 +3430,58 @@
                 ordenarFila();
                 salvarNoFirebase();
                 atualizarUI();
+            }
+        }
+
+        // Tempo máximo (minutos) que um pedido pode ficar ausente antes de ser
+        // tratado como abandono — ver verificarTimeoutAusentes().
+        const MINUTOS_MAX_AUSENTE = 60;
+
+        // O DJ chamou e a pessoa não apareceu (foi ao banheiro, fumar, pagar a
+        // conta...). Marca o pedido como ausente: ele some da fila
+        // visível/ordenada (ver ordenarFila/filaAtiva) mas continua existindo,
+        // pra não perder o lugar dela — ver acaoVoltouAusencia.
+        function acaoMarcarAusente(id) {
+            const index = fila.findIndex(p => p.id === id);
+            if (index !== -1) {
+                fila[index].ausenteDesde = Date.now();
+                ordenarFila();
+                salvarNoFirebase();
+                atualizarUI();
+            }
+        }
+
+        // A pessoa voltou. Soma o tempo que ela ficou ausente ao "relógio de
+        // espera" da fila (timestampFila) — é como se esse relógio tivesse
+        // pausado durante a ausência — e devolve o pedido pra fila normal.
+        // ordenarFila() já calcula sozinha a posição certa pra ele a partir
+        // daí (ver calcularPrioridadeEfetiva), sem fila paralela nem furar
+        // quem esperou certinho.
+        function acaoVoltouAusencia(id) {
+            const index = fila.findIndex(p => p.id === id);
+            if (index !== -1 && fila[index].ausenteDesde) {
+                const tempoAusenteMs = Date.now() - fila[index].ausenteDesde;
+                fila[index].timestampFila = (fila[index].timestampFila || fila[index].timestamp) + tempoAusenteMs;
+                fila[index].ausenteDesde = null;
+                ordenarFila();
+                salvarNoFirebase();
+                atualizarUI();
+            }
+        }
+
+        // Segurança contra ausentes esquecidos: passou de MINUTOS_MAX_AUSENTE,
+        // remove o pedido da fila automaticamente (mesmo tratamento de "abandono"
+        // que qualquer outra remoção) — só quem está autenticado como DJ grava
+        // isso no Firebase, senão qualquer celular de cliente aberto tentaria
+        // escrever em campos que as regras de segurança não liberam pra ele.
+        function verificarTimeoutAusentes() {
+            if (!isAdminAuthenticated()) return;
+
+            const agora = Date.now();
+            const restantes = fila.filter(p => !(p.ausenteDesde && (agora - p.ausenteDesde) > MINUTOS_MAX_AUSENTE * 60000));
+            if (restantes.length !== fila.length) {
+                fila = restantes;
+                salvarNoFirebase();
             }
         }
 
@@ -3388,6 +3534,11 @@
         // --- ATUALIZAÇÃO DA INTERFACE ---
 
         function atualizarUI() {
+            // Ausente esquecido por tempo demais: trata como abandono e remove da
+            // fila antes de mais nada (ver verificarTimeoutAusentes) — só o DJ
+            // autenticado grava isso.
+            verificarTimeoutAusentes();
+
             // Reordena a cada atualização de tela — é o que faz quem está esperando
             // subir na fila sozinho com o tempo, mesmo sem nenhuma ação nova acontecer
             // (novo pedido, voto, etc). Só reordena a lista local pra exibição — não
@@ -3460,15 +3611,19 @@
             if (filaHashAtual !== _ultimaFilaHash) {
                 _ultimaFilaHash = filaHashAtual;
 
+                // Só a fila ATIVA aparece na tabela/lista pública — quem está
+                // ausente (ver acaoMarcarAusente) tem sua própria seção abaixo.
+                const filaAtivos = filaAtiva();
+
                 const tabela = document.getElementById('tabela-fila');
                 const filaVazia = document.getElementById('fila-vazia');
                 tabela.innerHTML = '';
-                
-                if (fila.length === 0) {
+
+                if (filaAtivos.length === 0) {
                     filaVazia.classList.remove('hidden');
                 } else {
                     filaVazia.classList.add('hidden');
-                    fila.forEach((pedido, index) => {
+                    filaAtivos.forEach((pedido, index) => {
                         const tr = document.createElement('tr');
                         tr.className = "hover:bg-gray-50 transition-colors";
                         tr.innerHTML = `
@@ -3486,6 +3641,9 @@
                                 <button type="button" onclick="acaoProximo(${pedido.id})" class="text-green-600 hover:bg-green-50 p-2 rounded-full" title="Chamar Próximo">
                                     <i class="fas fa-play" aria-hidden="true"></i>
                                 </button>
+                                <button type="button" onclick="acaoMarcarAusente(${pedido.id})" class="text-yellow-600 hover:bg-yellow-50 p-2 rounded-full" title="Marcar Ausente">
+                                    <i class="fas fa-user-clock" aria-hidden="true"></i>
+                                </button>
                                 <button type="button" onclick="acaoPular(${pedido.id})" class="text-orange-500 hover:bg-orange-50 p-2 rounded-full" title="Pular Vez">
                                     <i class="fas fa-forward" aria-hidden="true"></i>
                                 </button>
@@ -3498,18 +3656,20 @@
                     });
                 }
 
+                renderizarAusentes();
+
                 // --- Atualizar aba "Próximos" para clientes (também só muda quando a fila muda) ---
                 const proximosList = document.getElementById('proximos-list');
                 const proximosVazio = document.getElementById('proximos-vazio');
                 if (proximosList) {
                     proximosList.innerHTML = '';
-                    if (fila.length === 0) {
+                    if (filaAtivos.length === 0) {
                         proximosVazio.classList.remove('hidden');
                     } else {
                         proximosVazio.classList.add('hidden');
-                        const limit = Math.min(10, fila.length);
+                        const limit = Math.min(10, filaAtivos.length);
                         for (let i = 0; i < limit; i++) {
-                            const p = fila[i];
+                            const p = filaAtivos[i];
                             const li = document.createElement('li');
                             li.className = 'p-4 flex justify-between items-center';
                             li.innerHTML = `
