@@ -743,22 +743,72 @@
             });
         }
 
+        // Cookie auxiliar do deviceId: first-party e funcional (não é rastreamento
+        // cross-site nem de terceiros), então não depende de banner de consentimento.
+        // Serve só de backup pro localStorage — ver obterOuCriarDeviceId() abaixo.
+        function lerCookie(nome) {
+            const alvo = nome + '=';
+            const partes = document.cookie.split(';');
+            for (let parte of partes) {
+                parte = parte.trim();
+                if (parte.startsWith(alvo)) {
+                    return decodeURIComponent(parte.slice(alvo.length));
+                }
+            }
+            return null;
+        }
+
+        function gravarCookie(nome, valor) {
+            const UM_ANO_EM_SEGUNDOS = 365 * 24 * 60 * 60;
+            document.cookie = `${nome}=${encodeURIComponent(valor)}; max-age=${UM_ANO_EM_SEGUNDOS}; path=/; SameSite=Lax`;
+        }
+
         function obterOuCriarDeviceId() {
             const CHAVE_DEVICE_ID = 'cantoke_device_id';
+
+            // Duas fontes independentes pro mesmo id: localStorage e cookie. Cada uma
+            // tem cenários em que sobrevive e o outro não (limpar "dados do site" às
+            // vezes some com um mas não o outro; aba anônima varia por navegador), então
+            // isso reduz — sem eliminar — o reset acidental de créditos/fila. Não é à
+            // prova de burla proposital: quem quer mesmo resetar limpa os dois.
+            let idStorage = null;
+            let idCookie = null;
+
             try {
-                let id = localStorage.getItem(CHAVE_DEVICE_ID);
-                if (!id) {
-                    id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : gerarUuidV4Fallback();
-                    localStorage.setItem(CHAVE_DEVICE_ID, id);
-                }
-                return id;
+                idStorage = localStorage.getItem(CHAVE_DEVICE_ID);
             } catch (e) {
-                // localStorage indisponível (ex: navegação privada bloqueando storage) —
-                // gera um id só pra essa carga de página; não persiste entre visitas,
-                // mas não impede o resto do app de funcionar
-                console.warn('⚠️ Não foi possível salvar o deviceId localmente:', e);
-                return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : gerarUuidV4Fallback();
+                console.warn('⚠️ Não foi possível ler o deviceId do localStorage:', e);
             }
+
+            try {
+                idCookie = lerCookie(CHAVE_DEVICE_ID);
+            } catch (e) {
+                console.warn('⚠️ Não foi possível ler o deviceId do cookie:', e);
+            }
+
+            let id = idStorage || idCookie;
+            if (!id) {
+                id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : gerarUuidV4Fallback();
+            }
+
+            // Sincroniza as duas fontes sempre que uma delas não bate com o id final
+            // (id novo, ou id que só existia numa das duas) — assim ficam sempre iguais.
+            if (idStorage !== id) {
+                try {
+                    localStorage.setItem(CHAVE_DEVICE_ID, id);
+                } catch (e) {
+                    console.warn('⚠️ Não foi possível salvar o deviceId no localStorage:', e);
+                }
+            }
+            if (idCookie !== id) {
+                try {
+                    gravarCookie(CHAVE_DEVICE_ID, id);
+                } catch (e) {
+                    console.warn('⚠️ Não foi possível salvar o deviceId no cookie:', e);
+                }
+            }
+
+            return id;
         }
 
         const DEVICE_ID = obterOuCriarDeviceId();
