@@ -1361,11 +1361,32 @@
             return Math.abs(hash) % 360;
         }
 
-        // Badge visual (só na tabela do DJ) com os últimos caracteres do deviceId do
-        // pedido, colorido de forma determinística — mesmo aparelho = mesma cor
-        // sempre, mesmo com nomes diferentes. Ajuda o DJ a notar rapidamente alguém
-        // revezando nomes ("Drica"/"Karine"/"Kah"...) pra furar o limite de créditos
-        // por dispositivo, sem precisar comparar o deviceId letra por letra.
+        // Emojis usados como "avatar" visual do dispositivo no badge (ver
+        // emojiDispositivo abaixo). Escolhidos pra serem bem distintos entre si num
+        // relance — objetos/animais/comida em vez de variações de smiley, que são
+        // fáceis de confundir de longe.
+        const EMOJIS_DISPOSITIVO = [
+            '🦁', '🐸', '🍕', '🚀', '🎸', '🌵', '🦋', '🍉', '🎲', '🐙',
+            '🐢', '🦉', '🍔', '⚽', '🎷', '🌈', '🦖', '🍩', '🎯', '🐳',
+            '🦊', '🐝', '🍎', '🎈', '🥁', '🌙', '🦈', '🍇', '🎃', '🐧',
+            '🦄', '🐌', '🍓', '⛄', '🎺', '🌻', '🦂', '🍒', '🎱', '🐊',
+        ];
+
+        // Escolhe um emoji fixo pro deviceId a partir do mesmo hash usado pra cor do
+        // badge (hashParaHue) — mesmo aparelho = mesmo emoji sempre, sem precisar de
+        // um segundo hash nem de guardar um mapa deviceId->emoji em lugar nenhum.
+        function emojiDispositivo(deviceId) {
+            const indice = hashParaHue(deviceId) % EMOJIS_DISPOSITIVO.length;
+            return EMOJIS_DISPOSITIVO[indice];
+        }
+
+        // Badge visual (só na tabela do DJ) com um emoji determinístico pro
+        // dispositivo do pedido, colorido de forma determinística — mesmo aparelho =
+        // mesmo emoji e mesma cor sempre, mesmo com nomes diferentes. Ajuda o DJ a
+        // notar rapidamente alguém revezando nomes ("Drica"/"Karine"/"Kah"...) pra
+        // furar o limite de créditos por dispositivo, sem precisar comparar o
+        // deviceId letra por letra. O deviceId completo fica no title do badge, pra
+        // o DJ conferir o valor exato passando o mouse por cima se precisar depurar.
         // Pedidos sem deviceId (formato legado, ver obterChaveIdentidade) não mostram nada.
         // Mostra também quantos créditos esse device já tem ativos na fila atual
         // (mesma contagem usada em podeAdicionarPedido) — em vermelho quando já bateu
@@ -1379,7 +1400,7 @@
 
         function badgeDispositivo(pedido, filaAtual) {
             if (!pedido.deviceId) return '';
-            const sufixo = pedido.deviceId.slice(-6);
+            const emoji = emojiDispositivo(pedido.deviceId);
             const hue = hashParaHue(pedido.deviceId);
             const estiloCor = `background-color: hsl(${hue}, 70%, 92%); color: hsl(${hue}, 65%, 30%); border: 1px solid hsl(${hue}, 60%, 75%);`;
             const creditos = pedidosAtivosDoDevice(filaAtual, pedido.deviceId).length;
@@ -1397,24 +1418,24 @@
                 : `<button type="button" onclick="acaoBloquearDispositivo('${deviceIdJs}')" class="ml-1 text-gray-400 hover:text-red-600" title="Bloquear este dispositivo pelo resto da noite">
                        <i class="fas fa-ban" aria-hidden="true"></i>
                    </button>`;
-            return `<span class="inline-block px-1.5 py-0.5 rounded ml-1 font-mono" style="${estiloCor}" title="Dispositivo (mesma cor = mesmo aparelho)">···${escaparHtml(sufixo)}</span>`
+            return `<span class="inline-block px-1.5 py-0.5 rounded ml-1" style="${estiloCor}" title="Dispositivo: ${escaparHtml(pedido.deviceId)} (mesmo emoji/cor = mesmo aparelho)">${emoji}</span>`
                  + `<span class="inline-block ml-1 font-mono" style="${estiloCreditos}" title="Créditos ativos deste dispositivo">${creditos}/${LIMITE_PEDIDOS_ATIVOS_POR_DEVICE}</span>`
                  + botaoBloqueio;
         }
 
         // Versão do badge acima pra lista "Já Cantadas" do DJ (#lista-historico):
-        // mesmo sufixo do deviceId e mesma cor por hash (hashParaHue), pra bater com
-        // a cor usada na tabela da fila — mas sem créditos nem botão de bloqueio, que
-        // não fazem sentido pra uma apresentação que já terminou. NUNCA usar isso na
-        // versão pro cliente (_historicoItensHtml) — é informação de moderação do DJ.
-        // Itens do histórico permanente de antes do sistema de deviceId não têm esse
-        // campo e não mostram badge nenhum.
+        // mesmo emoji e mesma cor por hash (hashParaHue/emojiDispositivo), pra bater
+        // com o badge usado na tabela da fila — mas sem créditos nem botão de
+        // bloqueio, que não fazem sentido pra uma apresentação que já terminou. NUNCA
+        // usar isso na versão pro cliente (_historicoItensHtml) — é informação de
+        // moderação do DJ. Itens do histórico permanente de antes do sistema de
+        // deviceId não têm esse campo e não mostram badge nenhum.
         function badgeDispositivoHistorico(item) {
             if (!item.deviceId) return '';
-            const sufixo = item.deviceId.slice(-6);
+            const emoji = emojiDispositivo(item.deviceId);
             const hue = hashParaHue(item.deviceId);
             const estiloCor = `background-color: hsl(${hue}, 70%, 92%); color: hsl(${hue}, 65%, 30%); border: 1px solid hsl(${hue}, 60%, 75%);`;
-            return `<span class="inline-block px-1.5 py-0.5 rounded ml-1 font-mono" style="${estiloCor}" title="Dispositivo (mesma cor = mesmo aparelho)">···${escaparHtml(sufixo)}</span>`;
+            return `<span class="inline-block px-1.5 py-0.5 rounded ml-1" style="${estiloCor}" title="Dispositivo: ${escaparHtml(item.deviceId)} (mesmo emoji/cor = mesmo aparelho)">${emoji}</span>`;
         }
 
         // --- VALIDAÇÃO DO FORMULÁRIO ---
