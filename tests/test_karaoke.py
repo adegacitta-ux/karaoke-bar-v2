@@ -545,6 +545,138 @@ def test_teto_de_espera_maxima_empate_por_ordem_de_chegada(browser, base_url):
     context.close()
 
 
+def test_marcar_ausente_remove_da_ordenacao_normal(browser, base_url):
+    """"Marcar Ausente" (quando o DJ chama e a pessoa não aparece) precisa
+    sumir da fila ativa/ordenada e da lista pública "Próximos" — mas sem
+    apagar o pedido de verdade: ele continua em "fila" e aparece na seção
+    "Ausentes" do painel do DJ, esperando o "Voltou"."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    preencher_pedido(page, "PessoaA", "MusicaA")
+    preencher_pedido(page, "PessoaB", "MusicaB")
+
+    id_a = page.evaluate("fila.find(p => p.nome === 'PessoaA').id")
+    page.evaluate(f"acaoMarcarAusente({id_a})")
+    page.wait_for_timeout(100)
+
+    ainda_existe_na_fila = page.evaluate("fila.some(p => p.nome === 'PessoaA')")
+    tem_ausente_desde = page.evaluate("fila.find(p => p.nome === 'PessoaA').ausenteDesde !== null")
+    fora_da_fila_ativa = page.evaluate("!filaAtiva().some(p => p.nome === 'PessoaA')")
+    tabela_dj_sem_ausente = page.evaluate("!document.getElementById('tabela-fila').innerText.includes('PessoaA')")
+    lista_publica_sem_ausente = page.evaluate("!document.getElementById('proximos-list').innerText.includes('PessoaA')")
+    secao_ausentes_visivel = page.evaluate("!document.getElementById('card-ausentes').classList.contains('hidden')")
+    secao_ausentes_lista_o_pedido = page.evaluate("document.getElementById('lista-ausentes').innerText.includes('PessoaA')")
+
+    ok = (ainda_existe_na_fila and tem_ausente_desde and fora_da_fila_ativa
+          and tabela_dj_sem_ausente and lista_publica_sem_ausente
+          and secao_ausentes_visivel and secao_ausentes_lista_o_pedido and not erros)
+    registrar("Marcar Ausente some da fila ativa sem apagar o pedido", ok,
+               f"ainda_existe_na_fila={ainda_existe_na_fila}, tem_ausente_desde={tem_ausente_desde}, "
+               f"fora_da_fila_ativa={fora_da_fila_ativa}, tabela_dj_sem_ausente={tabela_dj_sem_ausente}, "
+               f"lista_publica_sem_ausente={lista_publica_sem_ausente}, secao_ausentes_visivel={secao_ausentes_visivel}, "
+               f"secao_ausentes_lista_o_pedido={secao_ausentes_lista_o_pedido}")
+    context.close()
+
+
+def test_voltar_recalcula_timestampfila_preservando_posicao_relativa(browser, base_url):
+    """"Voltou" precisa somar o tempo que a pessoa ficou ausente ao
+    timestampFila (como se o relógio de espera tivesse pausado durante a
+    ausência) — a prioridade dela relativa a quem NUNCA ficou ausente deve
+    ficar exatamente igual à de antes de ausentar, sem furar nem perder
+    lugar."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    preencher_pedido(page, "PessoaA", "MusicaA")
+    id_a = page.evaluate("fila.find(p => p.nome === 'PessoaA').id")
+
+    minutos_credito_antes = 3   # quanto PessoaA já tinha esperado antes de ausentar
+    minutos_ausente = 12        # quanto tempo ela ficou ausente
+    minutos_credito_pessoa_b = 5  # referência fixa, nunca ausente, pra comparar a posição relativa
+
+    # PessoaB é de outro dispositivo (senão a identidade seria a mesma de
+    # PessoaA — ver obterChaveIdentidade) e serve só de referência estável:
+    # o teste nunca mais mexe no timestampFila dela depois disso.
+    page.evaluate(f"""
+        fila.push({{
+            id: 999001, nome: 'PessoaB', mesa: null, musica: 'MusicaB', artista: 'X',
+            deviceId: 'device-pessoab-outro-aparelho',
+            timestamp: Date.now(), timestampFila: Date.now() - {minutos_credito_pessoa_b} * 60 * 1000,
+            vezesCantadas: 0, youtubeUrl: null, ausenteDesde: null
+        }});
+        // PessoaA já tinha {minutos_credito_antes} min de espera acumulada
+        // antes de ser marcada ausente.
+        fila.find(p => p.id === {id_a}).timestampFila = Date.now() - {minutos_credito_antes} * 60 * 1000;
+        ordenarFila();
+        atualizarUI();
+    """)
+    ordem_antes = page.evaluate("fila.map(p => p.nome)")
+
+    page.evaluate(f"acaoMarcarAusente({id_a})")
+    # Simula os {minutos_ausente} minutos de ausência reescrevendo
+    # "ausenteDesde" pro passado — mesma técnica usada nos outros testes pra
+    # simular espera sem precisar esperar de verdade.
+    page.evaluate(f"""
+        fila.find(p => p.id === {id_a}).ausenteDesde = Date.now() - {minutos_ausente} * 60 * 1000;
+    """)
+
+    timestampfila_antes = page.evaluate(f"fila.find(p => p.id === {id_a}).timestampFila")
+    page.evaluate(f"acaoVoltouAusencia({id_a})")
+
+    pedido_a_depois = page.evaluate(f"fila.find(p => p.id === {id_a})")
+    timestampfila_depois = pedido_a_depois["timestampFila"]
+    ausente_desde_depois = pedido_a_depois["ausenteDesde"]
+
+    diferenca_minutos = (timestampfila_depois - timestampfila_antes) / 60000
+    tempo_somado_corretamente = abs(diferenca_minutos - minutos_ausente) < 0.2
+
+    ordem_depois = page.evaluate("fila.map(p => p.nome)")
+
+    ok = (ausente_desde_depois is None and tempo_somado_corretamente
+          and ordem_antes == ["PessoaB", "PessoaA"] and ordem_depois == ordem_antes and not erros)
+    registrar("Voltou soma o tempo ausente ao timestampFila e preserva a posição relativa", ok,
+               f"diferenca_minutos={diferenca_minutos:.2f} (esperado {minutos_ausente}), "
+               f"ordem_antes={ordem_antes}, ordem_depois={ordem_depois}")
+    context.close()
+
+
+def test_timeout_ausente_remove_automaticamente(browser, base_url):
+    """Segurança contra ausentes esquecidos pra sempre: passado
+    MINUTOS_MAX_AUSENTE, o pedido é tratado como abandono e removido da fila
+    sozinho (ver verificarTimeoutAusentes) — só quando o DJ está autenticado,
+    já que é quem tem permissão de gravar essa remoção no Firebase."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    preencher_pedido(page, "PessoaA", "MusicaA")
+    id_a = page.evaluate("fila.find(p => p.nome === 'PessoaA').id")
+    page.evaluate(f"acaoMarcarAusente({id_a})")
+
+    limite_minutos = page.evaluate("MINUTOS_MAX_AUSENTE")
+    minutos_alem_do_limite = limite_minutos + 5
+    page.evaluate(f"""
+        fila.find(p => p.id === {id_a}).ausenteDesde = Date.now() - {minutos_alem_do_limite} * 60 * 1000;
+    """)
+
+    # Sem estar autenticado como DJ, o timeout não deve gravar a remoção
+    # (ver verificarTimeoutAusentes/isAdminAuthenticated).
+    page.evaluate("atualizarUI()")
+    ainda_la_sem_login = page.evaluate(f"fila.some(p => p.id === {id_a})")
+
+    # Autentica como DJ — mesma checagem que o app usa de verdade
+    # (ver isAdminAuthenticated).
+    page.evaluate("""
+        ADMIN_EMAIL = 'dj-teste@example.com';
+        usuarioAtual = { isAnonymous: false, email: ADMIN_EMAIL };
+    """)
+    page.evaluate("atualizarUI()")
+    page.wait_for_timeout(100)
+    removido_apos_login = page.evaluate(f"!fila.some(p => p.id === {id_a})")
+
+    ok = ainda_la_sem_login and removido_apos_login and not erros
+    registrar("Ausente por mais de MINUTOS_MAX_AUSENTE é removido automaticamente da fila", ok,
+               f"ainda_la_sem_login={ainda_la_sem_login}, removido_apos_login={removido_apos_login}")
+    context.close()
+
+
 def test_deviceid_impede_burlar_cooldown_trocando_nome(browser, base_url):
     """Anti-fraude (deviceId): antes, "vezesCantadas" era agrupado por nome+mesa
     digitados — bastava digitar um nome diferente pra "resetar" a prioridade de
@@ -1845,6 +1977,9 @@ def main():
             test_fila_nao_fura_prioridade_pra_desfazer_sequencia(browser, base_url)
             test_teto_de_espera_maxima_fura_mesmo_com_vezes_cantadas_alto(browser, base_url)
             test_teto_de_espera_maxima_empate_por_ordem_de_chegada(browser, base_url)
+            test_marcar_ausente_remove_da_ordenacao_normal(browser, base_url)
+            test_voltar_recalcula_timestampfila_preservando_posicao_relativa(browser, base_url)
+            test_timeout_ausente_remove_automaticamente(browser, base_url)
             test_deviceid_impede_burlar_cooldown_trocando_nome(browser, base_url)
             test_modo_semi_automatico_chama_proximo_sozinho(browser, base_url)
             test_modo_semi_automatico_desligado_nao_chama_sozinho(browser, base_url)
