@@ -918,6 +918,90 @@ def test_modo_escuro_alterna_e_persiste(browser, base_url):
     context.close()
 
 
+def test_toggle_anuncio_voz_liga_desliga_e_persiste(browser, base_url):
+    """O toggle "Anunciar por voz" do painel do DJ é uma preferência só desse
+    aparelho: default desligado, liga/desliga o checkbox, e continua valendo
+    depois de recarregar a página (localStorage, igual ao modo escuro)."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    default_desligado = (not page.evaluate("anuncioVozAtivo()")
+                          and not page.evaluate("document.getElementById('chk-anuncio-voz').checked"))
+
+    page.evaluate("""
+        document.getElementById('chk-anuncio-voz').checked = true;
+        alternarAnuncioVoz();
+    """)
+    ligou = page.evaluate("anuncioVozAtivo()")
+
+    page.reload()
+    page.wait_for_timeout(300)
+    persistiu_estado = page.evaluate("anuncioVozAtivo()")
+    persistiu_checkbox = page.evaluate("document.getElementById('chk-anuncio-voz').checked")
+
+    page.evaluate("""
+        document.getElementById('chk-anuncio-voz').checked = false;
+        alternarAnuncioVoz();
+    """)
+    desligou_de_novo = not page.evaluate("anuncioVozAtivo()")
+
+    ok = (default_desligado and ligou and persistiu_estado and persistiu_checkbox
+          and desligou_de_novo and not erros)
+    registrar("Toggle de anúncio por voz liga/desliga e persiste em localStorage", ok,
+               f"default_desligado={default_desligado}, ligou={ligou}, "
+               f"persistiu_estado={persistiu_estado}, persistiu_checkbox={persistiu_checkbox}, "
+               f"desligou_de_novo={desligou_de_novo}")
+    context.close()
+
+
+def test_acao_proximo_com_anuncio_de_voz_ligado_nao_quebra(browser, base_url):
+    """Chamar o próximo (acaoProximo) com o toggle de anúncio por voz ligado não
+    pode travar nem atrasar o fluxo normal (a fala é "dispara e esquece"), e
+    precisa continuar funcionando normalmente mesmo em navegador sem suporte a
+    speechSynthesis."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    preencher_pedido(page, "Fulano", "MusicaTeste", mesa="7")
+    page.evaluate("""
+        document.getElementById('chk-anuncio-voz').checked = true;
+        alternarAnuncioVoz();
+    """)
+
+    suportado = page.evaluate("'speechSynthesis' in window")
+
+    id_pedido = page.evaluate("fila[0].id")
+    page.evaluate(f"acaoProximo({id_pedido})")
+    page.wait_for_timeout(100)
+
+    apresentacao_iniciou = page.evaluate("apresentacaoAtual && apresentacaoAtual.nome === 'Fulano'")
+    fila_esvaziou = page.evaluate("fila.length === 0")
+
+    # Simula um navegador sem suporte: a função tem que sair sem erro, sem alert
+    disparou_alert = {"sim": False}
+    page.on("dialog", lambda dialog: (disparou_alert.__setitem__("sim", True), dialog.dismiss()))
+    sem_suporte_nao_quebra = page.evaluate("""
+        () => {
+            const original = window.speechSynthesis;
+            try {
+                Object.defineProperty(window, 'speechSynthesis', { value: undefined, configurable: true });
+                anunciarProximoPorVoz({ nome: 'Ciclano', mesa: '3' });
+                return true;
+            } catch (e) {
+                return false;
+            } finally {
+                Object.defineProperty(window, 'speechSynthesis', { value: original, configurable: true });
+            }
+        }
+    """)
+
+    ok = (apresentacao_iniciou and fila_esvaziou and sem_suporte_nao_quebra
+          and not disparou_alert["sim"] and not erros)
+    registrar("acaoProximo() com anúncio por voz ligado não quebra o fluxo", ok,
+               f"suportado_neste_navegador={suportado}, apresentacao_iniciou={apresentacao_iniciou}, "
+               f"fila_esvaziou={fila_esvaziou}, sem_suporte_nao_quebra={sem_suporte_nao_quebra}, "
+               f"disparou_alert={disparou_alert['sim']}")
+    context.close()
+
+
 def test_protecao_contra_xss(browser, base_url):
     """Nome, música e mesa digitados pelo cliente entram em vários lugares via
     innerHTML (fila do DJ, próximos, já cantadas) — sem escapar, alguém poderia
@@ -1663,6 +1747,8 @@ def main():
             test_aviso_iphone_aparece_so_no_iphone(browser, base_url)
             test_aviso_de_conexao_perdida_existe(browser, base_url)
             test_modo_escuro_alterna_e_persiste(browser, base_url)
+            test_toggle_anuncio_voz_liga_desliga_e_persiste(browser, base_url)
+            test_acao_proximo_com_anuncio_de_voz_ligado_nao_quebra(browser, base_url)
             test_protecao_contra_xss(browser, base_url)
             test_listeners_separados_por_pedaco(browser, base_url)
             test_historico_completo_sob_demanda(browser, base_url)

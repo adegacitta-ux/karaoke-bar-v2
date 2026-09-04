@@ -387,6 +387,15 @@
                                     <i class="fas fa-lock" aria-hidden="true"></i> <span>Fechar Fila Manualmente</span>
                                 </button>
                             </div>
+                            <div class="flex items-center justify-between gap-2 pt-2 border-t border-gray-100">
+                                <label for="chk-anuncio-voz" class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                    <input type="checkbox" id="chk-anuncio-voz" onchange="alternarAnuncioVoz()" class="w-4 h-4">
+                                    <i class="fas fa-volume-up" aria-hidden="true"></i> Anunciar por voz
+                                </label>
+                                <button type="button" onclick="testarAnuncioVoz()" class="text-xs font-semibold text-indigo-600 border border-indigo-200 rounded-lg px-3 py-1.5 hover:bg-indigo-50 transition-colors whitespace-nowrap">
+                                    Testar voz
+                                </button>
+                            </div>
                             <div>
                                 <button type="button" onclick="window.open('display.html?bar=' + encodeURIComponent(BAR_ID), '_blank')" class="w-full py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 bg-gradient-custom text-white hover:opacity-90">
                                     <i class="fas fa-tv" aria-hidden="true"></i> <span>Abrir Telão</span>
@@ -2779,6 +2788,52 @@
         }
 
         // Ações do DJ
+        // --- ANÚNCIO POR VOZ (Web Speech API) ---
+        // Preferência só desse aparelho (localStorage), default desligado. Tudo aqui é
+        // "dispara e esquece": nunca usa await nem bloqueia a UI esperando a fala terminar,
+        // e se o navegador não suportar speechSynthesis simplesmente não faz nada.
+        function anuncioVozAtivo() {
+            try {
+                return localStorage.getItem(chaveLocal('anuncio_voz')) === '1';
+            } catch (e) {
+                return false;
+            }
+        }
+
+        function alternarAnuncioVoz() {
+            const checkbox = document.getElementById('chk-anuncio-voz');
+            try {
+                localStorage.setItem(chaveLocal('anuncio_voz'), checkbox.checked ? '1' : '0');
+            } catch (e) {
+                console.warn('⚠️ Não foi possível lembrar a preferência de anúncio por voz:', e);
+            }
+        }
+
+        function iniciarAnuncioVoz() {
+            const checkbox = document.getElementById('chk-anuncio-voz');
+            if (checkbox) checkbox.checked = anuncioVozAtivo();
+        }
+
+        function falarPorVoz(texto) {
+            if (!('speechSynthesis' in window)) return; // navegador sem suporte -> não faz nada
+            try {
+                const utterance = new SpeechSynthesisUtterance(texto);
+                utterance.lang = 'pt-BR';
+                window.speechSynthesis.speak(utterance);
+            } catch (e) {
+                console.warn('⚠️ Não foi possível anunciar por voz:', e);
+            }
+        }
+
+        function anunciarProximoPorVoz(pedido) {
+            const frase = `${pedido.nome}${pedido.mesa ? ', mesa ' + pedido.mesa : ''}, sua vez de cantar!`;
+            falarPorVoz(frase);
+        }
+
+        function testarAnuncioVoz() {
+            falarPorVoz('Teste de anúncio, mesa 1');
+        }
+
         function acaoProximo(id) {
             if (apresentacaoAtual) {
                 alert('Já existe uma apresentação em andamento. Finalize-a antes de chamar o próximo.');
@@ -2813,6 +2868,8 @@
                 ordenarFila();
                 salvarNoFirebase();
                 atualizarUI();
+
+                if (anuncioVozAtivo()) anunciarProximoPorVoz(pedido);
             }
         }
 
@@ -3352,6 +3409,7 @@
         window.addEventListener('load', () => {
             iniciarModoEscuro(); // independe de ter bar ou não — já deixa a tela no tom certo
             iniciarIdioma(); // idem — já aplica a preferência de idioma do cliente
+            iniciarAnuncioVoz(); // idem — já reflete a preferência de anúncio por voz salva
             if (!BAR_ID) {
                 mostrarErroSemBar();
                 return; // não continua tentando mexer em elementos que acabaram de sumir
