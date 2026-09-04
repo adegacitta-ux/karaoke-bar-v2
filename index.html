@@ -2684,6 +2684,47 @@
             return pedido.vezesCantadas - (minutosEsperando / MINUTOS_PARA_PERDOAR_UMA_VEZ_CANTADA);
         }
 
+        // Diferença máxima de calcularPrioridadeEfetiva que a passada
+        // anti-sequência (ver desfazerSequenciasConsecutivas) aceita pra trazer
+        // o pedido de outra pessoa pra frente. Mantido pequeno (~1, equivalente a
+        // uns 25min de espera perdoados) de propósito: só desfaz a sequência
+        // quando as prioridades já estavam bem próximas, nunca furando a fila de
+        // alguém com prioridade bem pior só pra evitar dois pedidos seguidos da
+        // mesma pessoa.
+        const LIMITE_TROCA_ANTI_SEQUENCIA = 1;
+
+        // Depois de fila.sort() por prioridade, dois pedidos da MESMA pessoa
+        // (mesmo obterChaveIdentidade) podem acabar consecutivos no topo — ex:
+        // ela pediu 2 músicas e vezesCantadas está baixo. Isso fura quem já
+        // estava esperando, então trazemos pra frente o próximo pedido de OUTRA
+        // pessoa que esteja logo depois na lista, desde que a diferença de
+        // prioridade entre os dois seja pequena (LIMITE_TROCA_ANTI_SEQUENCIA).
+        // Se todos os pedidos restantes forem da mesma pessoa, não tem outra
+        // pessoa pra trazer pra frente — a sequência é mantida (não dá pra evitar).
+        function desfazerSequenciasConsecutivas() {
+            for (let i = 1; i < fila.length; i++) {
+                if (obterChaveIdentidade(fila[i]) !== obterChaveIdentidade(fila[i - 1])) {
+                    continue;
+                }
+
+                let j = i + 1;
+                while (j < fila.length && obterChaveIdentidade(fila[j]) === obterChaveIdentidade(fila[i])) {
+                    j++;
+                }
+                if (j >= fila.length) {
+                    break; // só sobrou pedido da mesma pessoa: mantém a sequência
+                }
+
+                const diferenca = calcularPrioridadeEfetiva(fila[j]) - calcularPrioridadeEfetiva(fila[i]);
+                if (diferenca > LIMITE_TROCA_ANTI_SEQUENCIA) {
+                    continue; // prioridade bem pior: não vale furar fila só pra desfazer a sequência
+                }
+
+                const [trocado] = fila.splice(j, 1);
+                fila.splice(i, 0, trocado);
+            }
+        }
+
         function ordenarFila() {
             // Regra: menos vezes cantadas primeiro — mas o "peso" de já ter cantado
             // vai diminuindo com o tempo de espera (ver calcularPrioridadeEfetiva).
@@ -2695,6 +2736,8 @@
                 }
                 return (a.timestampFila || a.timestamp) - (b.timestampFila || b.timestamp);
             });
+
+            desfazerSequenciasConsecutivas();
         }
 
         // Ações do DJ

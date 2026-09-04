@@ -373,6 +373,99 @@ def test_espera_longa_faz_pessoa_furar_a_fila(browser, base_url):
     context.close()
 
 
+def test_fila_evita_pedidos_consecutivos_da_mesma_pessoa(browser, base_url):
+    """Regra anti-sequência: dois pedidos da MESMA pessoa (mesmo deviceId) não
+    devem ficar colados um atrás do outro no topo da fila, furando quem já
+    está esperando — mesmo que a prioridade "bruta" colocasse os dois juntos.
+    ordenarFila() deve trazer pra frente o próximo pedido de outra pessoa,
+    já que a diferença de prioridade entre os dois é pequena aqui."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    agora = page.evaluate("Date.now()")
+    page.evaluate(f"""
+        fila = [
+            {{id: 1, nome: 'PessoaA', mesa: null, musica: 'MusicaA1', artista: 'X',
+              deviceId: 'device-a', timestamp: {agora}, timestampFila: {agora},
+              vezesCantadas: 0, youtubeUrl: null}},
+            {{id: 2, nome: 'PessoaA', mesa: null, musica: 'MusicaA2', artista: 'X',
+              deviceId: 'device-a', timestamp: {agora + 1000}, timestampFila: {agora + 1000},
+              vezesCantadas: 0, youtubeUrl: null}},
+            {{id: 3, nome: 'PessoaB', mesa: null, musica: 'MusicaB1', artista: 'X',
+              deviceId: 'device-b', timestamp: {agora + 2000}, timestampFila: {agora + 2000},
+              vezesCantadas: 0, youtubeUrl: null}}
+        ];
+        ordenarFila();
+        atualizarUI();
+    """)
+
+    ids_ordem = page.evaluate("fila.map(p => p.id)")
+    ok = ids_ordem == [1, 3, 2] and not erros
+    registrar("Pedidos consecutivos da mesma pessoa são separados pelo próximo pedido de outra pessoa", ok,
+               f"ids_ordem={ids_ordem}")
+    context.close()
+
+
+def test_fila_mantem_sequencia_quando_so_sobra_a_mesma_pessoa(browser, base_url):
+    """Se TODOS os pedidos restantes na fila são da mesma pessoa, não tem outra
+    pessoa pra trazer pra frente — a sequência é mantida (não dá pra evitar)."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    agora = page.evaluate("Date.now()")
+    page.evaluate(f"""
+        fila = [
+            {{id: 1, nome: 'PessoaA', mesa: null, musica: 'MusicaA1', artista: 'X',
+              deviceId: 'device-a', timestamp: {agora}, timestampFila: {agora},
+              vezesCantadas: 0, youtubeUrl: null}},
+            {{id: 2, nome: 'PessoaA', mesa: null, musica: 'MusicaA2', artista: 'X',
+              deviceId: 'device-a', timestamp: {agora + 1000}, timestampFila: {agora + 1000},
+              vezesCantadas: 0, youtubeUrl: null}},
+            {{id: 3, nome: 'PessoaA', mesa: null, musica: 'MusicaA3', artista: 'X',
+              deviceId: 'device-a', timestamp: {agora + 2000}, timestampFila: {agora + 2000},
+              vezesCantadas: 0, youtubeUrl: null}}
+        ];
+        ordenarFila();
+        atualizarUI();
+    """)
+
+    ids_ordem = page.evaluate("fila.map(p => p.id)")
+    ok = ids_ordem == [1, 2, 3] and not erros
+    registrar("Fila com pedidos só da mesma pessoa mantém a sequência (não tem como evitar)", ok,
+               f"ids_ordem={ids_ordem}")
+    context.close()
+
+
+def test_fila_nao_fura_prioridade_pra_desfazer_sequencia(browser, base_url):
+    """A troca anti-sequência só deve acontecer se a diferença de prioridade
+    entre os dois pedidos envolvidos for pequena (LIMITE_TROCA_ANTI_SEQUENCIA)
+    — não vale furar a frente de alguém com prioridade bem pior só pra separar
+    os pedidos consecutivos da mesma pessoa."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    limite = page.evaluate("LIMITE_TROCA_ANTI_SEQUENCIA")
+    agora = page.evaluate("Date.now()")
+    page.evaluate(f"""
+        fila = [
+            {{id: 1, nome: 'PessoaA', mesa: null, musica: 'MusicaA1', artista: 'X',
+              deviceId: 'device-a', timestamp: {agora}, timestampFila: {agora},
+              vezesCantadas: 0, youtubeUrl: null}},
+            {{id: 2, nome: 'PessoaA', mesa: null, musica: 'MusicaA2', artista: 'X',
+              deviceId: 'device-a', timestamp: {agora}, timestampFila: {agora},
+              vezesCantadas: 0, youtubeUrl: null}},
+            {{id: 3, nome: 'PessoaB', mesa: null, musica: 'MusicaB1', artista: 'X',
+              deviceId: 'device-b', timestamp: {agora}, timestampFila: {agora},
+              vezesCantadas: {limite + 5}, youtubeUrl: null}}
+        ];
+        ordenarFila();
+        atualizarUI();
+    """)
+
+    ids_ordem = page.evaluate("fila.map(p => p.id)")
+    ok = ids_ordem == [1, 2, 3] and not erros
+    registrar("Troca anti-sequência não fura fila de quem tem prioridade bem pior", ok,
+               f"ids_ordem={ids_ordem}, limite={limite}")
+    context.close()
+
+
 def test_teto_de_espera_maxima_fura_mesmo_com_vezes_cantadas_alto(browser, base_url):
     """O desconto de calcularPrioridadeEfetiva é linear e na mesma taxa pra
     todo mundo — então a DIFERENÇA de prioridade entre dois pedidos que já
@@ -1552,6 +1645,9 @@ def main():
             test_youtube_preenche_musica_e_libera_artista(browser, base_url)
             test_media_de_avaliacoes(browser, base_url)
             test_espera_longa_faz_pessoa_furar_a_fila(browser, base_url)
+            test_fila_evita_pedidos_consecutivos_da_mesma_pessoa(browser, base_url)
+            test_fila_mantem_sequencia_quando_so_sobra_a_mesma_pessoa(browser, base_url)
+            test_fila_nao_fura_prioridade_pra_desfazer_sequencia(browser, base_url)
             test_teto_de_espera_maxima_fura_mesmo_com_vezes_cantadas_alto(browser, base_url)
             test_teto_de_espera_maxima_empate_por_ordem_de_chegada(browser, base_url)
             test_deviceid_impede_burlar_cooldown_trocando_nome(browser, base_url)
