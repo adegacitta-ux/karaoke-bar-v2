@@ -29,6 +29,12 @@
             }
           },
 
+          "dispositivosBloqueados": {
+            "$deviceId": {
+              ".validate": "newData.isBoolean()"
+            }
+          },
+
           "apresentacaoAtual": {
             "avaliacoes": {
               "$votanteId": {
