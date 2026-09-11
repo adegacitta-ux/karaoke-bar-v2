@@ -931,6 +931,16 @@
             });
         }
 
+        // Escapa texto de qualquer campo digitado por usuário (nome, música, artista,
+        // mesa, etc.) antes de colocar dentro de innerHTML. Sem isso, alguém poderia
+        // digitar algo como <img src=x onerror=alert(1)> no campo "Nome" e esse código
+        // rodaria na tela pública do telão (XSS).
+        function escaparHtml(texto) {
+            const div = document.createElement('div');
+            div.textContent = (texto === null || texto === undefined) ? '' : String(texto);
+            return div.innerHTML;
+        }
+
         // Preenche a lista "A Seguir" com os próximos da fila (a partir do índice 'partirDe'),
         // mostrando até 4 nomes
         function popularMiniFila(fila, partirDe) {
@@ -949,8 +959,8 @@
                     <div style="display:flex;align-items:center;">
                         <span class="mini-fila-posicao">${i + 1}</span>
                         <div>
-                            <div class="mini-fila-nome">${p.nome}</div>
-                            <div class="mini-fila-musica">${p.musica} — ${p.artista}</div>
+                            <div class="mini-fila-nome">${escaparHtml(p.nome)}</div>
+                            <div class="mini-fila-musica">${escaparHtml(p.musica)} — ${escaparHtml(p.artista)}</div>
                         </div>
                     </div>
                 </div>
