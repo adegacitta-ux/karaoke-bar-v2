@@ -1114,6 +1114,93 @@ def test_modo_semi_automatico_desligado_nao_chama_sozinho(browser, base_url):
     context.close()
 
 
+def test_chamada_automatica_usa_topo_atual_da_fila_no_disparo(browser, base_url):
+    """PR B: a contagem regressiva do modo semi-automático leva
+    SEGUNDOS_AUTO_CHAMAR_PROXIMO segundos, e a fila pode mudar nesse meio-tempo
+    (ex: alguém furar a fila por MINUTOS_ESPERA_MAXIMA). A AÇÃO final
+    (acaoProximo) precisa reconferir o topo da fila ATIVA no momento exato em
+    que dispara — não usar quem era o topo quando a contagem começou."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    page.evaluate("localStorage.setItem(chaveLocal('auto_chamar_proximo'), '1')")
+
+    # Monta a fila direto (mais controle que o formulário) com 'CapturadoNoInicio'
+    # no topo e inicia a contagem regressiva.
+    page.evaluate("""
+        fila = [
+            { id: 501, nome: 'CapturadoNoInicio', mesa: null, musica: 'M1', artista: 'X',
+              deviceId: 'device-1', timestamp: Date.now(), timestampFila: Date.now(),
+              vezesCantadas: 0, youtubeUrl: null },
+            { id: 502, nome: 'NovoTopoDepois', mesa: null, musica: 'M2', artista: 'X',
+              deviceId: 'device-2', timestamp: Date.now(), timestampFila: Date.now(),
+              vezesCantadas: 0, youtubeUrl: null }
+        ];
+        ordenarFila();
+        apresentacaoAtual = null;
+        agendarChamadaAutomatica();
+    """)
+
+    texto_inicial = page.evaluate("document.getElementById('admin-auto-proximo-texto').innerText")
+
+    # Intercepta acaoProximo pra registrar com qual id ela é chamada, e simula a
+    # fila mudando ANTES da contagem terminar: quem estava no topo ('id 501') sai
+    # (furada por outra pessoa, ou até removida) e o segundo pedido vira o novo
+    # topo. O texto na tela pode continuar citando o nome antigo — só a chamada
+    # final importa.
+    page.evaluate("""
+        window.__acaoProximoChamadoCom = 'nao chamado';
+        window.acaoProximo = function(id) { window.__acaoProximoChamadoCom = id; };
+        fila = fila.filter(p => p.id !== 501);
+    """)
+
+    segundos = page.evaluate("SEGUNDOS_AUTO_CHAMAR_PROXIMO")
+    page.wait_for_timeout(segundos * 1000 + 500)
+
+    chamado_com = page.evaluate("window.__acaoProximoChamadoCom")
+
+    ok = ("CapturadoNoInicio" in texto_inicial and chamado_com == 502 and not erros)
+    registrar("Chamada automática reconfere o topo da fila no momento do disparo, não no início da contagem", ok,
+               f"texto_inicial={texto_inicial!r}, chamado_com={chamado_com} (esperado 502, o NOVO topo)")
+    context.close()
+
+
+def test_chamada_automatica_fila_vazia_no_disparo_nao_chama_ninguem(browser, base_url):
+    """PR B: se a fila ficar vazia durante a contagem (ex: a própria pessoa
+    cancela o pedido), a chamada automática deve sair silenciosamente ao
+    disparar — nunca chamar acaoProximo com um id inválido."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    page.evaluate("localStorage.setItem(chaveLocal('auto_chamar_proximo'), '1')")
+
+    page.evaluate("""
+        fila = [
+            { id: 601, nome: 'UnicaPessoaNaFila', mesa: null, musica: 'M1', artista: 'X',
+              deviceId: 'device-1', timestamp: Date.now(), timestampFila: Date.now(),
+              vezesCantadas: 0, youtubeUrl: null }
+        ];
+        ordenarFila();
+        apresentacaoAtual = null;
+        agendarChamadaAutomatica();
+    """)
+
+    # Antes da contagem terminar, a única pessoa na fila cancela o próprio pedido.
+    page.evaluate("""
+        window.__acaoProximoChamadoCom = 'nao chamado';
+        window.acaoProximo = function(id) { window.__acaoProximoChamadoCom = id; };
+        acaoRemover(601);
+    """)
+
+    segundos = page.evaluate("SEGUNDOS_AUTO_CHAMAR_PROXIMO")
+    page.wait_for_timeout(segundos * 1000 + 500)
+
+    chamado_com = page.evaluate("window.__acaoProximoChamadoCom")
+
+    ok = (chamado_com == "nao chamado" and not erros)
+    registrar("Fila vazia no momento do disparo não chama acaoProximo com id inválido", ok,
+               f"chamado_com={chamado_com} (esperado 'nao chamado')")
+    context.close()
+
+
 def test_dois_pedidos_simultaneos_nao_se_perdem(browser, base_url):
     """Regra crítica: reproduz o bug relatado de nomes "sumindo e reaparecendo".
     Causa era uma corrida de gravação — dois pedidos quase ao mesmo tempo podiam

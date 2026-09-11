@@ -3127,7 +3127,18 @@
                 autoChamarProximoTimeoutId = null;
                 cancelarChamadaAutomatica();
                 if (!apresentacaoAtual) {
-                    acaoProximo(proximo.id);
+                    // Reconfere o topo da fila ATIVA agora, no momento exato em que
+                    // a ação dispara — NÃO usa a variável `proximo` capturada lá em
+                    // cima, porque a fila pode ter mudado durante os segundos da
+                    // contagem (ex: alguém furou por MINUTOS_ESPERA_MAXIMA). O texto
+                    // da contagem na tela pode continuar mostrando o nome antigo sem
+                    // problema — só a ação final que chama precisa estar atualizada.
+                    const topoAtual = filaAtiva()[0];
+                    // Fila vazia agora (a própria pessoa cancelou o pedido durante a
+                    // contagem, por exemplo) — não chama acaoProximo com id inválido.
+                    if (topoAtual) {
+                        acaoProximo(topoAtual.id);
+                    }
                 }
             }, SEGUNDOS_AUTO_CHAMAR_PROXIMO * 1000);
         }
