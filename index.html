@@ -3651,8 +3651,11 @@
 
         // --- CÁLCULOS DE TEMPO E BLOQUEIO ---
 
+        // Usa a fila ATIVA — ausentes não contam como tempo de espera real, senão
+        // a fila pode ser bloqueada perto do fechamento mesmo tendo poucas
+        // pessoas ativas esperando de verdade (ver filaAtiva/acaoMarcarAusente).
         function calcularTempoEstimado() {
-            return fila.length * TEMPO_MEDIO_MUSICA;
+            return filaAtiva().length * TEMPO_MEDIO_MUSICA;
         }
 
         function isFilaBloqueada() {
@@ -3705,7 +3708,10 @@
             }
 
             // UI Admin
-            document.getElementById('admin-total-fila').innerText = fila.length;
+            // Mesma lógica de calcularTempoEstimado(): mostra só quem está ativo
+            // na fila, não os ausentes — senão o número exibido pro DJ não bate
+            // com o tempo de espera calculado ao lado.
+            document.getElementById('admin-total-fila').innerText = filaAtiva().length;
             document.getElementById('admin-tempo-espera').innerText = `${tempoEstimado} min`;
             
             const btnToggle = document.getElementById('btn-toggle-fila');

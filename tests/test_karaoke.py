@@ -779,6 +779,49 @@ def test_suspeita_fila_curta_conta_ausentes_como_gente_esperando(browser, base_u
     context.close()
 
 
+def test_calcular_tempo_estimado_ignora_ausentes(browser, base_url):
+    """calcularTempoEstimado() (~linha 3643) usa filaAtiva().length, não
+    fila.length — ausentes não contam como tempo de espera real, senão a fila
+    pode ser bloqueada perto do fechamento mesmo tendo poucas pessoas ativas
+    esperando de verdade. Com N pedidos ativos + M ausentes, o tempo estimado
+    deve ser N * TEMPO_MEDIO_MUSICA, ignorando os M ausentes — e o número
+    exibido em #admin-total-fila (painel do DJ) deve bater com esse N."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    tempo_medio = page.evaluate("TEMPO_MEDIO_MUSICA")
+
+    n_ativos = 3
+    m_ausentes = 4
+
+    page.evaluate(f"""
+        fila = [
+            ...Array.from({{length: {n_ativos}}}, (_, i) => ({{
+                id: 1000 + i, nome: 'Ativo' + i, mesa: null, musica: 'MusicaAtivo' + i,
+                artista: 'X', deviceId: 'device-ativo-' + i,
+                timestamp: Date.now(), timestampFila: Date.now(), vezesCantadas: 0,
+                youtubeUrl: null, ausenteDesde: null
+            }})),
+            ...Array.from({{length: {m_ausentes}}}, (_, i) => ({{
+                id: 2000 + i, nome: 'Ausente' + i, mesa: null, musica: 'MusicaAusente' + i,
+                artista: 'X', deviceId: 'device-ausente-' + i,
+                timestamp: Date.now(), timestampFila: Date.now(), vezesCantadas: 0,
+                youtubeUrl: null, ausenteDesde: Date.now()
+            }}))
+        ];
+        atualizarUI();
+    """)
+
+    tempo_estimado = page.evaluate("calcularTempoEstimado()")
+    total_fila_exibido = page.evaluate("document.getElementById('admin-total-fila').innerText")
+
+    esperado = n_ativos * tempo_medio
+    ok = (tempo_estimado == esperado and int(total_fila_exibido) == n_ativos and not erros)
+    registrar("calcularTempoEstimado() ignora ausentes (só conta fila ativa)", ok,
+              f"n_ativos={n_ativos}, m_ausentes={m_ausentes}, tempo_medio={tempo_medio}, "
+              f"tempo_estimado={tempo_estimado}, esperado={esperado}, total_fila_exibido={total_fila_exibido}")
+    context.close()
+
+
 def test_marcar_ausente_remove_da_ordenacao_normal(browser, base_url):
     """"Marcar Ausente" (quando o DJ chama e a pessoa não aparece) precisa
     sumir da fila ativa/ordenada e da lista pública "Próximos" — mas sem
@@ -2406,6 +2449,7 @@ def main():
             test_teto_de_espera_maxima_empate_por_ordem_de_chegada(browser, base_url)
             test_suspeita_espera_maxima_anula_protecao_anti_sequencia(browser, base_url)
             test_suspeita_fila_curta_conta_ausentes_como_gente_esperando(browser, base_url)
+            test_calcular_tempo_estimado_ignora_ausentes(browser, base_url)
             test_marcar_ausente_remove_da_ordenacao_normal(browser, base_url)
             test_voltar_recalcula_timestampfila_preservando_posicao_relativa(browser, base_url)
             test_timeout_ausente_remove_automaticamente(browser, base_url)
