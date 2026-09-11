@@ -3970,11 +3970,31 @@
         // Navegadores mobile pausam timers (setInterval) quando a aba/tela fica em segundo
         // plano ou bloqueada. Sem isso, a fila renderizada fica presa numa ordem antiga até
         // o timer voltar a rodar — o que pode levar minutos após reativar a tela, ou nunca,
-        // se o usuário não interagir. Recalculamos na hora que a tela volta a ficar visível,
-        // em vez de esperar o próximo tick do setInterval.
+        // se o usuário não interagir.
+        //
+        // Ao voltar a ficar visível, damos location.reload() em vez de só chamar
+        // atualizarUI(): reload reconecta tudo do zero (Firebase, listeners, estado local) —
+        // o mesmo efeito do F5 manual que já sabemos que resolve — em vez de confiar que o
+        // listener do Firebase reconectou sozinho enquanto a tela estava em segundo plano.
+        //
+        // Só faz isso na visão do DJ/admin (isAdminAuthenticated()): é a tela que fica
+        // minutos em segundo plano numa tablet/notebook fixo. Na visão do cliente existe o
+        // formulário de pedido com texto digitado (nome, mesa, música, artista) — um reload
+        // ali derrubaria o que a pessoa estava digitando, e o ganho não compensa o risco
+        // (o cliente não costuma deixar a aba minutos em segundo plano do mesmo jeito).
+        //
+        // Debounce de ~5s: só recarrega se a tela ficou oculta por mais tempo que isso.
+        // Trocar de app rapidinho e voltar não deve disparar um reload desnecessário.
+        let ficouOcultoEm = null;
         document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') {
-                atualizarUI();
+            if (document.visibilityState === 'hidden') {
+                ficouOcultoEm = Date.now();
+            } else if (document.visibilityState === 'visible') {
+                const tempoOculto = ficouOcultoEm ? Date.now() - ficouOcultoEm : 0;
+                ficouOcultoEm = null;
+                if (isAdminAuthenticated() && tempoOculto > 5000) {
+                    location.reload();
+                }
             }
         });
 
