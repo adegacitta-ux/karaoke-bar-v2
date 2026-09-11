@@ -466,6 +466,114 @@ def test_fila_nao_fura_prioridade_pra_desfazer_sequencia(browser, base_url):
     context.close()
 
 
+def test_finalizar_apresentacao_nao_deixa_mesma_pessoa_como_proxima(browser, base_url):
+    """Regressão (bug real com Tharik e Gabriel): desfazerSequenciasConsecutivas
+    só comparava fila[i] com fila[i-1], nunca fila[0] com quem tinha ACABADO de
+    sair do palco — essa pessoa não está mais dentro de "fila" pra comparar.
+    Se ela tinha outro pedido com prioridade próxima do topo, ele subia pra
+    fila[0] e ela era chamada de novo em seguida, quebrando a regra
+    anti-sequência na prática. O fix guarda a chave de quem acabou de terminar
+    (capturada ANTES de zerar apresentacaoAtual) na variável global
+    ultimoCantorKey, que desfazerSequenciasConsecutivas() consulta sozinha —
+    precisa ser global, e não um parâmetro só das chamadas de ordenarFila() em
+    acaoProximo/acaoFinalizarApresentacao, porque atualizarUI() TAMBÉM chama
+    ordenarFila() sozinha (sem esse contexto) logo em seguida."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    limite_minutos = page.evaluate("MINUTOS_PARA_PERDOAR_UMA_VEZ_CANTADA")
+    agora = page.evaluate("Date.now()")
+
+    # PessoaX tem 2 pedidos na fila (mesmo deviceId); PessoaY tem 1, chegou
+    # antes e sem nunca ter cantado.
+    page.evaluate(f"""
+        fila = [
+            {{id: 1, nome: 'PessoaX', mesa: null, musica: 'MusicaX1', artista: 'A',
+              deviceId: 'device-x', timestamp: {agora}, timestampFila: {agora},
+              vezesCantadas: 0, youtubeUrl: null}},
+            {{id: 2, nome: 'PessoaX', mesa: null, musica: 'MusicaX2', artista: 'A',
+              deviceId: 'device-x', timestamp: {agora}, timestampFila: {agora},
+              vezesCantadas: 0, youtubeUrl: null}},
+            {{id: 3, nome: 'PessoaY', mesa: null, musica: 'MusicaY1', artista: 'A',
+              deviceId: 'device-y', timestamp: {agora - 500}, timestampFila: {agora - 500},
+              vezesCantadas: 0, youtubeUrl: null}}
+        ];
+        ordenarFila();
+        atualizarUI();
+    """)
+
+    # PessoaX começa a cantar MusicaX1 — isso já incrementa vezesCantadas do
+    # pedido restante dela (MusicaX2) pra 1 (ver acaoProximo).
+    page.evaluate("acaoProximo(1)")
+
+    # Simula o tempo passando DURANTE a apresentação: o pedido restante de
+    # PessoaX (MusicaX2) vai esperando mais, e sua prioridade efetiva vai
+    # descontando até ficar levemente melhor que a de PessoaY — mas a
+    # diferença continua pequena (dentro de LIMITE_TROCA_ANTI_SEQUENCIA), é
+    # exatamente o caso em que a troca anti-sequência deve valer.
+    minutos_de_espera_simulada = limite_minutos * 1.5
+    page.evaluate(f"""
+        const pedidoX2 = fila.find(p => p.deviceId === 'device-x');
+        pedidoX2.timestampFila = Date.now() - ({minutos_de_espera_simulada} * 60 * 1000);
+    """)
+
+    # Confirma que a decadência simulada realmente deixou a prioridade efetiva
+    # de MusicaX2 um pouco MELHOR (menor) que a de PessoaY, mas dentro de
+    # LIMITE_TROCA_ANTI_SEQUENCIA — sem isso o teste não estaria reproduzindo o
+    # cenário real (diferença pequena), só uma diferença grande e legítima
+    # (aí não há bug: ela merece furar a fila de verdade).
+    prioridade_x2 = page.evaluate("calcularPrioridadeEfetiva(fila.find(p => p.deviceId === 'device-x'))")
+    prioridade_y = page.evaluate("calcularPrioridadeEfetiva(fila.find(p => p.deviceId === 'device-y'))")
+    limite_troca = page.evaluate("LIMITE_TROCA_ANTI_SEQUENCIA")
+
+    page.evaluate("acaoFinalizarApresentacao()")
+    page.wait_for_timeout(150)
+
+    ordem_final = page.evaluate("fila.map(p => p.deviceId)")
+
+    # Sem o fix, fila[0] seria 'device-x' de novo (MusicaX2) logo depois dela
+    # ter acabado de cantar MusicaX1 — a checagem abaixo é a que capturava o
+    # bug relatado.
+    diferenca = prioridade_y - prioridade_x2
+    ok = (prioridade_x2 < prioridade_y and diferenca <= limite_troca
+          and ordem_final[0] == 'device-y' and not erros)
+    registrar("Fila não repete a mesma pessoa como próxima logo após ela finalizar", ok,
+               f"prioridade_x2={prioridade_x2}, prioridade_y={prioridade_y}, "
+               f"limite_troca={limite_troca}, apos_finalizar={ordem_final}")
+    context.close()
+
+
+def test_finalizar_apresentacao_mantem_no_topo_se_so_sobra_a_mesma_pessoa(browser, base_url):
+    """Mesmo cenário do teste acima, mas sem ninguém mais na fila além dos
+    outros pedidos de quem acabou de cantar — não tem outra pessoa pra trazer
+    pra frente, então a exceção de fila[0] em desfazerSequenciasConsecutivas
+    não deve fazer nada (nem quebrar): a sequência é mantida."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    agora = page.evaluate("Date.now()")
+    page.evaluate(f"""
+        fila = [
+            {{id: 1, nome: 'PessoaX', mesa: null, musica: 'MusicaX1', artista: 'A',
+              deviceId: 'device-x', timestamp: {agora}, timestampFila: {agora},
+              vezesCantadas: 0, youtubeUrl: null}},
+            {{id: 2, nome: 'PessoaX', mesa: null, musica: 'MusicaX2', artista: 'A',
+              deviceId: 'device-x', timestamp: {agora}, timestampFila: {agora},
+              vezesCantadas: 0, youtubeUrl: null}}
+        ];
+        ordenarFila();
+        atualizarUI();
+    """)
+
+    page.evaluate("acaoProximo(1)")
+    page.evaluate("acaoFinalizarApresentacao()")
+    page.wait_for_timeout(150)
+
+    ordem_final = page.evaluate("fila.map(p => p.deviceId)")
+    ok = (ordem_final == ['device-x'] and not erros)
+    registrar("Sem outra pessoa na fila, o pedido restante da mesma pessoa é mantido no topo", ok,
+               f"apos_finalizar={ordem_final}")
+    context.close()
+
+
 def test_teto_de_espera_maxima_fura_mesmo_com_vezes_cantadas_alto(browser, base_url):
     """O desconto de calcularPrioridadeEfetiva é linear e na mesma taxa pra
     todo mundo — então a DIFERENÇA de prioridade entre dois pedidos que já
@@ -1975,6 +2083,8 @@ def main():
             test_fila_evita_pedidos_consecutivos_da_mesma_pessoa(browser, base_url)
             test_fila_mantem_sequencia_quando_so_sobra_a_mesma_pessoa(browser, base_url)
             test_fila_nao_fura_prioridade_pra_desfazer_sequencia(browser, base_url)
+            test_finalizar_apresentacao_nao_deixa_mesma_pessoa_como_proxima(browser, base_url)
+            test_finalizar_apresentacao_mantem_no_topo_se_so_sobra_a_mesma_pessoa(browser, base_url)
             test_teto_de_espera_maxima_fura_mesmo_com_vezes_cantadas_alto(browser, base_url)
             test_teto_de_espera_maxima_empate_por_ordem_de_chegada(browser, base_url)
             test_marcar_ausente_remove_da_ordenacao_normal(browser, base_url)
