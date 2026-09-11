@@ -430,7 +430,7 @@
                             <h3 class="font-bold"><i class="fas fa-microphone mr-2" aria-hidden="true"></i>Cantando Agora</h3>
                         </div>
                         <div class="p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                            <div>
+                            <div class="min-w-0">
                                 <div class="text-lg font-bold text-gray-800" id="admin-ap-nome">-</div>
                                 <div class="text-gray-500 text-sm" id="admin-ap-musica">-</div>
                                 <div class="mt-2 text-sm">
@@ -441,9 +441,9 @@
                                     <i class="fab fa-youtube" aria-hidden="true"></i> Abrir Karaokê no YouTube
                                 </a>
                             </div>
-                            <div class="flex flex-col sm:flex-row gap-2">
-                                <button type="button" onclick="acaoNaoApareceu()" class="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 font-semibold px-5 py-2 rounded-lg whitespace-nowrap border border-yellow-300">
-                                    <i class="fas fa-user-clock mr-2" aria-hidden="true"></i>Não Apareceu (Devolver à Fila)
+                            <div class="flex flex-col sm:flex-row sm:flex-wrap sm:flex-shrink-0 gap-2">
+                                <button type="button" onclick="acaoNaoApareceu()" title="Devolve o pedido pra fila como ausente" class="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 font-semibold px-5 py-2 rounded-lg whitespace-nowrap border border-yellow-300">
+                                    <i class="fas fa-user-clock mr-2" aria-hidden="true"></i>Não Apareceu
                                 </button>
                                 <button type="button" onclick="acaoFinalizarApresentacao()" class="bg-green-600 hover:bg-green-700 text-white font-semibold px-5 py-2 rounded-lg whitespace-nowrap">
                                     <i class="fas fa-flag-checkered mr-2" aria-hidden="true"></i>Finalizar Apresentação
