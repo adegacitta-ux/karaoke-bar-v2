@@ -2614,10 +2614,10 @@
         // já libera o crédito na hora — ele simplesmente some da fila e para de contar.
         // ⚠️ Números ainda não validados com o dono do bar — ajuste aqui depois dos
         // primeiros testes reais (ver auditoria/relatório desta tarefa).
-        const LIMITE_PEDIDOS_ATIVOS_POR_DEVICE = 5;
+        const LIMITE_PEDIDOS_ATIVOS_POR_DEVICE = 4;
         const MINUTOS_RECARGA_CREDITO = 50;
         const LIMIAR_FILA_CURTA = 3; // menos que isso de OUTRAS pessoas esperando ignora o limite de créditos
-        const LIMIAR_AVISO_CREDITO = 4; // a partir de quantos pedidos ativos o indicador visual aparece
+        const LIMIAR_AVISO_CREDITO = 3; // a partir de quantos pedidos ativos o indicador visual aparece
         // Mensagens traduzidas — ver chaves "limite_creditos_alert" e
         // "indicador_creditos_texto" em TRADUCOES (pt/en)
 
@@ -2653,7 +2653,7 @@
         // contra o número de OUTRAS pessoas esperando, não o total da fila — assim
         // um cliente sozinho (ou quase) no bar nunca fica travado só porque os
         // próprios pedidos dele já preencheram a fila. Com os números padrão daqui
-        // (5 créditos / limiar 3), comparar contra o total incluiria os próprios
+        // (4 créditos / limiar 3), comparar contra o total incluiria os próprios
         // pedidos do device e tornaria essa exceção praticamente inatingível.
         function podeAdicionarPedido(lista, deviceId, bloqueados = dispositivosBloqueados) {
             if (dispositivoBloqueado(deviceId, bloqueados)) return false;
