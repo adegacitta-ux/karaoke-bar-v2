@@ -3966,7 +3966,38 @@
         // Loop de atualização (fallback — a sincronização real acontece via listener em tempo
         // real do Firebase; isso aqui é só uma rede de segurança, a cada 10s)
         setInterval(atualizarUI, 10000);
-        
+
+        // Navegadores mobile pausam/throttlam timers (incluindo o setInterval acima) quando a
+        // tela do tablet/celular do DJ bloqueia ou o app vai pra segundo plano. Resultado: a
+        // fila fica presa numa ordem antiga até alguém dar F5 manualmente — e um F5 resolve
+        // (ver rodapé "...ou ao recarregar a página"). Então, ao voltar a ficar visível,
+        // forçamos esse mesmo recarregamento de verdade em vez de confiar no setInterval
+        // "acordar" sozinho.
+        // Só faz isso na aba do DJ/admin: na aba do cliente a pessoa pode estar no meio do
+        // preenchimento do pedido, e recarregar nessa hora perderia o que ela digitou.
+        let telaFicouOcultaEm = null;
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'hidden') {
+                telaFicouOcultaEm = Date.now();
+                return;
+            }
+            if (document.visibilityState !== 'visible' || telaFicouOcultaEm === null) return;
+
+            const ficouOcultaPorMs = Date.now() - telaFicouOcultaEm;
+            telaFicouOcultaEm = null;
+
+            // Debounce: uma troca rápida de app (menos de 5s oculta) não deveria recarregar
+            // toda vez — só quando ficou tempo suficiente em segundo plano pro navegador ter
+            // de fato throttlado os timers.
+            const LIMIAR_RELOAD_MS = 5000;
+            if (ficouOcultaPorMs < LIMIAR_RELOAD_MS) return;
+
+            const painelAdmin = document.getElementById('admin');
+            if (painelAdmin && painelAdmin.classList.contains('active')) {
+                location.reload();
+            }
+        });
+
         // Inicializar
         window.addEventListener('load', () => {
             iniciarModoEscuro(); // independe de ter bar ou não — já deixa a tela no tom certo
