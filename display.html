@@ -106,7 +106,11 @@
             align-items: center;
             gap: clamp(16px, 2.2vw, 40px);
             padding: 16px;
-            overflow-y: auto;
+            /* "hidden", não "auto": numa TV de bar uma barra de rolagem nunca
+               é aceitável. O ajuste de escala em JS (ajustarEscalaConteudo)
+               garante que o conteúdo caiba antes de chegar aqui — isto é só
+               a rede de segurança pra nenhuma barra aparecer de jeito nenhum. */
+            overflow: hidden;
         }
 
         /* Cartaz principal: cara de "passe de bastidor", não de card de app */
@@ -116,11 +120,12 @@
                tela, não ao tamanho do texto de verdade (nome de dupla longo,
                música com título grande...), então às vezes sobrava espaço e
                às vezes precisava rolar. Isso encolhe só o necessário pra
-               nunca precisar de barra de rolagem. */
+               nunca precisar de barra de rolagem; overflow:hidden abaixo é
+               a garantia de que, mesmo no pior caso, nenhuma barra aparece. */
             --escala-conteudo: 1;
             background: var(--cor-painel);
             border-radius: clamp(18px, 1.4vw, 32px);
-            padding: clamp(20px, 2.2vw, 44px) clamp(28px, 4.4vw, 84px);
+            padding: calc(clamp(20px, 2.2vw, 44px) * var(--escala-conteudo, 1)) calc(clamp(28px, 4.4vw, 84px) * var(--escala-conteudo, 1));
             box-shadow: 0 0 0 1px rgba(255, 212, 59, 0.35), 0 0 0 7px rgba(255, 212, 59, 0.08), 0 30px 70px rgba(0, 0, 0, 0.6);
             text-align: center;
             max-width: min(66vw, 1320px);
@@ -132,7 +137,7 @@
                manter sincronizadas em cada resolução). */
             max-height: calc(100vh - 280px);
             flex: 1 1 480px;
-            overflow-y: auto;
+            overflow: hidden;
             animation: slideIn 0.8s ease-out;
         }
 
@@ -152,7 +157,7 @@
         .titulo-proximo {
             font-size: calc(clamp(28px, 2.7vw, 58px) * var(--escala-conteudo, 1));
             color: var(--cor-ouro);
-            margin-bottom: clamp(10px, 1.4vw, 26px);
+            margin-bottom: calc(clamp(10px, 1.4vw, 26px) * var(--escala-conteudo, 1));
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: clamp(2px, 0.35vw, 6px);
@@ -161,26 +166,26 @@
         .mensagem-secundaria {
             font-size: calc(clamp(26px, 2vw, 44px) * var(--escala-conteudo, 1));
             color: var(--cor-marfim);
-            font-style: italic;
-            font-weight: 300;
-            margin-top: clamp(4px, 0.6vw, 12px);
+            font-weight: 400;
+            margin-top: calc(clamp(4px, 0.6vw, 12px) * var(--escala-conteudo, 1));
         }
 
         /* Nome de quem vai cantar: o elemento-herói da tela, o maior de todos —
-           responde "quem está cantando?" de longe, sem precisar chegar perto. */
+           responde "quem está cantando?" de longe, sem precisar chegar perto.
+           Cor sólida (não gradiente) e sem itálico: de longe, tanto o
+           gradiente quanto a inclinação do itálico atrapalham mais do que
+           ajudam a reconhecer as letras rápido. */
         .cantor-nombre {
             font-family: 'Bodoni Moda', serif;
             font-size: calc(clamp(52px, 5.6vw, 148px) * var(--escala-conteudo, 1));
             font-weight: 800;
-            font-style: italic;
             line-height: 1.05;
-            background: linear-gradient(100deg, var(--cor-ouro-claro) 0%, var(--cor-neon) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            color: var(--cor-ouro-claro);
             text-shadow: 0 0 40px rgba(255, 212, 59, 0.35);
-            margin-bottom: clamp(4px, 0.8vw, 14px);
+            margin-bottom: calc(clamp(4px, 0.8vw, 14px) * var(--escala-conteudo, 1));
             animation: scaleIn 0.6s ease-out;
+            overflow-wrap: break-word;
+            word-break: break-word;
         }
 
         @keyframes scaleIn {
@@ -193,9 +198,9 @@
             position: relative;
             background: var(--cor-painel-clara);
             border: 1px dashed rgba(255, 212, 59, 0.4);
-            padding: clamp(10px, 1.4vw, 20px) 18px clamp(8px, 1.1vw, 16px);
+            padding: calc(clamp(10px, 1.4vw, 20px) * var(--escala-conteudo, 1)) calc(18px * var(--escala-conteudo, 1)) calc(clamp(8px, 1.1vw, 16px) * var(--escala-conteudo, 1));
             border-radius: 14px;
-            margin: clamp(10px, 1.4vw, 18px) 0 0;
+            margin: calc(clamp(10px, 1.4vw, 18px) * var(--escala-conteudo, 1)) 0 0;
         }
         .musica-info::before, .musica-info::after {
             content: '';
@@ -219,16 +224,18 @@
             text-transform: uppercase;
             letter-spacing: 0.5px;
             color: var(--cor-ouro);
-            margin-bottom: clamp(2px, 0.5vw, 8px);
+            margin-bottom: calc(clamp(2px, 0.5vw, 8px) * var(--escala-conteudo, 1));
+            overflow-wrap: break-word;
+            word-break: break-word;
         }
 
         .musica-artista {
             font-size: calc(clamp(28px, 2.4vw, 54px) * var(--escala-conteudo, 1));
-            color: var(--cor-marfim);
-            opacity: 0.85;
-            font-weight: 300;
-            font-style: italic;
-            margin-bottom: clamp(8px, 1vw, 20px);
+            color: var(--cor-suave);
+            font-weight: 400;
+            margin-bottom: calc(clamp(8px, 1vw, 20px) * var(--escala-conteudo, 1));
+            overflow-wrap: break-word;
+            word-break: break-word;
         }
 
         .veces-cantadas {
@@ -236,7 +243,7 @@
             background: transparent;
             border: 2px solid var(--cor-ouro);
             color: var(--cor-ouro-claro);
-            padding: clamp(6px, 0.6vw, 12px) clamp(16px, 1.6vw, 30px);
+            padding: calc(clamp(6px, 0.6vw, 12px) * var(--escala-conteudo, 1)) calc(clamp(16px, 1.6vw, 30px) * var(--escala-conteudo, 1));
             border-radius: 50px;
             font-size: calc(clamp(17px, 1.2vw, 27px) * var(--escala-conteudo, 1));
             font-weight: 600;
@@ -245,10 +252,10 @@
         }
 
         .fila-info {
-            margin-top: clamp(16px, 1.6vw, 32px);
+            margin-top: calc(clamp(16px, 1.6vw, 32px) * var(--escala-conteudo, 1));
             display: flex;
             justify-content: space-around;
-            gap: clamp(10px, 1.2vw, 22px);
+            gap: calc(clamp(10px, 1.2vw, 22px) * var(--escala-conteudo, 1));
         }
 
         /* Status da fila (2ª prioridade da hierarquia) e "A seguir" (secundário):
@@ -257,7 +264,7 @@
         .fila-stat {
             background: var(--cor-painel-clara);
             border: 1px dashed rgba(255, 212, 59, 0.28);
-            padding: clamp(8px, 0.8vw, 16px) clamp(6px, 0.7vw, 12px);
+            padding: calc(clamp(8px, 0.8vw, 16px) * var(--escala-conteudo, 1)) calc(clamp(6px, 0.7vw, 12px) * var(--escala-conteudo, 1));
             border-radius: clamp(8px, 0.8vw, 14px);
             flex: 1;
         }
@@ -272,11 +279,10 @@
 
         .stat-label {
             font-size: clamp(12px, 0.95vw, 17px);
-            color: var(--cor-marfim);
-            opacity: 0.75;
+            color: var(--cor-suave);
             text-transform: uppercase;
             letter-spacing: 1.2px;
-            margin-top: clamp(3px, 0.5vw, 8px);
+            margin-top: calc(clamp(3px, 0.5vw, 8px) * var(--escala-conteudo, 1));
         }
 
         /* Controles secundários: grandes o bastante pra apontar/tocar com
@@ -339,26 +345,29 @@
 
         @media (max-width: 1024px) {
             /* Abaixo de 1024px não sobra largura pra card + QR lado a lado
-               (isso é celular/tablet, não TV) — volta a empilhar. */
+               (isso é celular/tablet, não TV) — volta a empilhar. Tamanhos
+               fixos aqui também passam por --escala-conteudo — sem isso o
+               ajuste de encolher-pra-caber do JS não tinha efeito nenhum
+               num celular/tablet, só nas resoluções de TV. */
             .main-container { flex-direction: column; padding-top: 90px; }
-            .display-card { padding: 26px 30px; max-width: 100%; flex: none; }
+            .display-card { padding: calc(26px * var(--escala-conteudo, 1)) calc(30px * var(--escala-conteudo, 1)); max-width: 100%; flex: none; }
             .qr-card { max-width: 100%; flex: none; }
-            .cantor-nombre { font-size: 54px; }
-            .titulo-proximo { font-size: 17px; }
-            .musica-titulo { font-size: 28px; }
-            .musica-artista { font-size: 20px; }
+            .cantor-nombre { font-size: calc(54px * var(--escala-conteudo, 1)); }
+            .titulo-proximo { font-size: calc(17px * var(--escala-conteudo, 1)); }
+            .musica-titulo { font-size: calc(28px * var(--escala-conteudo, 1)); }
+            .musica-artista { font-size: calc(20px * var(--escala-conteudo, 1)); }
         }
 
         @media (max-width: 768px) {
-            .display-card { padding: 20px 20px; }
+            .display-card { padding: calc(20px * var(--escala-conteudo, 1)) calc(20px * var(--escala-conteudo, 1)); }
             .display-logo { width: 90px; }
-            .cantor-nombre { font-size: 42px; }
-            .titulo-proximo { font-size: 16px; letter-spacing: 3px; }
-            .musica-titulo { font-size: 26px; }
-            .musica-artista { font-size: 19px; }
+            .cantor-nombre { font-size: calc(42px * var(--escala-conteudo, 1)); }
+            .titulo-proximo { font-size: calc(16px * var(--escala-conteudo, 1)); letter-spacing: 3px; }
+            .musica-titulo { font-size: calc(26px * var(--escala-conteudo, 1)); }
+            .musica-artista { font-size: calc(19px * var(--escala-conteudo, 1)); }
             .fila-info { flex-direction: column; gap: 8px; }
-            .veces-cantadas { font-size: 14px; }
-            .mensagem-secundaria { font-size: 20px; }
+            .veces-cantadas { font-size: calc(14px * var(--escala-conteudo, 1)); }
+            .mensagem-secundaria { font-size: calc(20px * var(--escala-conteudo, 1)); }
         }
 
         /* 1280x720 e 1366x768 (TVs reais, resoluções-alvo) já caem aqui por
@@ -367,12 +376,16 @@
            não uma TV em tela cheia) e só ajusta espaçamento, nunca reduz a
            tipografia principal a ponto de ficar ilegível de longe. */
         @media (max-height: 560px) {
-            .display-card { padding: 16px 24px; }
-            .musica-info { padding: 10px 14px 8px; margin: 10px 0 0; }
-            .fila-info { margin-top: 8px; }
-            .fila-stat { padding: 6px 8px; }
-            .mini-fila-lista { margin-top: 8px; }
-            .mini-fila-item { padding: 5px 12px; margin-bottom: 3px; }
+            /* Mesmos valores de antes, só que agora também multiplicados por
+               --escala-conteudo — senão esses números fixos sobrescreviam o
+               padding/margin já encolhido pelo JS e o card voltava a não caber
+               (a reduzir só a fonte não sobra espaço vertical suficiente). */
+            .display-card { padding: calc(16px * var(--escala-conteudo, 1)) calc(24px * var(--escala-conteudo, 1)); }
+            .musica-info { padding: calc(10px * var(--escala-conteudo, 1)) calc(14px * var(--escala-conteudo, 1)) calc(8px * var(--escala-conteudo, 1)); margin: calc(10px * var(--escala-conteudo, 1)) 0 0; }
+            .fila-info { margin-top: calc(8px * var(--escala-conteudo, 1)); }
+            .fila-stat { padding: calc(6px * var(--escala-conteudo, 1)) calc(8px * var(--escala-conteudo, 1)); }
+            .mini-fila-lista { margin-top: calc(8px * var(--escala-conteudo, 1)); }
+            .mini-fila-item { padding: calc(5px * var(--escala-conteudo, 1)) calc(12px * var(--escala-conteudo, 1)); margin-bottom: calc(3px * var(--escala-conteudo, 1)); }
             .display-logo { width: 60px; margin-bottom: 6px; }
         }
 
@@ -498,7 +511,7 @@
             max-width: min(25vw, 380px);
             width: 100%;
             max-height: calc(100vh - 280px);
-            overflow-y: auto;
+            overflow: hidden;
             flex: 0 1 280px;
             margin: 0;
         }
@@ -523,39 +536,48 @@
         }
         .qr-card .qr-sub {
             font-size: clamp(17px, 1.4vw, 26px);
-            color: var(--cor-marfim);
-            opacity: 0.85;
+            color: var(--cor-suave);
             font-weight: 500;
             line-height: 1.3;
             margin-top: clamp(4px, 0.5vw, 10px);
         }
 
         /* Lista de próximos na fila, dentro do card principal */
-        .mini-fila-lista { margin-top: clamp(10px, 1vw, 20px); text-align: left; }
+        .mini-fila-lista { margin-top: calc(clamp(10px, 1vw, 20px) * var(--escala-conteudo, 1)); text-align: left; }
         .mini-fila-titulo {
             font-size: calc(clamp(12px, 0.85vw, 16px) * var(--escala-conteudo, 1));
             font-weight: 700;
-            color: var(--cor-marfim);
-            opacity: 0.75;
+            color: var(--cor-suave);
             text-transform: uppercase;
             letter-spacing: 2.5px;
-            margin-bottom: clamp(6px, 0.6vw, 12px);
+            margin-bottom: calc(clamp(6px, 0.6vw, 12px) * var(--escala-conteudo, 1));
             text-align: center;
         }
         .mini-fila-item {
             display: flex; justify-content: space-between; align-items: center;
             background: var(--cor-painel-clara); border-radius: 10px;
-            padding: clamp(6px, 0.6vw, 12px) clamp(10px, 1vw, 18px);
-            margin-bottom: clamp(4px, 0.5vw, 8px);
+            padding: calc(clamp(6px, 0.6vw, 12px) * var(--escala-conteudo, 1)) calc(clamp(10px, 1vw, 18px) * var(--escala-conteudo, 1));
+            margin-bottom: calc(clamp(4px, 0.5vw, 8px) * var(--escala-conteudo, 1));
             border-left: 3px solid var(--cor-ouro);
         }
-        .mini-fila-item .mini-fila-nome { font-weight: 600; color: var(--cor-marfim); font-size: calc(clamp(15px, 1.1vw, 21px) * var(--escala-conteudo, 1)); }
-        .mini-fila-item .mini-fila-musica { color: var(--cor-marfim); opacity: 0.7; font-size: calc(clamp(13px, 0.9vw, 17px) * var(--escala-conteudo, 1)); }
+        .mini-fila-item .mini-fila-nome {
+            font-weight: 600;
+            color: var(--cor-marfim);
+            font-size: calc(clamp(15px, 1.1vw, 21px) * var(--escala-conteudo, 1));
+            overflow-wrap: break-word;
+            word-break: break-word;
+        }
+        .mini-fila-item .mini-fila-musica {
+            color: var(--cor-suave);
+            font-size: calc(clamp(13px, 0.9vw, 17px) * var(--escala-conteudo, 1));
+            overflow-wrap: break-word;
+            word-break: break-word;
+        }
         .mini-fila-posicao {
             background: var(--cor-ouro); color: var(--cor-texto-sobre-destaque);
-            width: clamp(20px, 1.6vw, 28px); height: clamp(20px, 1.6vw, 28px);
+            width: calc(clamp(20px, 1.6vw, 28px) * var(--escala-conteudo, 1)); height: calc(clamp(20px, 1.6vw, 28px) * var(--escala-conteudo, 1));
             border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            font-size: clamp(14px, 1.1vw, 20px); font-weight: 700; margin-right: clamp(8px, 0.9vw, 16px);
+            font-size: calc(clamp(14px, 1.1vw, 20px) * var(--escala-conteudo, 1)); font-weight: 700; margin-right: calc(clamp(8px, 0.9vw, 16px) * var(--escala-conteudo, 1));
             flex-shrink: 0;
         }
 
@@ -919,7 +941,10 @@
             requestAnimationFrame(() => {
                 card.style.setProperty('--escala-conteudo', '1');
                 const PASSO = 0.05;
-                const MINIMO = 0.5;
+                // MINIMO baixo de propósito: o card agora tem overflow:hidden
+                // (nunca mostra barra de rolagem), então é melhor encolher
+                // bastante o texto do que cortar conteúdo escondido embaixo.
+                const MINIMO = 0.35;
                 let escala = 1;
                 // scrollHeight/clientHeight forçam layout — funciona porque
                 // a fonte menor reduz a altura do conteúdo, nunca a largura
