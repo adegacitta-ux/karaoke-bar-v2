@@ -677,6 +677,58 @@ def test_timeout_ausente_remove_automaticamente(browser, base_url):
     context.close()
 
 
+def test_nao_apareceu_devolve_a_fila_e_desfaz_contagem(browser, base_url):
+    """"Não Apareceu" (no card "Cantando Agora") precisa cobrir o caso em que
+    o DJ já chamou a pessoa (acaoProximo tirou o pedido de "fila" e criou
+    apresentacaoAtual) mas ela nunca apareceu pra cantar — diferente de
+    "Marcar Ausente", que só existe pra pedidos ainda dentro de "fila".
+    Além de devolver o pedido pra fila como ausente, precisa desfazer o
+    incremento de vezesCantadas que acaoProximo já tinha aplicado na hora da
+    chamada, senão a pessoa fica injustamente penalizada na próxima vez de
+    verdade."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    preencher_pedido(page, "PessoaA", "MusicaA")
+    id_a = page.evaluate("fila.find(p => p.nome === 'PessoaA').id")
+    key = page.evaluate(f"obterChaveIdentidade(fila.find(p => p.id === {id_a}))")
+
+    vezes_cantadas_antes = page.evaluate("fila.find(p => p.id === " + str(id_a) + ").vezesCantadas")
+    page.evaluate(f"acaoProximo({id_a})")
+
+    # contagemCantores é a fonte de verdade pra "vezes cantadas" (ver
+    # acaoProximo) — apresentacaoAtual.vezesCantadas fica com o valor de
+    # ANTES da chamada, já que o snapshot (...pedido) acontece antes do
+    # incremento, então não serve pra checar o incremento em si.
+    contagem_apos_chamada = page.evaluate(f"contagemCantores[{key!r}]")
+    apresentacao_setada = page.evaluate("apresentacaoAtual !== null")
+    sumiu_da_fila_apos_chamada = page.evaluate("!fila.some(p => p.id === " + str(id_a) + ")")
+
+    page.evaluate("acaoNaoApareceu()")
+    page.wait_for_timeout(100)
+
+    pedido_devolvido = page.evaluate(f"fila.find(p => p.id === {id_a})")
+    contagem_apos_nao_apareceu = page.evaluate(f"contagemCantores[{key!r}]")
+    apresentacao_zerada = page.evaluate("apresentacaoAtual === null")
+    tem_ausente_desde = pedido_devolvido is not None and pedido_devolvido.get("ausenteDesde") is not None
+    vezes_cantadas_desfeita = pedido_devolvido is not None and pedido_devolvido.get("vezesCantadas") == vezes_cantadas_antes
+    secao_ausentes_visivel = page.evaluate("!document.getElementById('card-ausentes').classList.contains('hidden')")
+    secao_ausentes_lista_o_pedido = page.evaluate("document.getElementById('lista-ausentes').innerText.includes('PessoaA')")
+
+    ok = (apresentacao_setada and sumiu_da_fila_apos_chamada
+          and contagem_apos_chamada == vezes_cantadas_antes + 1
+          and contagem_apos_nao_apareceu == vezes_cantadas_antes
+          and pedido_devolvido is not None and apresentacao_zerada and tem_ausente_desde
+          and vezes_cantadas_desfeita and secao_ausentes_visivel and secao_ausentes_lista_o_pedido
+          and not erros)
+    registrar("Não Apareceu devolve o pedido chamado pra fila e desfaz a contagem de vezesCantadas", ok,
+               f"vezes_cantadas_antes={vezes_cantadas_antes}, contagem_apos_chamada={contagem_apos_chamada}, "
+               f"contagem_apos_nao_apareceu={contagem_apos_nao_apareceu}, "
+               f"pedido_devolvido={pedido_devolvido}, apresentacao_zerada={apresentacao_zerada}, "
+               f"tem_ausente_desde={tem_ausente_desde}, vezes_cantadas_desfeita={vezes_cantadas_desfeita}, "
+               f"secao_ausentes_visivel={secao_ausentes_visivel}, secao_ausentes_lista_o_pedido={secao_ausentes_lista_o_pedido}")
+    context.close()
+
+
 def test_deviceid_impede_burlar_cooldown_trocando_nome(browser, base_url):
     """Anti-fraude (deviceId): antes, "vezesCantadas" era agrupado por nome+mesa
     digitados — bastava digitar um nome diferente pra "resetar" a prioridade de
@@ -1980,6 +2032,7 @@ def main():
             test_marcar_ausente_remove_da_ordenacao_normal(browser, base_url)
             test_voltar_recalcula_timestampfila_preservando_posicao_relativa(browser, base_url)
             test_timeout_ausente_remove_automaticamente(browser, base_url)
+            test_nao_apareceu_devolve_a_fila_e_desfaz_contagem(browser, base_url)
             test_deviceid_impede_burlar_cooldown_trocando_nome(browser, base_url)
             test_modo_semi_automatico_chama_proximo_sozinho(browser, base_url)
             test_modo_semi_automatico_desligado_nao_chama_sozinho(browser, base_url)

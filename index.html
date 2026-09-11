@@ -441,9 +441,14 @@
                                     <i class="fab fa-youtube" aria-hidden="true"></i> Abrir Karaokê no YouTube
                                 </a>
                             </div>
-                            <button type="button" onclick="acaoFinalizarApresentacao()" class="bg-green-600 hover:bg-green-700 text-white font-semibold px-5 py-2 rounded-lg whitespace-nowrap">
-                                <i class="fas fa-flag-checkered mr-2" aria-hidden="true"></i>Finalizar Apresentação
-                            </button>
+                            <div class="flex flex-col sm:flex-row gap-2">
+                                <button type="button" onclick="acaoNaoApareceu()" class="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 font-semibold px-5 py-2 rounded-lg whitespace-nowrap border border-yellow-300">
+                                    <i class="fas fa-user-clock mr-2" aria-hidden="true"></i>Não Apareceu (Devolver à Fila)
+                                </button>
+                                <button type="button" onclick="acaoFinalizarApresentacao()" class="bg-green-600 hover:bg-green-700 text-white font-semibold px-5 py-2 rounded-lg whitespace-nowrap">
+                                    <i class="fas fa-flag-checkered mr-2" aria-hidden="true"></i>Finalizar Apresentação
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -483,8 +488,10 @@
                         </div>
                     </div>
 
-                    <!-- Ausentes: pedidos que o DJ chamou e a pessoa não apareceu (ver
-                         acaoMarcarAusente). Ficam fora da fila normal até a pessoa
+                    <!-- Ausentes: pedidos que o DJ marcou como ausente ainda na fila
+                         (ver acaoMarcarAusente) OU que já tinham sido chamados
+                         (apresentacaoAtual) e a pessoa não apareceu pra cantar (ver
+                         acaoNaoApareceu). Ficam fora da fila normal até a pessoa
                          voltar (acaoVoltouAusencia) ou passar de MINUTOS_MAX_AUSENTE. -->
                     <div id="card-ausentes" class="hidden bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
                         <div class="bg-gray-50 px-6 py-4 border-b">
@@ -3181,6 +3188,33 @@
 
                 if (anuncioVozAtivo()) anunciarProximoPorVoz(pedido);
             }
+        }
+
+        // O DJ chamou (acaoProximo) mas a pessoa não apareceu pra cantar de
+        // verdade. Devolve o pedido pra fila como ausente (mesmo tratamento de
+        // acaoMarcarAusente/acaoVoltouAusencia) e desfaz o incremento de
+        // vezesCantadas que acaoProximo já tinha aplicado na hora da chamada —
+        // sem isso ela ficaria penalizada (prioridade mais baixa) na próxima
+        // vez que realmente cantasse.
+        function acaoNaoApareceu() {
+            if (!apresentacaoAtual) return;
+
+            const key = obterChaveIdentidade(apresentacaoAtual);
+            contagemCantores[key] = (contagemCantores[key] || 0) - 1;
+            fila.forEach(p => {
+                if (obterChaveIdentidade(p) === key) {
+                    p.vezesCantadas = contagemCantores[key];
+                }
+            });
+
+            const { avaliacoes, iniciadoEm, ...pedido } = apresentacaoAtual;
+            fila.push({ ...pedido, ausenteDesde: Date.now() });
+            apresentacaoAtual = null;
+
+            ordenarFila();
+            salvarNoFirebase();
+            atualizarUI();
+            agendarChamadaAutomatica();
         }
 
         // Encerra a apresentação atual: registra no histórico com a média de
