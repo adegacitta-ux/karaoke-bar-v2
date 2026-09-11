@@ -3966,7 +3966,18 @@
         // Loop de atualização (fallback — a sincronização real acontece via listener em tempo
         // real do Firebase; isso aqui é só uma rede de segurança, a cada 10s)
         setInterval(atualizarUI, 10000);
-        
+
+        // Navegadores mobile pausam timers (setInterval) quando a aba/tela fica em segundo
+        // plano ou bloqueada. Sem isso, a fila renderizada fica presa numa ordem antiga até
+        // o timer voltar a rodar — o que pode levar minutos após reativar a tela, ou nunca,
+        // se o usuário não interagir. Recalculamos na hora que a tela volta a ficar visível,
+        // em vez de esperar o próximo tick do setInterval.
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                atualizarUI();
+            }
+        });
+
         // Inicializar
         window.addEventListener('load', () => {
             iniciarModoEscuro(); // independe de ter bar ou não — já deixa a tela no tom certo
