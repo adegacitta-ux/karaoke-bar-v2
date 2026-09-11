@@ -1290,6 +1290,21 @@
         let dispositivosBloqueados = {};
         let apresentacaoAtual = null; // { id, nome, mesa, musica, artista, vezesCantadas, avaliacoes: {votanteId: nota} }
 
+        // Chave (obterChaveIdentidade) de quem começou ou terminou a apresentação
+        // mais recentemente — atualizada em acaoProximo() e
+        // acaoFinalizarApresentacao(). Usada por desfazerSequenciasConsecutivas()
+        // pra nunca deixar essa mesma pessoa aparecer de novo no topo da fila logo
+        // em seguida (ver comentário lá). Precisa ser uma variável global, e não um
+        // parâmetro passado só nas duas chamadas de ordenarFila() daquelas duas
+        // funções: atualizarUI() TAMBÉM chama ordenarFila() sozinha (sem esse
+        // contexto) toda vez que a tela atualiza — inclusive logo depois daquelas
+        // duas chamadas, e de novo a cada 10s (ver setInterval no fim do arquivo) —
+        // e sem essa variável global, aquela outra chamada desfaria a troca assim
+        // que rodasse. Não precisa ser "limpa": só tem efeito enquanto essa pessoa
+        // continuar em fila[0], e qualquer nova apresentação (de qualquer pessoa)
+        // sobrescreve o valor, então nunca fica "presa" bloqueando alguém à toa.
+        let ultimoCantorKey = null;
+
         // Guardam a última versão renderizada da fila/histórico, para não reconstruir
         // o HTML dessas listas sem necessidade (ex: a cada voto de avaliação)
         let _ultimaFilaHash = null;
@@ -2977,8 +2992,34 @@
             return primeiroAusente === -1 ? fila.length : primeiroAusente;
         }
 
+        // Trata fila[0] como um caso especial ANTES do loop abaixo: o loop só
+        // compara fila[i] com fila[i-1], então nunca pegaria o caso de fila[0]
+        // ser a MESMA pessoa que acabou de começar/terminar de se apresentar
+        // (ultimoCantorKey — ver declaração dela) — essa pessoa não está mais
+        // dentro de "fila" pra comparar com fila[-1]. Sem esse caso especial, se
+        // ela tivesse outro pedido com prioridade próxima do topo, ele subia pra
+        // posição 0 e ela era chamada de novo em seguida.
         function desfazerSequenciasConsecutivas() {
             const limite = limiteFilaAtiva();
+
+            if (ultimoCantorKey && limite > 0 &&
+                obterChaveIdentidade(fila[0]) === ultimoCantorKey) {
+                let j = 1;
+                while (j < limite && obterChaveIdentidade(fila[j]) === ultimoCantorKey) {
+                    j++;
+                }
+                if (j < limite) {
+                    const diferenca = calcularPrioridadeEfetiva(fila[j]) - calcularPrioridadeEfetiva(fila[0]);
+                    if (diferenca <= LIMITE_TROCA_ANTI_SEQUENCIA) {
+                        const [trocado] = fila.splice(j, 1);
+                        fila.splice(0, 0, trocado);
+                    }
+                }
+                // Se ninguém qualificar (só sobrou ela, ou a próxima pessoa tem
+                // prioridade bem pior), mantém como está — mesma filosofia do
+                // loop abaixo: não fura fila de prioridade muito pior.
+            }
+
             for (let i = 1; i < limite; i++) {
                 if (obterChaveIdentidade(fila[i]) !== obterChaveIdentidade(fila[i - 1])) {
                     continue;
@@ -3182,6 +3223,10 @@
                     }
                 });
 
+                // Marca quem acabou de começar a cantar agora, pra ordenarFila()
+                // não deixar a "próxima" da fila ser a mesma pessoa (ver
+                // ultimoCantorKey e desfazerSequenciasConsecutivas).
+                ultimoCantorKey = key;
                 ordenarFila();
                 salvarNoFirebase();
                 atualizarUI();
@@ -3229,6 +3274,12 @@
             // processava a mesma apresentação duas vezes, duplicando a entrada no
             // histórico.
             const pedido = apresentacaoAtual;
+            // Guarda a chave ANTES de zerar apresentacaoAtual — depois disso não dá
+            // mais pra usar a variável global pra saber quem acabou de sair do
+            // palco. Atualiza ultimoCantorKey pra ordenarFila() (chamada logo
+            // abaixo por atualizarUI(), e de novo mais adiante) não deixar a fila
+            // mostrar essa mesma pessoa como próxima (ver desfazerSequenciasConsecutivas).
+            ultimoCantorKey = obterChaveIdentidade(pedido);
             apresentacaoAtual = null;
             atualizarUI();
 
