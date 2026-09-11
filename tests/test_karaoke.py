@@ -653,6 +653,132 @@ def test_teto_de_espera_maxima_empate_por_ordem_de_chegada(browser, base_url):
     context.close()
 
 
+# --- Testes de INTERAÇÃO entre regras (combinação de 2-3 regras ao mesmo
+# tempo) — diferente dos testes acima, que cobrem cada regra isolada. Estes
+# só CONFIRMAM (ou descartam) comportamentos suspeitos, sem corrigir nada
+# ainda. Cada um documenta qual comportamento está confirmando; não achei um
+# arquivo "mapa-regras-fila.md" neste repositório no momento em que este
+# teste foi escrito, então a referência abaixo é a descrição do comportamento
+# em si (recebida junto com a tarefa), não um número de item de um documento.
+# ok=True nestes 3 testes específicos == a suspeita é REAL (bug confirmado);
+# ok=False == o sistema já se comporta bem (falsa suspeita).
+
+def test_suspeita_espera_maxima_anula_protecao_anti_sequencia(browser, base_url):
+    """[Combinação: MINUTOS_ESPERA_MAXIMA (calcularPrioridadeEfetiva, ~linha
+    2954) + LIMITE_TROCA_ANTI_SEQUENCIA (desfazerSequenciasConsecutivas,
+    ~linha 2996)] Suspeita: quando o segundo pedido de quem ACABOU de cantar
+    já passou do teto de espera máxima, calcularPrioridadeEfetiva força esse
+    pedido pra -Infinity. desfazerSequenciasConsecutivas só desfaz a
+    sequência (troca pelo próximo pedido de OUTRA pessoa) se a diferença de
+    prioridade entre os dois for <= LIMITE_TROCA_ANTI_SEQUENCIA. Como a
+    diferença entre uma prioridade normal (finita) e -Infinity é sempre
+    (efetivamente) infinita, a condição "diferenca <= LIMITE_TROCA_ANTI_SEQUENCIA"
+    nunca é satisfeita — ou seja, a troca NUNCA acontece nesse caso, e a
+    pessoa que acabou de cantar é chamada de novo em seguida mesmo tendo
+    outra pessoa esperando logo atrás. Este teste documenta o que o sistema
+    JÁ FAZ hoje; se for corrigido depois, o teste abaixo vai passar a falhar
+    e precisa ser atualizado junto com o fix."""
+    context, page, erros = nova_pagina(browser, base_url, bar="TESTE")
+
+    teto_minutos = page.evaluate("MINUTOS_ESPERA_MAXIMA")
+    limite_troca = page.evaluate("LIMITE_TROCA_ANTI_SEQUENCIA")
+    agora = page.evaluate("Date.now()")
+
+    # PessoaX tem 2 pedidos (mesmo deviceId); PessoaY tem 1, prioridade normal.
+    page.evaluate(f"""
+        fila = [
+            {{id: 1, nome: 'PessoaX', mesa: null, musica: 'MusicaX1', artista: 'A',
+              deviceId: 'device-x', timestamp: {agora}, timestampFila: {agora},
+              vezesCantadas: 0, youtubeUrl: null}},
+            {{id: 2, nome: 'PessoaX', mesa: null, musica: 'MusicaX2', artista: 'A',
+              deviceId: 'device-x', timestamp: {agora}, timestampFila: {agora},
+              vezesCantadas: 0, youtubeUrl: null}},
+            {{id: 3, nome: 'PessoaY', mesa: null, musica: 'MusicaY1', artista: 'A',
+              deviceId: 'device-y', timestamp: {agora - 500}, timestampFila: {agora - 500},
+              vezesCantadas: 0, youtubeUrl: null}}
+        ];
+        ordenarFila();
+        atualizarUI();
+    """)
+
+    # PessoaX começa a cantar MusicaX1 -> ultimoCantorKey = chave dela.
+    page.evaluate("acaoProximo(1)")
+
+    # O pedido restante dela (MusicaX2) já passou (bem) do teto de espera
+    # máxima -> calcularPrioridadeEfetiva força -Infinity nele.
+    page.evaluate(f"""
+        const pedidoX2 = fila.find(p => p.deviceId === 'device-x');
+        pedidoX2.timestampFila = Date.now() - ({teto_minutos} + 5) * 60 * 1000;
+    """)
+
+    prioridade_x2 = page.evaluate("calcularPrioridadeEfetiva(fila.find(p => p.deviceId === 'device-x'))")
+    prioridade_y = page.evaluate("calcularPrioridadeEfetiva(fila.find(p => p.deviceId === 'device-y'))")
+
+    page.evaluate("acaoFinalizarApresentacao()")
+    page.wait_for_timeout(150)
+
+    ordem_final = page.evaluate("fila.map(p => p.deviceId)")
+
+    # ok=True confirma a suspeita: mesmo com PessoaY esperando logo atrás
+    # (prioridade normal, finita), a troca anti-sequência nunca roda porque a
+    # diferença contra -Infinity sempre excede LIMITE_TROCA_ANTI_SEQUENCIA —
+    # PessoaX (device-x) permanece no topo e seria chamada de novo.
+    ok = (prioridade_x2 == float('-inf') and prioridade_y != float('-inf')
+          and ordem_final[0] == 'device-x' and not erros)
+    registrar("[SUSPEITA CONFIRMADA?] Espera máxima (-Infinity) anula a proteção anti-sequência", ok,
+               f"prioridade_x2={prioridade_x2}, prioridade_y={prioridade_y}, "
+               f"limite_troca={limite_troca}, ordem_final={ordem_final}")
+    context.close()
+
+
+def test_suspeita_fila_curta_conta_ausentes_como_gente_esperando(browser, base_url):
+    """[Combinação: LIMITE_PEDIDOS_ATIVOS_POR_DEVICE (teto de créditos) +
+    LIMIAR_FILA_CURTA (bypass de fila curta), ambos em podeAdicionarPedido()
+    ~linha 2680] Suspeita: outrasPessoasNaFila (~linha 2683) é calculado como
+    `lista.filter(p => p.deviceId !== deviceId).length` — não filtra quem
+    está marcado `ausenteDesde`. Ou seja, pedidos de gente que nem está
+    esperando de verdade (ausente) contam como "gente na fila" pro cálculo de
+    fila curta, podendo impedir o bypass de liberar um device que já bateu o
+    teto de créditos mesmo quando, na prática, ninguém mais está esperando.
+    Este teste documenta o que o sistema JÁ FAZ hoje (bloqueia); se for
+    corrigido depois, o teste abaixo vai passar a falhar e precisa ser
+    atualizado junto com o fix."""
+    context, page, erros = nova_pagina(browser, base_url, bar="TESTE")
+
+    limite = page.evaluate("LIMITE_PEDIDOS_ATIVOS_POR_DEVICE")
+    limiar_fila_curta = page.evaluate("LIMIAR_FILA_CURTA")
+
+    # limiar_fila_curta pedidos de OUTROS devices, todos ausentes — ninguém
+    # realmente esperando.
+    page.evaluate(f"""
+        fila = Array.from({{length: {limiar_fila_curta}}}, (_, i) => ({{
+            id: 9000 + i, nome: 'Ausente' + i, mesa: null, musica: 'MusicaAusente' + i,
+            artista: 'X', deviceId: 'outro-device-' + i,
+            timestamp: Date.now(), timestampFila: Date.now(), vezesCantadas: 0,
+            youtubeUrl: null, ausenteDesde: Date.now()
+        }}));
+        atualizarUI();
+    """)
+
+    # Device A bate o teto de créditos.
+    for i in range(limite):
+        preencher_pedido(page, "MesmoDispositivo", f"MinhaMusica{i}")
+    total_antes = page.evaluate("fila.filter(p => p.deviceId === DEVICE_ID).length")
+
+    bloqueou = {"sim": False}
+    page.on("dialog", lambda dialog: (bloqueou.__setitem__("sim", True), dialog.accept()))
+    preencher_pedido(page, "MesmoDispositivo", "MusicaQueDeveriaSerLiberadaSeAusentesNaoContassem")
+    total_depois = page.evaluate("fila.filter(p => p.deviceId === DEVICE_ID).length")
+
+    # ok=True confirma a suspeita: mesmo com TODOS os "outros" pedidos
+    # ausentes, o sistema ainda bloqueia o pedido extra do device A.
+    ok = total_antes == limite and total_depois == limite and bloqueou["sim"] and not erros
+    registrar("[SUSPEITA CONFIRMADA?] Bypass de fila curta conta pedidos ausentes como gente esperando", ok,
+               f"limite={limite}, limiar_fila_curta={limiar_fila_curta}, "
+               f"antes={total_antes}, depois={total_depois}, bloqueou={bloqueou['sim']}")
+    context.close()
+
+
 def test_marcar_ausente_remove_da_ordenacao_normal(browser, base_url):
     """"Marcar Ausente" (quando o DJ chama e a pessoa não aparece) precisa
     sumir da fila ativa/ordenada e da lista pública "Próximos" — mas sem
@@ -834,6 +960,58 @@ def test_nao_apareceu_devolve_a_fila_e_desfaz_contagem(browser, base_url):
                f"pedido_devolvido={pedido_devolvido}, apresentacao_zerada={apresentacao_zerada}, "
                f"tem_ausente_desde={tem_ausente_desde}, vezes_cantadas_desfeita={vezes_cantadas_desfeita}, "
                f"secao_ausentes_visivel={secao_ausentes_visivel}, secao_ausentes_lista_o_pedido={secao_ausentes_lista_o_pedido}")
+    context.close()
+
+
+def test_suspeita_nao_apareceu_duas_vezes_seguidas_mantem_contagem_consistente(browser, base_url):
+    """[Combinação: acaoProximo() ~linha 3191 + acaoNaoApareceu() ~linha 3244
+    + acaoVoltouAusencia() ~linha 3587, aplicadas duas vezes seguidas pra
+    mesma pessoa] Suspeita: será que dois ciclos de "chamar -> não apareceu"
+    seguidos pra mesma pessoa (chamada, marcada ausente, volta, chamada de
+    novo, marcada ausente de novo) desalinham contagemCantores[key] em
+    relação a vezesCantadas dos pedidos dela que continuam na fila — ou pior,
+    deixam contagemCantores[key] negativo? Diferente dos testes acima, aqui
+    NÃO se sabe de antemão qual dos dois lados é o comportamento real: o
+    teste computa o estado final de verdade e reporta os dois valores.
+    ok=True == a suspeita É real (achou inconsistência/negativo — bug
+    confirmado); ok=False == contagemCantores e vezesCantadas de TODOS os
+    pedidos dela na fila continuam batendo (sistema já se comporta bem,
+    falsa suspeita)."""
+    context, page, erros = nova_pagina(browser, base_url, bar="TESTE")
+
+    # PessoaX tem 2 pedidos na fila (mesmo deviceId) — estressa o forEach de
+    # acaoProximo/acaoNaoApareceu que atualiza vezesCantadas de TODOS os
+    # pedidos dela ainda em "fila", não só do que foi chamado.
+    preencher_pedido(page, "PessoaX", "MusicaX1")
+    preencher_pedido(page, "PessoaX", "MusicaX2")
+    id1 = page.evaluate("fila.find(p => p.musica === 'MusicaX1').id")
+    key = page.evaluate(f"obterChaveIdentidade(fila.find(p => p.id === {id1}))")
+
+    # Ciclo 1: chamada -> não apareceu -> volta da ausência.
+    page.evaluate(f"acaoProximo({id1})")
+    page.wait_for_timeout(100)
+    page.evaluate("acaoNaoApareceu()")
+    page.wait_for_timeout(100)
+    page.evaluate(f"acaoVoltouAusencia({id1})")
+    page.wait_for_timeout(100)
+
+    # Ciclo 2: chamada -> não apareceu, de novo, pra mesma pessoa.
+    page.evaluate(f"acaoProximo({id1})")
+    page.wait_for_timeout(100)
+    page.evaluate("acaoNaoApareceu()")
+    page.wait_for_timeout(100)
+
+    contagem_final = page.evaluate(f"contagemCantores[{key!r}]")
+    pedidos_dela = page.evaluate(f"fila.filter(p => obterChaveIdentidade(p) === {key!r})")
+    vezes_cantadas_dela = [p["vezesCantadas"] for p in pedidos_dela]
+
+    contagem_negativa = contagem_final is not None and contagem_final < 0
+    desalinhado = any(v != contagem_final for v in vezes_cantadas_dela)
+
+    ok = (contagem_negativa or desalinhado) and not erros
+    registrar("[SUSPEITA CONFIRMADA?] Dois 'Não Apareceu' seguidos da mesma pessoa desalinham contagemCantores/vezesCantadas", ok,
+               f"contagem_final={contagem_final}, vezes_cantadas_dela={vezes_cantadas_dela}, "
+               f"pedidos_dela={pedidos_dela}, contagem_negativa={contagem_negativa}, desalinhado={desalinhado}")
     context.close()
 
 
@@ -2139,10 +2317,13 @@ def main():
             test_finalizar_apresentacao_mantem_no_topo_se_so_sobra_a_mesma_pessoa(browser, base_url)
             test_teto_de_espera_maxima_fura_mesmo_com_vezes_cantadas_alto(browser, base_url)
             test_teto_de_espera_maxima_empate_por_ordem_de_chegada(browser, base_url)
+            test_suspeita_espera_maxima_anula_protecao_anti_sequencia(browser, base_url)
+            test_suspeita_fila_curta_conta_ausentes_como_gente_esperando(browser, base_url)
             test_marcar_ausente_remove_da_ordenacao_normal(browser, base_url)
             test_voltar_recalcula_timestampfila_preservando_posicao_relativa(browser, base_url)
             test_timeout_ausente_remove_automaticamente(browser, base_url)
             test_nao_apareceu_devolve_a_fila_e_desfaz_contagem(browser, base_url)
+            test_suspeita_nao_apareceu_duas_vezes_seguidas_mantem_contagem_consistente(browser, base_url)
             test_deviceid_impede_burlar_cooldown_trocando_nome(browser, base_url)
             test_modo_semi_automatico_chama_proximo_sozinho(browser, base_url)
             test_modo_semi_automatico_desligado_nao_chama_sozinho(browser, base_url)
