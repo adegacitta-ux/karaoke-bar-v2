@@ -1025,6 +1025,31 @@
             }, 200);
         });
 
+        // Igual ao index.html: navegadores throttlam o setInterval acima quando a tela do
+        // telão fica em segundo plano (TV que desliga a fonte HDMI, tablet que bloqueia,
+        // etc.). Ao voltar a ficar visível, forçamos location.reload() — reconecta tudo do
+        // zero (Firebase, listeners) em vez de confiar que o setInterval "acordou" sozinho.
+        // Diferente do index.html, aqui não existe restrição de admin nem debounce contra
+        // formulário: o telão é só exibição, sem input do usuário pra perder, então não há
+        // risco em recarregar. Mesmo assim, mantemos o debounce de ~5s para não recarregar
+        // à toa em trocas rápidas e desnecessárias de app/aba.
+        let telaFicouOcultaEm = null;
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') {
+                telaFicouOcultaEm = Date.now();
+                return;
+            }
+            if (document.visibilityState !== 'visible' || telaFicouOcultaEm === null) return;
+
+            const ficouOcultaPorMs = Date.now() - telaFicouOcultaEm;
+            telaFicouOcultaEm = null;
+
+            const LIMIAR_RELOAD_MS = 5000;
+            if (ficouOcultaPorMs >= LIMIAR_RELOAD_MS) {
+                location.reload();
+            }
+        });
+
         // Inicialización
         window.addEventListener('load', () => {
             console.log('📺 Display.html carregado');
