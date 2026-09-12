@@ -1028,7 +1028,24 @@ def test_suspeita_nao_apareceu_duas_vezes_seguidas_mantem_contagem_consistente(b
     ok=True == a suspeita É real (achou inconsistência/negativo — bug
     confirmado); ok=False == contagemCantores e vezesCantadas de TODOS os
     pedidos dela na fila continuam batendo (sistema já se comporta bem,
-    falsa suspeita)."""
+    falsa suspeita).
+
+    INVESTIGADO A FUNDO (ver PR do bug 2): nesse cenário de UM SÓ cliente
+    (modo local, sem Firebase, que é como esse teste sempre roda), a suspeita
+    É falsa — contagemCantores[key] e vezesCantadas nunca desalinham, porque
+    só existe uma "apresentacaoAtual" por vez e cada incremento/decremento
+    ressincroniza todos os pedidos daquela pessoa ainda na fila. O bug REAL
+    (item 5 de mapa-regras-fila.md) só aparece com MÚLTIPLAS abas/dispositivos
+    de admin abertos ao mesmo tempo contra o Firebase de verdade: duas
+    escritas concorrentes (fila/contagem/apresentacaoAtual) podiam se
+    sobrescrever, já que cada ação local lia o estado JÁ desatualizado e
+    gravava tudo de uma vez com .update(). Esse caso não dá pra reproduzir
+    aqui (a suíte roda sem Firebase de propósito, ver docstring do arquivo) —
+    foi corrigido convertendo acaoProximo/acaoNaoApareceu (e as outras ações
+    do admin que mexem em fila/contagem/dispositivosBloqueados/manualFechada)
+    pra usar db.ref(...).transaction() por path no modo Firebase, mesmo padrão
+    já usado em cancelarMeuPedido/adicionarPedido. O modo local (testado aqui)
+    ficou propositalmente idêntico ao de antes."""
     context, page, erros = nova_pagina(browser, base_url, bar="TESTE")
 
     # PessoaX tem 2 pedidos na fila (mesmo deviceId) — estressa o forEach de
