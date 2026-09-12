@@ -2515,6 +2515,8 @@ def main():
             test_deviceid_impede_burlar_cooldown_trocando_nome(browser, base_url)
             test_modo_semi_automatico_chama_proximo_sozinho(browser, base_url)
             test_modo_semi_automatico_desligado_nao_chama_sozinho(browser, base_url)
+            test_chamada_automatica_usa_topo_atual_da_fila_no_disparo(browser, base_url)
+            test_chamada_automatica_fila_vazia_no_disparo_nao_chama_ninguem(browser, base_url)
             test_dois_pedidos_simultaneos_nao_se_perdem(browser, base_url)
             test_limite_de_creditos_bloqueia_sexto_pedido_com_fila_cheia(browser, base_url)
             test_limite_de_creditos_libera_com_fila_curta(browser, base_url)
