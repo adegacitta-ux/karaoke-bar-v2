@@ -1561,6 +1561,65 @@ def test_historico_paginado_no_cliente(browser, base_url):
     context.close()
 
 
+def test_resetar_noite_exige_digitar_palavra_de_confirmacao(browser, base_url):
+    """resetarNoite() não usa mais o confirm() nativo do navegador (fácil de clicar
+    'Ok' sem pensar numa ação irreversível) — agora abre um modal, no mesmo padrão
+    visual do admin-auth-modal, que só libera o botão 'Apagar tudo' depois de
+    digitar a palavra APAGAR. Deixar em branco ou digitar errado não apaga nada,
+    nem pelo botão (que fica desabilitado) nem submetendo o formulário direto."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    page.evaluate("""
+        fila = [{id: 1, nome: 'Pessoa1', mesa: null, musica: 'Musica1', artista: 'X', timestamp: Date.now(), vezesCantadas: 0, youtubeUrl: null}];
+        historico = [{id: 2, deviceId: 'dev-1', nome: 'Pessoa2', mesa: null, musica: 'Musica2', artista: 'X', horario: '20:00', mediaAvaliacao: 4, totalVotos: 1}];
+        contagemCantores = {'device:dev-1': 1};
+        atualizarUI();
+    """)
+
+    # Abre o modal (equivalente a clicar em "LIMPAR TODOS OS DADOS DA NOITE")
+    page.evaluate("resetarNoite()")
+    page.wait_for_timeout(100)
+    modal_visivel = page.evaluate("!document.getElementById('reset-noite-modal').classList.contains('hidden')")
+    desabilitado_vazio = page.evaluate("document.getElementById('reset-noite-confirmar').disabled")
+
+    # Deixa em branco e tenta submeter direto (ex: Enter) -> nada é apagado
+    page.evaluate("document.getElementById('reset-noite-form').dispatchEvent(new Event('submit', {cancelable: true}))")
+    page.wait_for_timeout(100)
+    fila_intacta_apos_vazio = page.evaluate("fila.length === 1")
+
+    # Digita errado -> botão continua desabilitado e submeter direto também não apaga
+    page.fill("#reset-noite-input", "apagar")
+    page.wait_for_timeout(50)
+    desabilitado_errado = page.evaluate("document.getElementById('reset-noite-confirmar').disabled")
+    page.evaluate("document.getElementById('reset-noite-form').dispatchEvent(new Event('submit', {cancelable: true}))")
+    page.wait_for_timeout(100)
+    fila_intacta_apos_errado = page.evaluate("fila.length === 1")
+
+    # Digita certo -> botão libera e clicar de fato reseta tudo
+    page.fill("#reset-noite-input", "APAGAR")
+    page.wait_for_timeout(50)
+    habilitado_certo = page.evaluate("!document.getElementById('reset-noite-confirmar').disabled")
+    page.click("#reset-noite-confirmar")
+    page.wait_for_timeout(150)
+
+    modal_fechado_depois = page.evaluate("document.getElementById('reset-noite-modal').classList.contains('hidden')")
+    fila_vazia = page.evaluate("fila.length === 0")
+    historico_vazio = page.evaluate("historico.length === 0")
+    contagem_vazia = page.evaluate("Object.keys(contagemCantores).length === 0")
+
+    ok = (modal_visivel and desabilitado_vazio and fila_intacta_apos_vazio
+          and desabilitado_errado and fila_intacta_apos_errado
+          and habilitado_certo and modal_fechado_depois
+          and fila_vazia and historico_vazio and contagem_vazia and not erros)
+    registrar("Resetar noite exige digitar 'APAGAR' no modal antes de apagar os dados", ok,
+               f"modal_visivel={modal_visivel}, desabilitado_vazio={desabilitado_vazio}, "
+               f"intacta_apos_vazio={fila_intacta_apos_vazio}, desabilitado_errado={desabilitado_errado}, "
+               f"intacta_apos_errado={fila_intacta_apos_errado}, habilitado_certo={habilitado_certo}, "
+               f"modal_fechado_depois={modal_fechado_depois}, fila_vazia={fila_vazia}, "
+               f"historico_vazio={historico_vazio}, contagem_vazia={contagem_vazia}")
+    context.close()
+
+
 def test_aviso_iphone_aparece_so_no_iphone(browser, base_url):
     """O aviso sobre a limitação de notificação no iPhone só aparece pra quem
     está realmente usando Safari em iPhone/iPad — não deve poluir a tela de
@@ -2468,6 +2527,7 @@ def main():
             test_indicador_creditos_minutos_ate_liberar(browser, base_url)
             test_meus_pedidos_posicao_e_cancelamento(browser, base_url)
             test_historico_paginado_no_cliente(browser, base_url)
+            test_resetar_noite_exige_digitar_palavra_de_confirmacao(browser, base_url)
             test_aviso_iphone_aparece_so_no_iphone(browser, base_url)
             test_aviso_de_conexao_perdida_existe(browser, base_url)
             test_modo_escuro_alterna_e_persiste(browser, base_url)
