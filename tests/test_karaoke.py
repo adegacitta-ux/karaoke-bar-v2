@@ -734,15 +734,13 @@ def test_suspeita_espera_maxima_anula_protecao_anti_sequencia(browser, base_url)
 def test_suspeita_fila_curta_conta_ausentes_como_gente_esperando(browser, base_url):
     """[Combinação: LIMITE_PEDIDOS_ATIVOS_POR_DEVICE (teto de créditos) +
     LIMIAR_FILA_CURTA (bypass de fila curta), ambos em podeAdicionarPedido()
-    ~linha 2680] Suspeita: outrasPessoasNaFila (~linha 2683) é calculado como
-    `lista.filter(p => p.deviceId !== deviceId).length` — não filtra quem
-    está marcado `ausenteDesde`. Ou seja, pedidos de gente que nem está
-    esperando de verdade (ausente) contam como "gente na fila" pro cálculo de
-    fila curta, podendo impedir o bypass de liberar um device que já bateu o
-    teto de créditos mesmo quando, na prática, ninguém mais está esperando.
-    Este teste documenta o que o sistema JÁ FAZ hoje (bloqueia); se for
-    corrigido depois, o teste abaixo vai passar a falhar e precisa ser
-    atualizado junto com o fix."""
+    ~linha 2680] Fix: outrasPessoasNaFila (~linha 2683) agora filtra quem
+    está marcado `ausenteDesde` — pedidos de gente que nem está esperando de
+    verdade (ausente) não contam mais como "gente na fila" pro cálculo de
+    fila curta, então o bypass libera um device que já bateu o teto de
+    créditos quando, na prática, ninguém mais está esperando. Este teste
+    documentava a suspeita (sistema bloqueava indevidamente); agora documenta
+    o fix, confirmando que o pedido extra é liberado."""
     context, page, erros = nova_pagina(browser, base_url, bar="TESTE")
 
     limite = page.evaluate("LIMITE_PEDIDOS_ATIVOS_POR_DEVICE")
@@ -770,8 +768,8 @@ def test_suspeita_fila_curta_conta_ausentes_como_gente_esperando(browser, base_u
     preencher_pedido(page, "MesmoDispositivo", "MusicaQueDeveriaSerLiberadaSeAusentesNaoContassem")
     total_depois = page.evaluate("fila.filter(p => p.deviceId === DEVICE_ID).length")
 
-    # ok=True confirma a suspeita: mesmo com TODOS os "outros" pedidos
-    # ausentes, o sistema ainda bloqueia o pedido extra do device A.
+    # ok=False confirma o fix: com TODOS os "outros" pedidos ausentes, o
+    # sistema libera o pedido extra do device A em vez de bloquear.
     ok = total_antes == limite and total_depois == limite and bloqueou["sim"] and not erros
     registrar("[SUSPEITA CONFIRMADA?] Bypass de fila curta conta pedidos ausentes como gente esperando", ok,
                f"limite={limite}, limiar_fila_curta={limiar_fila_curta}, "

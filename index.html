@@ -2699,10 +2699,12 @@
         // próprios pedidos dele já preencheram a fila. Com os números padrão daqui
         // (4 créditos / limiar 3), comparar contra o total incluiria os próprios
         // pedidos do device e tornaria essa exceção praticamente inatingível.
+        // Pedidos com ausenteDesde não contam: quem está ausente não está de fato
+        // esperando a vez, então não deve inflar a fila e travar o bypass.
         function podeAdicionarPedido(lista, deviceId, bloqueados = dispositivosBloqueados) {
             if (dispositivoBloqueado(deviceId, bloqueados)) return false;
             if (contarPedidosAtivosDoDevice(lista, deviceId) < LIMITE_PEDIDOS_ATIVOS_POR_DEVICE) return true;
-            const outrasPessoasNaFila = lista.filter(p => p.deviceId !== deviceId).length;
+            const outrasPessoasNaFila = lista.filter(p => p.deviceId !== deviceId && !p.ausenteDesde).length;
             return outrasPessoasNaFila < LIMIAR_FILA_CURTA;
         }
 
