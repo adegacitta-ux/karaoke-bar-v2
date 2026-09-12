@@ -350,6 +350,17 @@ def test_espera_longa_faz_pessoa_furar_a_fila(browser, base_url):
     """)
     ordem_normal = page.evaluate("fila.map(p => p.nome)")
 
+    # PessoaA é a ultimoCantorKey (acabou de finalizar a apresentação, logo
+    # acima). Esse teste quer isolar a regra de fairness por espera (teto
+    # MINUTOS_ESPERA_MAXIMA) — não a proteção anti-sequência (que agora troca
+    # incondicionalmente fila[0] vs ultimoCantorKey, ver
+    # desfazerSequenciasConsecutivas). Sem resetar aqui, as duas regras se
+    # combinariam neste cenário específico (mesma pessoa que furou é também
+    # quem acabou de cantar) e a troca anti-sequência adiaria PessoaA por 1
+    # posição mesmo com o teto ativo — comportamento correto, mas não o que
+    # este teste específico mede.
+    page.evaluate("ultimoCantorKey = null;")
+
     # Simula 20 minutos de espera no pedido da Pessoa A (mais que o limite de
     # 15min configurado pra perdoar uma vez cantada)
     # Simula uma espera bem maior que o limite configurado (2x + 5min de folga),
@@ -666,18 +677,18 @@ def test_teto_de_espera_maxima_empate_por_ordem_de_chegada(browser, base_url):
 def test_suspeita_espera_maxima_anula_protecao_anti_sequencia(browser, base_url):
     """[Combinação: MINUTOS_ESPERA_MAXIMA (calcularPrioridadeEfetiva, ~linha
     2954) + LIMITE_TROCA_ANTI_SEQUENCIA (desfazerSequenciasConsecutivas,
-    ~linha 2996)] Suspeita: quando o segundo pedido de quem ACABOU de cantar
-    já passou do teto de espera máxima, calcularPrioridadeEfetiva força esse
-    pedido pra -Infinity. desfazerSequenciasConsecutivas só desfaz a
-    sequência (troca pelo próximo pedido de OUTRA pessoa) se a diferença de
-    prioridade entre os dois for <= LIMITE_TROCA_ANTI_SEQUENCIA. Como a
-    diferença entre uma prioridade normal (finita) e -Infinity é sempre
-    (efetivamente) infinita, a condição "diferenca <= LIMITE_TROCA_ANTI_SEQUENCIA"
-    nunca é satisfeita — ou seja, a troca NUNCA acontece nesse caso, e a
-    pessoa que acabou de cantar é chamada de novo em seguida mesmo tendo
-    outra pessoa esperando logo atrás. Este teste documenta o que o sistema
-    JÁ FAZ hoje; se for corrigido depois, o teste abaixo vai passar a falhar
-    e precisa ser atualizado junto com o fix."""
+    ~linha 2996)] FIXADO: o caso fila[0] vs ultimoCantorKey em
+    desfazerSequenciasConsecutivas (a garantia de "nunca chamar a mesma
+    pessoa duas vezes seguidas") agora troca de forma INCONDICIONAL, sem
+    passar pelo LIMITE_TROCA_ANTI_SEQUENCIA — diferente do loop de pares no
+    meio da fila, que continua respeitando esse limite (é uma otimização de
+    prioridade, não uma garantia de UX). Antes do fix, quando o segundo
+    pedido de quem ACABOU de cantar já tinha passado do teto de espera
+    máxima (prioridade forçada a -Infinity por calcularPrioridadeEfetiva), a
+    diferença contra qualquer prioridade finita sempre excedia
+    LIMITE_TROCA_ANTI_SEQUENCIA e a troca nunca acontecia — a pessoa era
+    chamada de novo em seguida mesmo com outra pessoa esperando logo atrás.
+    Este teste agora confirma que a troca acontece nesse caso."""
     context, page, erros = nova_pagina(browser, base_url, bar="TESTE")
 
     teto_minutos = page.evaluate("MINUTOS_ESPERA_MAXIMA")

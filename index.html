@@ -3002,6 +3002,16 @@
         function desfazerSequenciasConsecutivas() {
             const limite = limiteFilaAtiva();
 
+            // Esse caso (fila[0] vs ultimoCantorKey) é uma garantia de UX —
+            // "nunca chamar a mesma pessoa duas vezes seguidas" — não uma
+            // otimização de prioridade como o loop abaixo. Por isso a troca
+            // aqui é INCONDICIONAL e não passa pelo LIMITE_TROCA_ANTI_SEQUENCIA:
+            // mesmo que fila[j] "mereça" ir primeiro pela lógica de fairness
+            // (ex: prioridade -Infinity por MINUTOS_ESPERA_MAXIMA, que faria a
+            // diferença de prioridade estourar qualquer limite), ele só é
+            // adiado por 1 posição — ainda vai ser chamado logo em seguida, não
+            // indefinidamente. Sem essa troca, a mesma pessoa seria chamada de
+            // novo na sequência mesmo com alguém esperando logo atrás.
             if (ultimoCantorKey && limite > 0 &&
                 obterChaveIdentidade(fila[0]) === ultimoCantorKey) {
                 let j = 1;
@@ -3009,15 +3019,11 @@
                     j++;
                 }
                 if (j < limite) {
-                    const diferenca = calcularPrioridadeEfetiva(fila[j]) - calcularPrioridadeEfetiva(fila[0]);
-                    if (diferenca <= LIMITE_TROCA_ANTI_SEQUENCIA) {
-                        const [trocado] = fila.splice(j, 1);
-                        fila.splice(0, 0, trocado);
-                    }
+                    const [trocado] = fila.splice(j, 1);
+                    fila.splice(0, 0, trocado);
                 }
-                // Se ninguém qualificar (só sobrou ela, ou a próxima pessoa tem
-                // prioridade bem pior), mantém como está — mesma filosofia do
-                // loop abaixo: não fura fila de prioridade muito pior.
+                // Se ninguém qualificar (só sobrou pedido dela), mantém como
+                // está — não tem ninguém pra trocar.
             }
 
             for (let i = 1; i < limite; i++) {
