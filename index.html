@@ -664,6 +664,28 @@
         </div>
     </div>
 
+    <!-- Modal de Confirmação: Resetar Noite -->
+    <div id="reset-noite-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4">
+        <div class="glass max-w-md w-full rounded-2xl shadow-xl p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-gray-800">Limpar Todos os Dados da Noite</h3>
+                <button type="button" id="reset-noite-cancel" class="text-gray-500 hover:text-gray-700">Cancelar</button>
+            </div>
+
+            <form id="reset-noite-form" class="space-y-4">
+                <div>
+                    <p class="text-sm text-gray-600 mb-3">Essa ação apaga a fila, o histórico e a contagem de cantores da noite — não pode ser desfeita. Para confirmar, digite <strong>APAGAR</strong> abaixo.</p>
+                    <label for="reset-noite-input" class="block text-sm font-medium text-gray-700 mb-1">Digite APAGAR para confirmar</label>
+                    <input id="reset-noite-input" type="text" autocomplete="off" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500" />
+                </div>
+                <div class="flex justify-end items-center gap-2">
+                    <button type="button" id="reset-noite-cancel-2" class="px-4 py-2 rounded-md border border-gray-200">Cancelar</button>
+                    <button type="submit" id="reset-noite-confirmar" disabled class="px-4 py-2 rounded-md bg-red-600 text-white disabled:opacity-50 disabled:cursor-not-allowed">Apagar tudo</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- MODAL: BUSCAR KARAOKÊ NO YOUTUBE -->
     <div id="youtube-modal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black bg-opacity-50 px-0 sm:px-4">
         <div class="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-xl p-6 max-h-[85vh] flex flex-col">
@@ -3618,24 +3640,62 @@
             atualizarUI();
         }
 
+        // Palavra que precisa ser digitada no modal de confirmação antes de habilitar
+        // o botão "Apagar tudo" — troca o confirm() nativo (só Ok/Cancelar, fácil de
+        // clicar sem pensar) por uma barreira mais forte pra uma ação irreversível.
+        const PALAVRA_CONFIRMACAO_RESET = "APAGAR";
+
         function resetarNoite() {
-            if(confirm("Tem certeza que deseja apagar todos os dados da noite?")) {
-                cancelarChamadaAutomatica();
-                fila = [];
-                historico = [];
-                contagemCantores = {};
-                filaManualFechada = false;
-                apresentacaoAtual = null;
-                // Bloqueio de dispositivo vale só pra noite em que foi aplicado —
-                // sem isso, bloqueios esquecidos se acumulariam noite após noite.
-                dispositivosBloqueados = {};
-                // Depois do reset o histórico está vazio "de verdade" — marca como já
-                // carregado pra não deixar o listener limitado (últimas 12) tentar
-                // repopular com dado antigo se ele ainda não tiver recebido a mudança.
-                historicoCompletoCarregado = true;
-                salvarNoFirebase();
-                atualizarUI();
-            }
+            mostrarModalResetNoite();
+        }
+
+        function mostrarModalResetNoite() {
+            const modal = document.getElementById('reset-noite-modal');
+            const input = document.getElementById('reset-noite-input');
+            const btnConfirmar = document.getElementById('reset-noite-confirmar');
+            input.value = '';
+            btnConfirmar.disabled = true;
+            modal.classList.remove('hidden');
+            input.focus();
+        }
+
+        function esconderModalResetNoite() {
+            document.getElementById('reset-noite-modal').classList.add('hidden');
+        }
+
+        function cancelarResetNoite() {
+            esconderModalResetNoite();
+        }
+
+        function handleResetNoiteInput() {
+            const input = document.getElementById('reset-noite-input');
+            const btnConfirmar = document.getElementById('reset-noite-confirmar');
+            btnConfirmar.disabled = input.value !== PALAVRA_CONFIRMACAO_RESET;
+        }
+
+        function handleResetNoiteSubmit(e) {
+            e.preventDefault();
+            const input = document.getElementById('reset-noite-input');
+            // Confere de novo aqui (além do botão desabilitado) — Enter dentro do
+            // form pode disparar o submit mesmo com o botão disabled em alguns casos.
+            if (input.value !== PALAVRA_CONFIRMACAO_RESET) return;
+
+            esconderModalResetNoite();
+            cancelarChamadaAutomatica();
+            fila = [];
+            historico = [];
+            contagemCantores = {};
+            filaManualFechada = false;
+            apresentacaoAtual = null;
+            // Bloqueio de dispositivo vale só pra noite em que foi aplicado —
+            // sem isso, bloqueios esquecidos se acumulariam noite após noite.
+            dispositivosBloqueados = {};
+            // Depois do reset o histórico está vazio "de verdade" — marca como já
+            // carregado pra não deixar o listener limitado (últimas 12) tentar
+            // repopular com dado antigo se ele ainda não tiver recebido a mudança.
+            historicoCompletoCarregado = true;
+            salvarNoFirebase();
+            atualizarUI();
         }
 
         // --- CÁLCULOS DE TEMPO E BLOQUEIO ---
@@ -3915,6 +3975,16 @@
         document.getElementById('admin-auth-modal').addEventListener('click', function(e) {
             // fechar se clicar fora do conteúdo
             if (e.target === this) cancelAdminAuth();
+        });
+
+        // Conectar eventos do modal de reset da noite
+        document.getElementById('reset-noite-form').addEventListener('submit', handleResetNoiteSubmit);
+        document.getElementById('reset-noite-input').addEventListener('input', handleResetNoiteInput);
+        document.getElementById('reset-noite-cancel').addEventListener('click', cancelarResetNoite);
+        document.getElementById('reset-noite-cancel-2').addEventListener('click', cancelarResetNoite);
+        document.getElementById('reset-noite-modal').addEventListener('click', function(e) {
+            // fechar se clicar fora do conteúdo
+            if (e.target === this) cancelarResetNoite();
         });
 
         // Clique nas estrelas de avaliação (delegação de evento)
