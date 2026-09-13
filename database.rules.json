@@ -12,11 +12,10 @@
           ".write": "auth != null && auth.token.email == root.child('bares/' + $barId + '/config/adminEmail').val()",
 
           "fila": {
-            ".write": "auth != null",
-            "$index": {
-              ".validate": "newData.hasChildren(['id', 'nome', 'musica', 'deviceId', 'timestamp', 'timestampFila', 'vezesCantadas'])",
+            "$pedidoId": {
+              ".write": "(auth != null && auth.token.email == root.child('bares/' + $barId + '/config/adminEmail').val()) || (auth != null && ((!data.exists() && newData.child('criadoPor').val() == auth.uid) || (data.exists() && data.child('criadoPor').val() == auth.uid)))",
+              ".validate": "newData.hasChildren(['nome', 'musica', 'deviceId', 'timestamp', 'timestampFila', 'vezesCantadas', 'criadoPor'])",
               "ausenteDesde": { ".validate": "newData.val() == null || newData.isNumber()" },
-              "id": { ".validate": "newData.isNumber()" },
               "nome": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60" },
               "mesa": { ".validate": "newData.val() == null || (newData.isString() && newData.val().length <= 20)" },
               "musica": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 120 && !newData.val().matches(/^https?:\\/\\//)" },
@@ -26,6 +25,7 @@
               "timestampFila": { ".validate": "newData.isNumber()" },
               "vezesCantadas": { ".validate": "newData.isNumber()" },
               "youtubeUrl": { ".validate": "newData.val() == null || (newData.isString() && newData.val().length <= 200 && newData.val().matches(/^https:\\/\\/(www\\.)?(youtube\\.com|youtu\\.be)\\/.+/))" },
+              "criadoPor": { ".validate": "newData.isString() && newData.val() == auth.uid" },
               "$other": { ".validate": false }
             }
           },
@@ -39,7 +39,8 @@
           "apresentacaoAtual": {
             "avaliacoes": {
               "$votanteId": {
-                ".write": "auth != null"
+                ".write": "auth != null && $votanteId == auth.uid",
+                ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 5"
               }
             }
           },

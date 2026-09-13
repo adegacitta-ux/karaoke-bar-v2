@@ -44,6 +44,9 @@ import socketserver
 import socket
 import threading
 import contextlib
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 from datetime import datetime
 
@@ -1274,7 +1277,11 @@ def test_dois_pedidos_simultaneos_nao_se_perdem(browser, base_url):
     """Regra crítica: reproduz o bug relatado de nomes "sumindo e reaparecendo".
     Causa era uma corrida de gravação — dois pedidos quase ao mesmo tempo podiam
     se sobrescrever. Usa um Firebase simulado que processa uma transação de
-    cada vez (como o servidor real faz) pra provar que os dois sobrevivem."""
+    cada vez (como o servidor real faz) pra provar que os dois sobrevivem.
+
+    window.__servidorFila fica no schema NOVO (mapa {pedidoId: pedido} — ver
+    migracao-fila-por-pedido.md), porque adicionarPedido() já devolve o
+    resultado da transação nesse formato (arrayFilaParaMapa)."""
     context, page, erros = nova_pagina(browser, base_url)
 
     page.evaluate("""
@@ -1309,7 +1316,7 @@ def test_dois_pedidos_simultaneos_nao_se_perdem(browser, base_url):
         """)
     page.wait_for_timeout(300)
 
-    fila_servidor = sorted(page.evaluate("window.__servidorFila.map(p => p.nome)"))
+    fila_servidor = sorted(page.evaluate("Object.values(window.__servidorFila).map(p => p.nome)"))
     fila_local = sorted(page.evaluate("fila.map(p => p.nome)"))
 
     ok = fila_servidor == ["PessoaX", "PessoaY"] and fila_local == ["PessoaX", "PessoaY"] and not erros
@@ -2462,7 +2469,10 @@ def test_campos_do_pedido_batem_com_regras_do_firebase(browser, base_url):
     disso aparece nos outros testes (que rodam em modo localStorage, sem as
     regras reais). Já aconteceu de verdade com o campo "youtubeUrl". Esse teste
     não abre browser: só compara estaticamente os campos que montarNovoPedido()
-    grava com o schema declarado em fila/$index nas regras."""
+    grava com o schema declarado em fila/$pedidoId nas regras (desde a
+    migração de array pra mapa, ver migracao-fila-por-pedido.md — "id" não
+    entra nessa whitelist de propósito, porque virou a própria chave do mapa,
+    não um campo dentro do objeto)."""
     conteudo = CAMINHO_INDEX.read_text(encoding="utf-8")
     regras = json.loads(CAMINHO_REGRAS.read_text(encoding="utf-8"))
 
@@ -2475,17 +2485,206 @@ def test_campos_do_pedido_batem_com_regras_do_firebase(browser, base_url):
         if not linha.strip().startswith("//")
     )
     campos_do_pedido = set(re.findall(r"^\s*(\w+):", linhas_sem_comentario, re.MULTILINE))
+    # "id" continua existindo no objeto em memória (usado por toda a lógica de
+    # ordenação/cancelamento via p.id), mas desde a migração pra mapa
+    # (arrayFilaParaMapa) NUNCA é gravado como campo dentro do pedido — vira a
+    # própria chave $pedidoId. Não faz parte da whitelist de campos por isso,
+    # não por descuido.
+    campos_do_pedido_gravados = campos_do_pedido - {"id"}
 
-    schema_fila = regras["rules"]["bares"]["$barId"]["karaoke"]["fila"]["$index"]
+    schema_fila = regras["rules"]["bares"]["$barId"]["karaoke"]["fila"]["$pedidoId"]
     campos_permitidos = {chave for chave in schema_fila.keys() if not chave.startswith(("$", "."))}
 
-    campos_nao_permitidos = campos_do_pedido - campos_permitidos
+    campos_nao_permitidos = campos_do_pedido_gravados - campos_permitidos
 
     ok = bool(match_funcao) and len(campos_do_pedido) > 0 and not campos_nao_permitidos
     registrar("Campos gravados em /fila batem com a whitelist de database.rules.json", ok,
               f"gravados={sorted(campos_do_pedido)}, "
               f"permitidos={sorted(campos_permitidos)}, "
               f"fora_da_whitelist={sorted(campos_nao_permitidos)}")
+
+
+# Mini-interpretador (Node.js) das expressões de database.rules.json — igual ao
+# teste estático acima, isso NÃO substitui testar contra o Firebase/emulator de
+# verdade (ver docstring do módulo: "regras de segurança" continuam fora do
+# alcance desta suíte), mas evita que a gente só "confie" que a string da regra
+# faz o que o texto da migração diz que faz. As expressões desse arquivo só
+# usam um subconjunto pequeno da API de regras do Firebase (val/exists/child/
+# isString/isNumber/hasChildren/matches), então dá pra simular com um mock
+# fiel e rodar a EXPRESSÃO DE VERDADE (copiada do JSON, não reescrita à mão)
+# com o motor de JS do Node contra cenários de dono certo/errado.
+_JS_AVALIADOR_DE_REGRAS = r"""
+const fs = require('fs');
+const entrada = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+
+class Snap {
+  constructor(v) { this._v = (v === undefined) ? null : v; }
+  val() { return this._v; }
+  exists() { return this._v !== null && this._v !== undefined; }
+  child(caminho) {
+    if (this._v === null || typeof this._v !== 'object') return new Snap(null);
+    let cur = this._v;
+    for (const parte of String(caminho).split('/')) {
+      if (cur === null || typeof cur !== 'object' || !(parte in cur)) { cur = null; break; }
+      cur = cur[parte];
+    }
+    return new Snap(cur);
+  }
+  isString() { return typeof this._v === 'string'; }
+  isNumber() { return typeof this._v === 'number'; }
+  isBoolean() { return typeof this._v === 'boolean'; }
+  hasChildren(lista) {
+    if (this._v === null || typeof this._v !== 'object') return false;
+    if (!lista) return Object.keys(this._v).length > 0;
+    return lista.every(k => this._v[k] !== undefined && this._v[k] !== null);
+  }
+  matches(re) { return typeof this._v === 'string' && re.test(this._v); }
+}
+
+function paraSnapOuValor(chave, valor) {
+  // auth e $barId/$votanteId entram "crus" (não são RuleDataSnapshot na API
+  // real do Firebase); data/newData/root entram envolvidos em Snap.
+  if (['data', 'newData', 'root'].includes(chave)) return new Snap(valor);
+  return valor;
+}
+
+const resultados = entrada.cenarios.map((cenario) => {
+  const nomes = Object.keys(cenario.vars);
+  const valores = nomes.map(n => paraSnapOuValor(n, cenario.vars[n]));
+  try {
+    const fn = new Function(...nomes, 'return (' + entrada.regras[cenario.regra] + ');');
+    return { nome: cenario.nome, resultado: !!fn(...valores), erro: null };
+  } catch (e) {
+    return { nome: cenario.nome, resultado: null, erro: String(e) };
+  }
+});
+
+process.stdout.write(JSON.stringify(resultados));
+"""
+
+
+def test_regras_de_ownership_fila_e_avaliacoes(browser, base_url):
+    """Simula (via Node, sem precisar do emulator/Firebase de verdade — ver
+    docstring do módulo) as expressões REAIS de database.rules.json contra
+    cenários de dono certo/errado, pra confirmar que elas realmente rejeitam
+    o que a migração pra ownership por auth.uid deveria rejeitar:
+
+    a) cliente A não pode escrever num campo (ex: timestampFila) do pedido de
+       B usando o pedidoId de B diretamente — só o admin ou o próprio dono
+       (criadoPor == auth.uid) podem.
+    b) cliente não pode gravar um voto em apresentacaoAtual/avaliacoes usando
+       um $votanteId diferente do próprio auth.uid.
+
+    Também cobre os caminhos que deveriam continuar permitidos (dono editando
+    o próprio pedido, admin editando qualquer um, criar pedido novo com
+    criadoPor == auth.uid) e a validação de nota (1 a 5, numérica) — pra não
+    travar sozinho os fluxos normais enquanto fecha a brecha."""
+    if shutil.which("node") is None:
+        registrar("Regras de ownership (fila/$pedidoId e avaliacoes/$votanteId) rejeitam dono errado", False,
+                   "node não está disponível neste ambiente pra rodar o mini-interpretador das regras")
+        return
+
+    regras = json.loads(CAMINHO_REGRAS.read_text(encoding="utf-8"))
+    regra_write_fila = regras["rules"]["bares"]["$barId"]["karaoke"]["fila"]["$pedidoId"][".write"]
+    schema_avaliacoes = regras["rules"]["bares"]["$barId"]["karaoke"]["apresentacaoAtual"]["avaliacoes"]["$votanteId"]
+    regra_write_avaliacoes = schema_avaliacoes[".write"]
+    regra_validate_avaliacoes = schema_avaliacoes[".validate"]
+
+    # auth.token sempre existe de verdade (é onde ficam as claims do token),
+    # mesmo pra sessão anônima — só não tem a claim "email" nesse caso. Um
+    # mock sem "token" nenhum faria "auth.token.email" quebrar em vez de dar
+    # undefined (!= adminEmail), o que a regra real nunca faria.
+    admin = {"uid": "admin-uid", "token": {"email": "dj@bar.com"}}
+    cliente_a = {"uid": "uid-a", "token": {}}
+    dono_do_pedido_b = {"uid": "uid-b", "token": {}}
+    root = {"bares": {"TESTE": {"config": {"adminEmail": "dj@bar.com"}}}}
+    pedido_de_b = {"criadoPor": "uid-b", "nome": "Beto", "timestampFila": 1000}
+
+    cenarios = [
+        # --- fila/$pedidoId ---
+        ("admin_pode_editar_pedido_de_outro", "write_fila", True, {
+            "auth": admin, "root": root, "$barId": "TESTE",
+            "data": pedido_de_b,
+            "newData": {**pedido_de_b, "timestampFila": 9999},
+        }),
+        ("dono_pode_editar_o_proprio_pedido", "write_fila", True, {
+            "auth": dono_do_pedido_b, "root": root, "$barId": "TESTE",
+            "data": pedido_de_b,
+            "newData": {**pedido_de_b, "timestampFila": 9999},
+        }),
+        ("cliente_a_NAO_pode_editar_pedido_de_b_usando_o_pedidoId_de_b", "write_fila", False, {
+            "auth": cliente_a, "root": root, "$barId": "TESTE",
+            "data": pedido_de_b,
+            "newData": {**pedido_de_b, "timestampFila": 9999},
+        }),
+        ("cliente_pode_criar_pedido_proprio_com_criadoPor_igual_ao_uid", "write_fila", True, {
+            "auth": cliente_a, "root": root, "$barId": "TESTE",
+            "data": None,
+            "newData": {"criadoPor": "uid-a", "nome": "Ana"},
+        }),
+        ("cliente_NAO_pode_criar_pedido_com_criadoPor_de_outro_uid", "write_fila", False, {
+            "auth": cliente_a, "root": root, "$barId": "TESTE",
+            "data": None,
+            "newData": {"criadoPor": "uid-b", "nome": "Ana"},
+        }),
+        ("sem_autenticacao_NAO_pode_escrever_na_fila", "write_fila", False, {
+            "auth": None, "root": root, "$barId": "TESTE",
+            "data": pedido_de_b,
+            "newData": {**pedido_de_b, "timestampFila": 9999},
+        }),
+        # --- apresentacaoAtual/avaliacoes/$votanteId ---
+        ("voto_com_votanteId_igual_ao_proprio_uid_e_permitido", "write_aval", True, {
+            "auth": cliente_a, "$votanteId": "uid-a",
+        }),
+        ("voto_com_votanteId_de_OUTRO_uid_e_rejeitado", "write_aval", False, {
+            "auth": cliente_a, "$votanteId": "uid-b",
+        }),
+        ("sem_autenticacao_NAO_pode_votar", "write_aval", False, {
+            "auth": None, "$votanteId": "uid-a",
+        }),
+        ("nota_valida_dentro_do_intervalo_e_aceita", "validate_aval", True, {"newData": 3}),
+        ("nota_acima_de_5_e_rejeitada", "validate_aval", False, {"newData": 6}),
+        ("nota_zero_e_rejeitada", "validate_aval", False, {"newData": 0}),
+        ("nota_como_string_e_rejeitada", "validate_aval", False, {"newData": "3"}),
+    ]
+
+    payload = {
+        "regras": {
+            "write_fila": regra_write_fila,
+            "write_aval": regra_write_avaliacoes,
+            "validate_aval": regra_validate_avaliacoes,
+        },
+        "cenarios": [{"nome": nome, "regra": regra, "vars": vars_} for nome, regra, _esperado, vars_ in cenarios],
+    }
+
+    with tempfile.TemporaryDirectory() as tmp:
+        script_path = Path(tmp) / "avaliador.js"
+        entrada_path = Path(tmp) / "entrada.json"
+        script_path.write_text(_JS_AVALIADOR_DE_REGRAS, encoding="utf-8")
+        entrada_path.write_text(json.dumps(payload), encoding="utf-8")
+        resultado = subprocess.run(
+            ["node", str(script_path), str(entrada_path)],
+            capture_output=True, text=True, timeout=30,
+        )
+
+    if resultado.returncode != 0:
+        registrar("Regras de ownership (fila/$pedidoId e avaliacoes/$votanteId) rejeitam dono errado", False,
+                   f"node falhou: {resultado.stderr.strip()}")
+        return
+
+    saida = {item["nome"]: item for item in json.loads(resultado.stdout)}
+    falhas = []
+    for nome, _regra, esperado, _vars in cenarios:
+        item = saida.get(nome)
+        if item is None:
+            falhas.append(f"{nome}: sem resultado")
+        elif item["erro"]:
+            falhas.append(f"{nome}: erro ao avaliar ({item['erro']})")
+        elif item["resultado"] != esperado:
+            falhas.append(f"{nome}: esperado {esperado}, veio {item['resultado']}")
+
+    registrar("Regras de ownership (fila/$pedidoId e avaliacoes/$votanteId) rejeitam dono errado", not falhas,
+              "tudo certo" if not falhas else "; ".join(falhas))
 
 
 # ---------------------------------------------------------------------------
@@ -2577,6 +2776,7 @@ def main():
             test_historico_permanente_limita_a_um_ano(browser, base_url)
             test_contraste_de_cores_no_modo_escuro(browser, base_url)
             test_campos_do_pedido_batem_com_regras_do_firebase(browser, base_url)
+            test_regras_de_ownership_fila_e_avaliacoes(browser, base_url)
 
             browser.close()
 
