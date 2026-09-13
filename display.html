@@ -825,6 +825,21 @@
             }
         }
 
+        // "fila" agora é gravada no Firebase como um MAPA { $pedidoId: pedido }
+        // (ver database.rules.json e migracao-fila-por-pedido.md no repo do
+        // index.html), não mais um array — converte de volta pra array ordenado
+        // antes de usar, igual sempre foi renderizado aqui. pedidoId é o próprio
+        // "id" (Date.now() + ...) gerado em montarNovoPedido(), então ordenar por
+        // ele ascendente reconstrói a mesma ordem de chegada que o array antigo
+        // já tinha (index.html só grava pedido novo no final da fila).
+        function mapaFilaParaArray(mapa) {
+            if (!mapa) return [];
+            if (Array.isArray(mapa)) return mapa; // dado antigo (schema anterior), só por segurança
+            return Object.keys(mapa)
+                .sort((a, b) => Number(a) - Number(b))
+                .map((pedidoId) => ({ ...mapa[pedidoId], id: Number(pedidoId) }));
+        }
+
         function calcularMediaAvaliacoes(avaliacoes) {
             const notas = Object.values(avaliacoes || {}).map(n => Number(n)).filter(n => !isNaN(n));
             if (notas.length === 0) return null;
@@ -884,7 +899,7 @@
                 document.getElementById('veces-cantadas').innerText = '-';
 
                 // info de fila
-                const fila = data.fila || [];
+                const fila = mapaFilaParaArray(data.fila);
                 document.getElementById('proximos-na-fila').innerText = Math.max(0, fila.length);
                 const tempoEstimado = Math.max(0, fila.length) * TEMPO_MEDIO_MUSICA;
                 document.getElementById('tempo-espera-display').innerText = tempoEstimado;
@@ -899,7 +914,7 @@
             }
 
             // Sem apresentacaoAtual: usamos a fila para mostrar o próximo
-            const fila = data.fila || [];
+            const fila = mapaFilaParaArray(data.fila);
             if (!fila || fila.length === 0) {
                 if (data.manualFechada) {
                     document.getElementById('fila-vazia').classList.remove('hidden');

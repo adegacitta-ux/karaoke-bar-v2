@@ -895,6 +895,7 @@
                 avaliar_status_default: 'Toque em uma estrela para votar.',
                 avaliar_status_votou: 'Você votou {nota}★. Pode alterar seu voto se quiser.',
                 avaliar_erro_voto: '⚠️ Seu voto não foi salvo. Toque na estrela de novo.',
+                avaliar_aguardando_login: 'Só um instante, terminando de conectar... toque na estrela de novo em 1 segundo.',
                 proximos_titulo: 'Próximos na Fila',
                 proximos_subtitulo: 'Veja a ordem atual e quem serão os próximos a cantar.',
                 proximos_mostrando: 'Mostrando até 10 próximos.',
@@ -990,6 +991,7 @@
                 avaliar_status_default: 'Tap a star to vote.',
                 avaliar_status_votou: 'You voted {nota}★. You can change your vote if you want.',
                 avaliar_erro_voto: "⚠️ Your vote wasn't saved. Tap the star again.",
+                avaliar_aguardando_login: 'Just a moment, finishing connecting... tap the star again in 1 second.',
                 proximos_titulo: 'Next in Queue',
                 proximos_subtitulo: "See the current order and who's singing next.",
                 proximos_mostrando: 'Showing up to 10 next.',
@@ -1345,12 +1347,39 @@
         let verTudoHistoricoCliente = false;
         const LIMITE_HISTORICO_CLIENTE = 12;
 
-        // Identificador anônimo do dispositivo, usado para permitir 1 voto por pessoa/dispositivo.
-        // Se o localStorage falhar (modo privado do Safari, por exemplo), ainda gera um
-        // id válido pra sessão atual — só não vai lembrar entre visitas, mas o voto
-        // continua funcionando em vez de travar a função inteira.
-        let _votanteIdDeSessao = null;
+        // Identidade de quem está votando. Em modo Firebase precisa ser o uid da
+        // sessão de auth anônima (firebase.auth().currentUser.uid) — é a ÚNICA
+        // forma das regras (database.rules.json: apresentacaoAtual/avaliacoes/
+        // $votanteId) conseguirem checar "esse voto é de quem diz que é": antes
+        // disso, $votanteId era uma string aleatória inventada pelo próprio
+        // cliente e salva em localStorage, sem nenhuma relação com auth — então
+        // qualquer pessoa podia gerar quantos ids quisesse e inflar a média (ver
+        // migracao-fila-por-pedido.md). Pode voltar null se a sessão anônima
+        // ainda não terminou de autenticar (ver onAuthStateChanged em
+        // initFirebase) — quem chama isso precisa tratar esse caso, não gravar
+        // um voto em "null" (ver avaliarApresentacao).
+        //
+        // Em modo local (sem Firebase, ex: sem internet no primeiro carregamento)
+        // não existe auth nem regra pra checar, então mantém o id de sessão em
+        // localStorage de antes — só serve pra lembrar "já votei" na cópia local.
+        let _votanteIdDeSessaoLocal = null;
+
+        // uid da sessão de auth anônima, ou null se ainda não resolveu — e
+        // também null (em vez de quebrar com exceção) se "firebase" nem
+        // estiver disponível de verdade (ex: testes que simulam só o objeto
+        // "db", sem chamar firebase.initializeApp() — ver test_karaoke.py).
+        function currentUid() {
+            try {
+                return firebase.auth().currentUser ? firebase.auth().currentUser.uid : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
         function getVotanteId() {
+            if (useFirebase) {
+                return currentUid();
+            }
             try {
                 let vid = localStorage.getItem(chaveLocal('votante_id'));
                 if (!vid) {
@@ -1359,10 +1388,10 @@
                 }
                 return vid;
             } catch (e) {
-                if (!_votanteIdDeSessao) {
-                    _votanteIdDeSessao = 'v-sessao-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+                if (!_votanteIdDeSessaoLocal) {
+                    _votanteIdDeSessaoLocal = 'v-sessao-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
                 }
-                return _votanteIdDeSessao;
+                return _votanteIdDeSessaoLocal;
             }
         }
 
@@ -2056,15 +2085,15 @@
         function cancelarMeuPedido(id) {
             if (useFirebase && db) {
                 db.ref(caminhoBar('fila')).transaction((filaAtualDoServidor) => {
-                    const listaAtual = filaAtualDoServidor || [];
-                    return listaAtual.filter(p => p.id !== id);
+                    const listaAtual = mapaFilaParaArray(filaAtualDoServidor);
+                    return arrayFilaParaMapa(listaAtual.filter(p => p.id !== id));
                 }, (error, comprometido, snapshot) => {
                     if (error) {
                         console.error('❌ Erro ao cancelar pedido:', error);
                         alert(t('erro_cancelar_pedido'));
                         return;
                     }
-                    fila = snapshot.val() || [];
+                    fila = mapaFilaParaArray(snapshot.val());
                     const meus = getMeusPedidos().filter(mid => mid !== id);
                     salvarMeusPedidos(meus);
                     atualizarUI();
@@ -2212,7 +2241,7 @@
 
             db.ref(caminhoBar('fila')).on('value', (snapshot) => {
                 if (syncInProgress) return;
-                fila = snapshot.val() || [];
+                fila = mapaFilaParaArray(snapshot.val());
                 atualizarUI();
             }, (error) => tratarErroDeSincronizacao(error));
 
@@ -2275,6 +2304,38 @@
             if (!valor) return [];
             if (Array.isArray(valor)) return valor;
             return Object.keys(valor).sort((a, b) => Number(a) - Number(b)).map(k => valor[k]);
+        }
+
+        // "fila" no Firebase agora é um MAPA { $pedidoId: pedido }, não mais um
+        // array (ver database.rules.json e migracao-fila-por-pedido.md — $pedidoId
+        // é a chave que dá dono a cada pedido pras regras de segurança). Só essa
+        // fronteira (aqui e em arrayFilaParaMapa) sabe disso: o resto do código
+        // continua usando "fila" como array, igual sempre foi, com "id" hidratado
+        // de volta a partir da própria chave do mapa.
+        function mapaFilaParaArray(mapa) {
+            if (!mapa) return [];
+            if (Array.isArray(mapa)) return mapa; // dado antigo (schema anterior), só por segurança
+            // Ordena por pedidoId (mesmo esquema de objetoParaArray, aqui acima) —
+            // como pedidoId é o próprio "id" gerado em montarNovoPedido
+            // (Date.now() + ...), essa ordem ascendente é a ordem de chegada, a
+            // mesma que o array antigo já tinha por ser sempre gravado com
+            // "[...listaAtual, novoPedido]" (só no final). ordenarFila() reordena
+            // por prioridade/fairness depois, como sempre fez — isso aqui só
+            // reconstrói a MESMA entrada que existia antes da conversão pra mapa.
+            return Object.keys(mapa)
+                .sort((a, b) => Number(a) - Number(b))
+                .map((pedidoId) => ({ ...mapa[pedidoId], id: Number(pedidoId) }));
+        }
+
+        // Inverso de mapaFilaParaArray: usa o "id" já existente em cada pedido como
+        // a própria chave do mapa, sem repeti-lo como campo dentro do objeto.
+        function arrayFilaParaMapa(lista) {
+            const mapa = {};
+            (lista || []).forEach((pedido) => {
+                const { id, ...resto } = pedido;
+                mapa[String(id)] = resto;
+            });
+            return mapa;
         }
 
         // Busca a lista COMPLETA do histórico (sem limite) — chamado só quando alguém
@@ -2784,7 +2845,7 @@
             // não da cópia que este celular tem localmente, que pode estar um pouco
             // desatualizada se outra pessoa mandou pedido ao mesmo tempo.
             // ⚠️ Todo campo que este objeto grava em /fila precisa estar na whitelist
-            // de database.rules.json ($index/$other: false) — um campo novo aqui sem
+            // de database.rules.json ($pedidoId/$other: false) — um campo novo aqui sem
             // entrada correspondente nas regras derruba a transação inteira com
             // permission_denied (já aconteceu com "youtubeUrl", ver commit que corrigiu
             // esse bug). Lembre de colar as regras atualizadas no Console do Firebase
@@ -2817,7 +2878,13 @@
                     // null enquanto o pedido está esperando normalmente; vira um
                     // timestamp quando o DJ chama e a pessoa não aparece (ver
                     // acaoMarcarAusente) — timeout automático em MINUTOS_MAX_AUSENTE
-                    ausenteDesde: null
+                    ausenteDesde: null,
+                    // Dono do pedido (uid da sessão anônima) — as regras do Firebase só
+                    // deixam criar/editar um pedido cujo criadoPor bata com o auth.uid de
+                    // quem está gravando (ver database.rules.json e
+                    // migracao-fila-por-pedido.md). Em modo local (sem Firebase) fica null,
+                    // já que não há regra nenhuma pra checar nesse modo.
+                    criadoPor: useFirebase ? currentUid() : null
                 };
             }
 
@@ -2832,7 +2899,7 @@
                 let bloqueadoPorCreditos = false;
                 let bloqueadoPorDispositivo = false;
                 db.ref(caminhoBar('fila')).transaction((filaAtualDoServidor) => {
-                    const listaAtual = filaAtualDoServidor || [];
+                    const listaAtual = mapaFilaParaArray(filaAtualDoServidor);
                     // Re-checa o bloqueio e os créditos contra o dado MAIS ATUAL do
                     // servidor (não a cópia local, que já foi checada acima mas pode
                     // estar desatualizada se outro pedido do mesmo device foi enviado
@@ -2852,7 +2919,7 @@
                     bloqueadoPorDispositivo = false;
                     bloqueadoPorCreditos = false;
                     ultimoPedidoCriado = montarNovoPedido();
-                    return [...listaAtual, ultimoPedidoCriado];
+                    return arrayFilaParaMapa([...listaAtual, ultimoPedidoCriado]);
                 }, (error, comprometido, snapshot) => {
                     if (error) {
                         console.error('❌ Erro na transação ao adicionar pedido:', error);
@@ -2866,7 +2933,7 @@
                         return;
                     }
 
-                    fila = snapshot.val() || [];
+                    fila = mapaFilaParaArray(snapshot.val());
                     ordenarFila();
 
                     // Sempre associa o pedido a este dispositivo — é o que permite mostrar
@@ -3344,15 +3411,17 @@
                     const novoValor = contagemCantores[key];
 
                     db.ref(caminhoBar('fila')).transaction((filaAtualDoServidor) => {
-                        return (filaAtualDoServidor || [])
-                            .filter(p => p.id !== id)
-                            .map(p => obterChaveIdentidade(p) === key ? { ...p, vezesCantadas: novoValor } : p);
+                        return arrayFilaParaMapa(
+                            mapaFilaParaArray(filaAtualDoServidor)
+                                .filter(p => p.id !== id)
+                                .map(p => obterChaveIdentidade(p) === key ? { ...p, vezesCantadas: novoValor } : p)
+                        );
                     }, (errorFila, comprometidoFila, snapshotFila) => {
                         if (errorFila) {
                             console.error('❌ Erro ao remover da fila:', errorFila);
                             avisarFalhaAoSalvar(errorFila);
                         }
-                        fila = snapshotFila ? (snapshotFila.val() || []) : fila;
+                        fila = snapshotFila ? mapaFilaParaArray(snapshotFila.val()) : fila;
                         apresentacaoAtual = pedidoConfirmado;
                         ultimoCantorKey = key;
                         atualizarUI();
@@ -3421,15 +3490,15 @@
 
                 const { avaliacoes, iniciadoEm, ...pedido } = pedidoQueChamou;
                 db.ref(caminhoBar('fila')).transaction((filaAtualDoServidor) => {
-                    const listaAtual = (filaAtualDoServidor || [])
+                    const listaAtual = mapaFilaParaArray(filaAtualDoServidor)
                         .map(p => obterChaveIdentidade(p) === key ? { ...p, vezesCantadas: novoValor } : p);
-                    return [...listaAtual, { ...pedido, vezesCantadas: novoValor, ausenteDesde: Date.now() }];
+                    return arrayFilaParaMapa([...listaAtual, { ...pedido, vezesCantadas: novoValor, ausenteDesde: Date.now() }]);
                 }, (errorFila, comprometidoFila, snapshotFila) => {
                     if (errorFila) {
                         console.error('❌ Erro ao devolver pedido pra fila:', errorFila);
                         avisarFalhaAoSalvar(errorFila);
                     }
-                    fila = snapshotFila ? (snapshotFila.val() || []) : fila;
+                    fila = snapshotFila ? mapaFilaParaArray(snapshotFila.val()) : fila;
 
                     db.ref(caminhoBar('apresentacaoAtual')).set(null, (errorLimpar) => {
                         if (errorLimpar) console.error('❌ Erro ao liberar apresentação:', errorLimpar);
@@ -3645,14 +3714,43 @@
             if (!apresentacaoAtual) return;
             nota = Math.max(1, Math.min(5, Number(nota)));
 
+            // Em modo Firebase, votar exige um uid de auth de verdade (ver
+            // getVotanteId/database.rules.json) — a sessão anônima normalmente já
+            // está pronta nesse ponto (dispara no carregamento da página, ver
+            // onAuthStateChanged em initFirebase), mas se a pessoa clicar bem
+            // rápido numa conexão lenta ainda pode não ter resolvido. Em vez de
+            // gravar em "apresentacaoAtual/avaliacoes/null" (o Firebase rejeitaria
+            // mesmo assim, já que null != auth.uid) ou deixar a estrela mudar sem
+            // salvar nada, espera a autenticação terminar e tenta de novo sozinho.
+            if (useFirebase && db && !currentUid()) {
+                try {
+                    const statusEl = document.getElementById('avaliar-status');
+                    if (statusEl) {
+                        statusEl.innerText = t('avaliar_aguardando_login');
+                        statusEl.classList.remove('text-red-600', 'font-semibold');
+                    }
+                    const pararDeEsperar = firebase.auth().onAuthStateChanged((user) => {
+                        pararDeEsperar();
+                        if (user) avaliarApresentacao(nota);
+                    });
+                    return;
+                } catch (e) {
+                    // Sem SDK de auth de verdade disponível pra esperar (ex: ambiente
+                    // que só simula o objeto "db", sem firebase.initializeApp() real —
+                    // ver test_karaoke.py) — não tem o que esperar aqui, segue direto
+                    // pro voto com o que getVotanteId() conseguir devolver.
+                }
+            }
+
+            const votanteId = getVotanteId();
             if (!apresentacaoAtual.avaliacoes) apresentacaoAtual.avaliacoes = {};
-            apresentacaoAtual.avaliacoes[getVotanteId()] = nota;
+            apresentacaoAtual.avaliacoes[votanteId] = nota;
 
             // Grava só o voto específico (não o objeto "karaoke" inteiro de novo).
             // Isso evita que cada voto reenvie fila + histórico completos pra todo mundo,
             // o que estava deixando a tela do DJ "travando/recarregando" a cada voto.
             if (useFirebase && db && apresentacaoAtual.id) {
-                db.ref(caminhoBar(`apresentacaoAtual/avaliacoes/${getVotanteId()}`)).set(nota, (error) => {
+                db.ref(caminhoBar(`apresentacaoAtual/avaliacoes/${votanteId}`)).set(nota, (error) => {
                     if (error) {
                         console.error('❌ Erro ao salvar voto:', error);
                         // A estrela já mudou na tela (otimista), mas se não salvou de
@@ -3679,10 +3777,10 @@
         function acaoRemover(id) {
             if (useFirebase && db) {
                 db.ref(caminhoBar('fila')).transaction((filaAtualDoServidor) => {
-                    return (filaAtualDoServidor || []).filter(p => p.id !== id);
+                    return arrayFilaParaMapa(mapaFilaParaArray(filaAtualDoServidor).filter(p => p.id !== id));
                 }, (error, comprometido, snapshot) => {
                     if (error) { console.error('❌ Erro ao remover pedido:', error); avisarFalhaAoSalvar(error); return; }
-                    fila = snapshot.val() || [];
+                    fila = mapaFilaParaArray(snapshot.val());
                     atualizarUI();
                 });
             } else {
@@ -3784,11 +3882,11 @@
         function acaoPular(id) {
             if (useFirebase && db) {
                 db.ref(caminhoBar('fila')).transaction((filaAtualDoServidor) => {
-                    const listaAtual = filaAtualDoServidor || [];
-                    return listaAtual.map(p => p.id === id ? { ...p, timestampFila: Date.now() } : p);
+                    const listaAtual = mapaFilaParaArray(filaAtualDoServidor);
+                    return arrayFilaParaMapa(listaAtual.map(p => p.id === id ? { ...p, timestampFila: Date.now() } : p));
                 }, (error, comprometido, snapshot) => {
                     if (error) { console.error('❌ Erro ao pular vez:', error); avisarFalhaAoSalvar(error); return; }
-                    fila = snapshot.val() || [];
+                    fila = mapaFilaParaArray(snapshot.val());
                     atualizarUI();
                 });
                 return;
@@ -3815,11 +3913,11 @@
         function acaoMarcarAusente(id) {
             if (useFirebase && db) {
                 db.ref(caminhoBar('fila')).transaction((filaAtualDoServidor) => {
-                    const listaAtual = filaAtualDoServidor || [];
-                    return listaAtual.map(p => p.id === id ? { ...p, ausenteDesde: Date.now() } : p);
+                    const listaAtual = mapaFilaParaArray(filaAtualDoServidor);
+                    return arrayFilaParaMapa(listaAtual.map(p => p.id === id ? { ...p, ausenteDesde: Date.now() } : p));
                 }, (error, comprometido, snapshot) => {
                     if (error) { console.error('❌ Erro ao marcar ausente:', error); avisarFalhaAoSalvar(error); return; }
-                    fila = snapshot.val() || [];
+                    fila = mapaFilaParaArray(snapshot.val());
                     atualizarUI();
                 });
                 return;
@@ -3842,8 +3940,8 @@
         function acaoVoltouAusencia(id) {
             if (useFirebase && db) {
                 db.ref(caminhoBar('fila')).transaction((filaAtualDoServidor) => {
-                    const listaAtual = filaAtualDoServidor || [];
-                    return listaAtual.map(p => {
+                    const listaAtual = mapaFilaParaArray(filaAtualDoServidor);
+                    return arrayFilaParaMapa(listaAtual.map(p => {
                         if (p.id !== id || !p.ausenteDesde) return p;
                         const tempoAusenteMs = Date.now() - p.ausenteDesde;
                         return {
@@ -3851,10 +3949,10 @@
                             timestampFila: (p.timestampFila || p.timestamp) + tempoAusenteMs,
                             ausenteDesde: null
                         };
-                    });
+                    }));
                 }, (error, comprometido, snapshot) => {
                     if (error) { console.error('❌ Erro ao voltar da ausência:', error); avisarFalhaAoSalvar(error); return; }
-                    fila = snapshot.val() || [];
+                    fila = mapaFilaParaArray(snapshot.val());
                     atualizarUI();
                 });
                 return;
@@ -3889,10 +3987,10 @@
 
             if (useFirebase && db) {
                 db.ref(caminhoBar('fila')).transaction((filaAtualDoServidor) => {
-                    return (filaAtualDoServidor || []).filter(aindaValido);
+                    return arrayFilaParaMapa(mapaFilaParaArray(filaAtualDoServidor).filter(aindaValido));
                 }, (error, comprometido, snapshot) => {
                     if (error) { console.error('❌ Erro ao expirar ausentes:', error); return; }
-                    fila = snapshot.val() || [];
+                    fila = mapaFilaParaArray(snapshot.val());
                     atualizarUI();
                 });
                 return;
