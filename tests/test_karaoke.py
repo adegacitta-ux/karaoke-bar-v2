@@ -1275,30 +1275,47 @@ def test_chamada_automatica_fila_vazia_no_disparo_nao_chama_ninguem(browser, bas
 
 def test_dois_pedidos_simultaneos_nao_se_perdem(browser, base_url):
     """Regra crítica: reproduz o bug relatado de nomes "sumindo e reaparecendo".
-    Causa era uma corrida de gravação — dois pedidos quase ao mesmo tempo podiam
-    se sobrescrever. Usa um Firebase simulado que processa uma transação de
-    cada vez (como o servidor real faz) pra provar que os dois sobrevivem.
+    Causa original era uma corrida de gravação — dois pedidos quase ao mesmo
+    tempo podiam se sobrescrever, quando a fila era regravada inteira (array
+    completo) a cada pedido novo.
 
-    window.__servidorFila fica no schema NOVO (mapa {pedidoId: pedido} — ver
-    migracao-fila-por-pedido.md), porque adicionarPedido() já devolve o
-    resultado da transação nesse formato (arrayFilaParaMapa)."""
+    Fase 2 da migração de segurança (ver migracao-fila-por-pedido.md) trocou
+    esse mecanismo: adicionarPedido() não usa mais .transaction() no mapa
+    inteiro da fila — ele lê a fila uma vez (.once('value'), só pra checar
+    crédito/bloqueio) e grava só o PRÓPRIO nó novo (fila/{pedidoId}) com
+    .set(). Esse teste simula exatamente isso, com o "once" de cada pedido
+    resolvendo de forma assíncrona (setTimeout) pra garantir que os dois
+    pedidos realmente se sobrepõem no tempo (a leitura do segundo pode
+    terminar antes da gravação do primeiro) — e confirma que, mesmo assim,
+    nenhum dos dois se perde, porque cada um grava numa chave própria, sem
+    disputar o mesmo nó."""
     context, page, erros = nova_pagina(browser, base_url)
 
     page.evaluate("""
-        window.__servidorFila = [];
-        window.__filaQueue = Promise.resolve();
+        window.__servidorFila = {};
         useFirebase = true;
         db = {
             ref: function(path) {
+                const matchPedido = path.match(/\\/fila\\/(.+)$/);
+                if (matchPedido) {
+                    const pedidoId = matchPedido[1];
+                    return {
+                        set: function(valor, cb) {
+                            setTimeout(() => {
+                                window.__servidorFila[pedidoId] = valor;
+                                if (cb) cb(null);
+                            }, 20);
+                        }
+                    };
+                }
                 if (path.endsWith('/fila')) {
                     return {
-                        transaction: function(updateFn, onComplete) {
-                            window.__filaQueue = window.__filaQueue.then(() => {
-                                const novoValor = updateFn(window.__servidorFila);
-                                window.__servidorFila = novoValor;
-                                onComplete(null, true, { val: () => novoValor });
+                        once: function() {
+                            return new Promise((resolve) => {
+                                setTimeout(() => resolve({ val: () => window.__servidorFila }), 10);
                             });
-                        }
+                        },
+                        on: function(){}
                     };
                 }
                 return { on: function(){}, once: function(){ return Promise.resolve({val: () => null}); } };
@@ -1320,7 +1337,7 @@ def test_dois_pedidos_simultaneos_nao_se_perdem(browser, base_url):
     fila_local = sorted(page.evaluate("fila.map(p => p.nome)"))
 
     ok = fila_servidor == ["PessoaX", "PessoaY"] and fila_local == ["PessoaX", "PessoaY"] and not erros
-    registrar("Dois pedidos simultâneos não se perdem (corrida de gravação)", ok,
+    registrar("Dois pedidos simultâneos não se perdem (gravação direta no próprio nó, Fase 2)", ok,
                f"servidor={fila_servidor}, local={fila_local}")
     context.close()
 

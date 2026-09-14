@@ -2076,24 +2076,26 @@
                 </div>`;
         }
 
-        // Cancela um pedido do próprio dispositivo. Usa transação no modo Firebase
-        // (mesma proteção contra corrida de gravação usada ao adicionar pedidos) —
-        // sem isso, cancelar ao mesmo tempo que outra pessoa entra na fila poderia
-        // fazer um dos dois pedidos sumir.
+        // Cancela um pedido do próprio dispositivo.
+        // Fase 2 da migração de segurança (ver migracao-fila-por-pedido.md):
+        // desde que a fila virou um mapa por pedido com dono (criadoPor ==
+        // auth.uid), cancelar não precisa mais ler/reescrever o mapa inteiro
+        // via .transaction() — é só remover o próprio nó (fila/{id}). As
+        // regras já garantem que só o dono desse pedido (ou o admin)
+        // consegue apagá-lo, então não existe mais "corrida" pra resolver
+        // aqui: remover um nó não interfere em nada que outro cliente esteja
+        // gravando no dele.
         // Obs: a confirmação já aconteceu antes (ver pedirConfirmacaoCancelamento) —
         // essa função só é chamada depois que a pessoa já confirmou de forma clara.
         function cancelarMeuPedido(id) {
             if (useFirebase && db) {
-                db.ref(caminhoBar('fila')).transaction((filaAtualDoServidor) => {
-                    const listaAtual = mapaFilaParaArray(filaAtualDoServidor);
-                    return arrayFilaParaMapa(listaAtual.filter(p => p.id !== id));
-                }, (error, comprometido, snapshot) => {
+                db.ref(caminhoBar('fila/' + id)).remove((error) => {
                     if (error) {
                         console.error('❌ Erro ao cancelar pedido:', error);
                         alert(t('erro_cancelar_pedido'));
                         return;
                     }
-                    fila = mapaFilaParaArray(snapshot.val());
+                    fila = fila.filter(p => p.id !== id);
                     const meus = getMeusPedidos().filter(mid => mid !== id);
                     salvarMeusPedidos(meus);
                     atualizarUI();
@@ -2840,10 +2842,10 @@
             const btnEnviar = document.getElementById('btn-enviar');
             if (btnEnviar) { btnEnviar.disabled = true; }
 
-            // Monta o pedido dentro da transação (não fora), porque precisa saber a
-            // prioridade calculada em cima do estado MAIS ATUAL da fila no servidor —
-            // não da cópia que este celular tem localmente, que pode estar um pouco
-            // desatualizada se outra pessoa mandou pedido ao mesmo tempo.
+            // Monta o pedido só depois de reler a fila do servidor (não aqui fora),
+            // porque precisa saber a prioridade calculada em cima do estado MAIS
+            // ATUAL da fila — não da cópia que este celular tem localmente, que pode
+            // estar um pouco desatualizada se outra pessoa mandou pedido ao mesmo tempo.
             // ⚠️ Todo campo que este objeto grava em /fila precisa estar na whitelist
             // de database.rules.json ($pedidoId/$other: false) — um campo novo aqui sem
             // entrada correspondente nas regras derruba a transação inteira com
@@ -2889,62 +2891,76 @@
             }
 
             if (useFirebase && db) {
-                // TRANSAÇÃO: o Firebase entrega o valor mais recente do servidor pra essa
-                // função, a gente devolve a fila já com o pedido novo dentro, e se OUTRO
-                // pedido tiver sido salvo bem nesse meio-tempo, o Firebase roda a função nA
-                // NOVO com o dado mais fresco de novo — automaticamente, sem perder nada.
-                // Isso é o que evita a corrida de gravação (dois pedidos simultâneos
-                // apagando um ao outro), que estava fazendo nomes sumirem/reaparecerem.
-                let ultimoPedidoCriado = null;
-                let bloqueadoPorCreditos = false;
-                let bloqueadoPorDispositivo = false;
-                db.ref(caminhoBar('fila')).transaction((filaAtualDoServidor) => {
-                    const listaAtual = mapaFilaParaArray(filaAtualDoServidor);
+                // Fase 2 da migração de segurança (ver migracao-fila-por-pedido.md):
+                // desde que cada pedido já tem seu próprio nó ($pedidoId) com dono
+                // (criadoPor == auth.uid), não precisa mais de uma .transaction() que
+                // lê e reescreve o mapa da fila INTEIRO só pra acrescentar um pedido —
+                // basta gravar só o próprio nó novo (fila/{meuPedidoId}) com .set().
+                // Isso não serializa mais contra o que OUTROS dispositivos estejam
+                // gravando ao mesmo tempo (cada um mexe só na própria chave, então dois
+                // pedidos simultâneos de pessoas diferentes não competem por nada).
+                //
+                // O preço desse ganho: a checagem de crédito/bloqueio abaixo lê a fila
+                // uma vez (não fica presa a ela como a transação antiga ficava) — duas
+                // abas do MESMO dispositivo mandando pedido bem no mesmo instante
+                // podem, em teoria, passar as duas pela checagem antes de qualquer uma
+                // delas gravar. Créditos são só uma cortesia de UX (nunca foram
+                // impostos pelas regras de segurança do Firebase), então essa janela
+                // rara não é um problema de segurança — só uma janela de "furada de
+                // crédito" que Fase 1 (ownership) não afeta.
+                db.ref(caminhoBar('fila')).once('value').then((snapshot) => {
+                    const listaAtual = mapaFilaParaArray(snapshot.val());
                     // Re-checa o bloqueio e os créditos contra o dado MAIS ATUAL do
                     // servidor (não a cópia local, que já foi checada acima mas pode
                     // estar desatualizada se outro pedido do mesmo device foi enviado
                     // bem nesse meio-tempo, ex: duas abas, ou se o DJ acabou de
                     // bloquear esse dispositivo). Dispositivo bloqueado é checado
-                    // ANTES de qualquer outra coisa. Retornar undefined aqui aborta a
-                    // transação sem gravar nada — é a forma do Firebase de "desistir"
-                    // de uma transação.
+                    // ANTES de qualquer outra coisa.
                     if (dispositivoBloqueado(DEVICE_ID, dispositivosBloqueados)) {
-                        bloqueadoPorDispositivo = true;
+                        if (btnEnviar) { btnEnviar.disabled = false; }
+                        alert(t('dispositivo_bloqueado_alert'));
                         return;
                     }
                     if (!podeAdicionarPedido(listaAtual, DEVICE_ID)) {
-                        bloqueadoPorCreditos = true;
-                        return;
-                    }
-                    bloqueadoPorDispositivo = false;
-                    bloqueadoPorCreditos = false;
-                    ultimoPedidoCriado = montarNovoPedido();
-                    return arrayFilaParaMapa([...listaAtual, ultimoPedidoCriado]);
-                }, (error, comprometido, snapshot) => {
-                    if (error) {
-                        console.error('❌ Erro na transação ao adicionar pedido:', error);
-                        alert(t('erro_enviar_pedido'));
                         if (btnEnviar) { btnEnviar.disabled = false; }
-                        return;
-                    }
-                    if (!comprometido) {
-                        if (btnEnviar) { btnEnviar.disabled = false; }
-                        alert(bloqueadoPorDispositivo ? t('dispositivo_bloqueado_alert') : (bloqueadoPorCreditos ? t('limite_creditos_alert') : t('erro_enviar_pedido')));
+                        alert(t('limite_creditos_alert'));
                         return;
                     }
 
-                    fila = mapaFilaParaArray(snapshot.val());
-                    ordenarFila();
+                    const novoPedido = montarNovoPedido();
+                    db.ref(caminhoBar('fila/' + novoPedido.id)).set(novoPedido, (error) => {
+                        if (error) {
+                            console.error('❌ Erro ao gravar pedido:', error);
+                            alert(t('erro_enviar_pedido'));
+                            if (btnEnviar) { btnEnviar.disabled = false; }
+                            return;
+                        }
 
-                    // Sempre associa o pedido a este dispositivo — é o que permite mostrar
-                    // "sua posição na fila" e o botão de cancelar, independente de a pessoa
-                    // ter ativado o aviso sonoro/notificação ou não.
-                    if (ultimoPedidoCriado) {
-                        registrarMeuPedido(ultimoPedidoCriado.id);
-                    }
+                        // Atualização otimista: já soma o pedido novo à cópia local
+                        // (o listener em tempo real de sincronizarComFirebase() vai
+                        // confirmar isso de qualquer forma, mas sem esperar o
+                        // round-trip a fila já aparece atualizada na hora). Importante
+                        // usar a "fila" ATUAL aqui, não "listaAtual" (a leitura feita
+                        // no início desta função) — enquanto esperávamos o .set(), o
+                        // listener em tempo real pode já ter atualizado "fila" com
+                        // pedidos de OUTRO dispositivo (ou até com este mesmo, se o
+                        // round-trip for mais rápido que o esperado); partir de
+                        // "listaAtual" apagaria essas mudanças da cópia local.
+                        fila = [...fila.filter(p => p.id !== novoPedido.id), novoPedido];
+                        ordenarFila();
 
-                    atualizarUI();
-                    finalizarEnvioPedido(nome, mesa, btnEnviar);
+                        // Sempre associa o pedido a este dispositivo — é o que permite mostrar
+                        // "sua posição na fila" e o botão de cancelar, independente de a pessoa
+                        // ter ativado o aviso sonoro/notificação ou não.
+                        registrarMeuPedido(novoPedido.id);
+
+                        atualizarUI();
+                        finalizarEnvioPedido(nome, mesa, btnEnviar);
+                    });
+                }).catch((error) => {
+                    console.error('❌ Erro ao ler a fila antes de gravar pedido:', error);
+                    alert(t('erro_enviar_pedido'));
+                    if (btnEnviar) { btnEnviar.disabled = false; }
                 });
             } else {
                 // Sem Firebase (modo offline/local) não existe risco de dois dispositivos
