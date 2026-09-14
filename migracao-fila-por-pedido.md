@@ -1,13 +1,15 @@
-# Migração de segurança — fila por array → mapa por pedido (Fase 1)
+# Migração de segurança — fila por array → mapa por pedido
 
-Fase 1 de um problema real de segurança no Karaokê Città: com auth anônima e
-`.write: "auth != null"`, qualquer cliente conectado conseguia escrever ou
+Correção de um problema real de segurança no Karaokê Città: com auth anônima
+e `.write: "auth != null"`, qualquer cliente conectado conseguia escrever ou
 apagar o pedido de QUALQUER outro cliente na fila, e inflar a média de
-avaliação da apresentação votando quantas vezes quisesse. Esta fase muda o
-**schema** (fila vira mapa, votante vira uid de auth) e as **regras**
-(ownership por `auth.uid`), sem mudar o algoritmo de fairness/prioridade nem
-a forma como o cliente escreve na fila (isso é Fase 2 — ver final deste
-documento).
+avaliação da apresentação votando quantas vezes quisesse.
+
+**Fase 1** mudou o **schema** (fila vira mapa, votante vira uid de auth) e
+as **regras** (ownership por `auth.uid`), sem mudar o algoritmo de
+fairness/prioridade nem a forma como o cliente escreve na fila. **Fase 2**
+(ver seção própria, mais abaixo) trocou a forma como o CLIENTE escreve na
+fila — sem mudar schema nem regras de novo.
 
 ## 1. Fila: array → mapa por pedido
 
@@ -72,13 +74,15 @@ linha. O que mudou é só a fronteira com o Firebase:
 - `arrayFilaParaMapa(lista)`: inverso — usa `pedido.id` como chave do mapa
   e remove `id` do corpo do objeto antes de gravar.
 
-Essas duas funções entram exatamente nos ~9 pontos que faziam
+Na Fase 1, essas duas funções entraram nos ~9 pontos que faziam
 `db.ref(caminhoBar('fila')).transaction(...)` (adicionar pedido, cancelar o
 próprio pedido, chamar próximo, pular, marcar ausente, voltar de ausência,
 "não apareceu", remover, expirar ausentes por timeout) e no listener
 `sincronizarComFirebase()`. `display.html` ganhou a mesma função
 `mapaFilaParaArray` pra converter `data.fila` antes de usar `fila[0]`/
-`popularMiniFila`.
+`popularMiniFila`. Na Fase 2 (ver seção própria), `adicionarPedido` e
+`cancelarMeuPedido` pararam de usar `.transaction()`/`mapaFilaParaArray` —
+os outros 7 pontos (todos ações do DJ) continuam exatamente como na Fase 1.
 
 ## 2. Avaliações: votanteId de localStorage → uid de auth
 
@@ -154,14 +158,63 @@ voto/pedido é bem mais trabalho (e mais visível: cada uid novo é um pedido
 "novo" contando crédito do zero, cada voto novo é uma sessão nova) do que a
 brecha de antes, que não exigia trabalho nenhum.
 
-## Pendente pra Fase 2
+## Fase 2 — escrita do cliente direto no próprio nó
 
-O cliente ainda regrava a fila inteira via `.transaction()` no mapa inteiro
-(`adicionarPedido`, `cancelarMeuPedido`) — a regra por `$pedidoId` já
-impede escrever no pedido de outra pessoa, mas a transação em si ainda lê e
-resolve conflito no nó `fila` inteiro. Fase 2: mover a escrita do cliente
-pra escrever direto só no próprio nó `fila/{meuPedidoId}` (sem
-`.transaction()` no mapa inteiro), aproveitando que agora cada pedido já
-tem seu próprio caminho — reduz o tamanho da unidade de escrita e o
-potencial de conflito entre clientes diferentes mexendo na fila ao mesmo
-tempo.
+Na Fase 1, `adicionarPedido` e `cancelarMeuPedido` (as duas únicas escritas
+que um CLIENTE comum faz na fila) continuavam usando
+`db.ref(caminhoBar('fila')).transaction(...)` no mapa inteiro — a regra por
+`$pedidoId` já impedia escrever no pedido de outra pessoa, mas a transação
+em si ainda lia e resolvia conflito em cima do nó `fila` inteiro, mesmo só
+precisando mexer num pedido só. Como cada pedido agora já tem seu próprio
+caminho (`fila/{pedidoId}`), isso virou desnecessário.
+
+### `cancelarMeuPedido(id)`
+
+De uma `.transaction()` que lia a fila inteira, filtrava o próprio pedido
+fora, e regravava o mapa inteiro sem ele — pra um `.remove()` direto em
+`fila/{id}`. As regras (`criadoPor == auth.uid`) já garantem que só o dono
+consegue apagar aquele nó; não sobra nenhuma outra checagem que dependesse
+do resto da fila.
+
+### `adicionarPedido()`
+
+De uma `.transaction()` que lia a fila inteira (pra checar bloqueio de
+dispositivo e limite de créditos contra o estado mais atual) e devolvia o
+mapa inteiro com o pedido novo dentro — pra:
+
+1. `db.ref(caminhoBar('fila')).once('value')`: lê a fila uma vez (só
+   leitura, não abre uma transação) pra checar bloqueio/créditos contra o
+   estado mais atual do servidor.
+2. `db.ref(caminhoBar('fila/' + novoPedido.id)).set(novoPedido)`: grava só
+   o próprio nó novo.
+
+A lógica de negócio (`podeAdicionarPedido`, `dispositivoBloqueado`,
+`montarNovoPedido`) não mudou nada — só passou a rodar depois de um
+`.once('value')` em vez de dentro do callback de uma `.transaction()`.
+
+**Ganho:** dois clientes DIFERENTES pedindo música ao mesmo tempo não
+disputam mais nada — cada um grava só na própria chave, sem qualquer
+serialização entre eles (antes, a segunda transação precisava esperar a
+primeira "vencer a corrida" e rodar de novo com o dado atualizado; agora
+nem existe corrida, porque não é a mesma escrita).
+
+**Trade-off aceito:** a checagem de crédito/bloqueio não fica mais "presa"
+a uma transação que sempre vê o dado mais fresco no momento exato da
+gravação — é uma leitura (`once`) seguida de uma gravação (`set`), com uma
+janela pequena entre as duas. Na prática, isso só importa se o MESMO
+dispositivo mandar dois pedidos quase no mesmo instante (ex: duas abas): as
+duas leituras podem não ver o pedido uma da outra ainda, e as duas passam
+pela checagem de crédito. Como o limite de créditos sempre foi só uma
+cortesia de UX — nunca foi (e continua não sendo) imposto pelas regras de
+segurança do Firebase, só pela lógica do cliente — essa janela não é uma
+regressão de segurança, só uma folga rara a mais no limite de créditos
+nesse cenário específico (duas abas do mesmo aparelho, no mesmo instante).
+
+**O que NÃO mudou nesta fase:** as ações do DJ (chamar próximo, pular,
+marcar ausente, voltar de ausência, "não apareceu", remover, expirar
+ausentes por timeout) continuam usando `.transaction()` no mapa inteiro,
+porque de fato precisam — várias delas mexem em mais de um pedido ao mesmo
+tempo (ex: tirar o pedido chamado da fila E atualizar `vezesCantadas` dos
+outros pedidos da mesma pessoa), então não dá pra reduzir pra uma escrita
+de nó único sem reformular a lógica em si, o que está fora do escopo desta
+migração de segurança.
