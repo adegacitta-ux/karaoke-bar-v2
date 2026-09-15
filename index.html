@@ -1216,10 +1216,20 @@
                 // admin) — foi isso que causou dados "fantasma" reaparecendo depois de limpos.
                 // Por isso, só decidimos se precisa de login anônimo DEPOIS que o
                 // onAuthStateChanged disparar pela primeira vez com o estado real e definitivo.
+                // Enquanto authPronta ainda é false, trava o botão de enviar pedido —
+                // reduz (mas não elimina sozinho, ver retentarSePermissaoNegada) a
+                // corrida de permission_denied em que a pessoa consegue clicar
+                // "Enviar" antes do Firebase Auth ter resolvido a sessão anônima.
+                const btnEnviarInicial = document.getElementById('btn-enviar');
+                if (btnEnviarInicial) { btnEnviarInicial.disabled = true; }
+
                 let anonimoTentado = false;
                 firebase.auth().onAuthStateChanged((user) => {
                     usuarioAtual = user;
                     authPronta = true;
+
+                    const btnEnviarAtual = document.getElementById('btn-enviar');
+                    if (btnEnviarAtual) { btnEnviarAtual.disabled = false; }
 
                     if (user) {
                         console.log(user.isAnonymous ? '👤 Sessão anônima ativa' : `🔑 Logado como ${user.email}`);
@@ -1374,6 +1384,44 @@
             } catch (e) {
                 return null;
             }
+        }
+
+        // Retentativa automática pra gravações no Realtime Database que falharem
+        // com permission_denied logo após o carregamento da página — existe uma
+        // corrida entre o SDK do Firebase Auth já ter resolvido a sessão do lado
+        // do JS (currentUid() já não é mais null) e a conexão websocket do
+        // Realtime Database já estar autenticada de verdade no servidor. O
+        // Laboratório de Testes de Regras do Firebase Console não reproduz isso
+        // porque testa a regra isolada, sem passar pela conexão real. NÃO retenta
+        // outros tipos de erro (ex: rede) — esses já têm tratamento próprio em
+        // cada chamador.
+        const ATRASOS_RETENTATIVA_PERMISSAO_MS = [300, 800, 1500];
+
+        function ehErroDePermissao(error) {
+            if (!error) return false;
+            const codigo = String(error.code || '').toUpperCase();
+            const mensagem = String(error.message || '').toUpperCase();
+            return codigo === 'PERMISSION_DENIED' || mensagem.includes('PERMISSION_DENIED');
+        }
+
+        // "executarTentativa" recebe um callback(error) e deve chamá-lo com o
+        // resultado da gravação (fazendo, dentro dele, o que for de sucesso —
+        // ex: atualizar a cópia local — antes de repassar o error pro callback).
+        // "aoDesistir" só é chamado quando as tentativas se esgotam (ou o erro
+        // não é de permissão), e recebe o último erro (ou null se deu certo).
+        function retentarSePermissaoNegada(nomeOperacao, executarTentativa, aoDesistir, tentativa) {
+            tentativa = tentativa || 0;
+            executarTentativa((error) => {
+                if (error && ehErroDePermissao(error) && tentativa < ATRASOS_RETENTATIVA_PERMISSAO_MS.length) {
+                    const atraso = ATRASOS_RETENTATIVA_PERMISSAO_MS[tentativa];
+                    console.warn(`⚠️ ${nomeOperacao}: permission_denied, retentando em ${atraso}ms (tentativa ${tentativa + 1}/${ATRASOS_RETENTATIVA_PERMISSAO_MS.length})...`);
+                    setTimeout(() => {
+                        retentarSePermissaoNegada(nomeOperacao, executarTentativa, aoDesistir, tentativa + 1);
+                    }, atraso);
+                    return;
+                }
+                aoDesistir(error);
+            });
         }
 
         function getVotanteId() {
@@ -2089,16 +2137,21 @@
         // essa função só é chamada depois que a pessoa já confirmou de forma clara.
         function cancelarMeuPedido(id) {
             if (useFirebase && db) {
-                db.ref(caminhoBar('fila/' + id)).remove((error) => {
+                retentarSePermissaoNegada('cancelarMeuPedido', (proximaTentativa) => {
+                    db.ref(caminhoBar('fila/' + id)).remove((error) => {
+                        if (!error) {
+                            fila = fila.filter(p => p.id !== id);
+                            const meus = getMeusPedidos().filter(mid => mid !== id);
+                            salvarMeusPedidos(meus);
+                            atualizarUI();
+                        }
+                        proximaTentativa(error);
+                    });
+                }, (error) => {
                     if (error) {
                         console.error('❌ Erro ao cancelar pedido:', error);
                         alert(t('erro_cancelar_pedido'));
-                        return;
                     }
-                    fila = fila.filter(p => p.id !== id);
-                    const meus = getMeusPedidos().filter(mid => mid !== id);
-                    salvarMeusPedidos(meus);
-                    atualizarUI();
                 });
             } else {
                 fila = fila.filter(p => p.id !== id);
@@ -2927,35 +2980,48 @@
                         return;
                     }
 
-                    const novoPedido = montarNovoPedido();
-                    db.ref(caminhoBar('fila/' + novoPedido.id)).set(novoPedido, (error) => {
+                    // Guarda o id da primeira tentativa pra reusar nas retentativas
+                    // (ver retentarSePermissaoNegada) — assim, se uma tentativa
+                    // anterior na verdade tiver sido aceita pelo servidor e só a
+                    // confirmação que falhou, a retentativa seguinte grava por cima
+                    // do MESMO nó em vez de criar um pedido duplicado.
+                    let pedidoIdFixo = null;
+                    retentarSePermissaoNegada('adicionarPedido', (proximaTentativa) => {
+                        const novoPedido = montarNovoPedido();
+                        if (pedidoIdFixo !== null) { novoPedido.id = pedidoIdFixo; }
+                        pedidoIdFixo = novoPedido.id;
+
+                        db.ref(caminhoBar('fila/' + novoPedido.id)).set(novoPedido, (error) => {
+                            if (!error) {
+                                // Atualização otimista: já soma o pedido novo à cópia local
+                                // (o listener em tempo real de sincronizarComFirebase() vai
+                                // confirmar isso de qualquer forma, mas sem esperar o
+                                // round-trip a fila já aparece atualizada na hora). Importante
+                                // usar a "fila" ATUAL aqui, não "listaAtual" (a leitura feita
+                                // no início desta função) — enquanto esperávamos o .set(), o
+                                // listener em tempo real pode já ter atualizado "fila" com
+                                // pedidos de OUTRO dispositivo (ou até com este mesmo, se o
+                                // round-trip for mais rápido que o esperado); partir de
+                                // "listaAtual" apagaria essas mudanças da cópia local.
+                                fila = [...fila.filter(p => p.id !== novoPedido.id), novoPedido];
+                                ordenarFila();
+
+                                // Sempre associa o pedido a este dispositivo — é o que permite mostrar
+                                // "sua posição na fila" e o botão de cancelar, independente de a pessoa
+                                // ter ativado o aviso sonoro/notificação ou não.
+                                registrarMeuPedido(novoPedido.id);
+
+                                atualizarUI();
+                                finalizarEnvioPedido(nome, mesa, btnEnviar);
+                            }
+                            proximaTentativa(error);
+                        });
+                    }, (error) => {
                         if (error) {
                             console.error('❌ Erro ao gravar pedido:', error);
                             alert(t('erro_enviar_pedido'));
                             if (btnEnviar) { btnEnviar.disabled = false; }
-                            return;
                         }
-
-                        // Atualização otimista: já soma o pedido novo à cópia local
-                        // (o listener em tempo real de sincronizarComFirebase() vai
-                        // confirmar isso de qualquer forma, mas sem esperar o
-                        // round-trip a fila já aparece atualizada na hora). Importante
-                        // usar a "fila" ATUAL aqui, não "listaAtual" (a leitura feita
-                        // no início desta função) — enquanto esperávamos o .set(), o
-                        // listener em tempo real pode já ter atualizado "fila" com
-                        // pedidos de OUTRO dispositivo (ou até com este mesmo, se o
-                        // round-trip for mais rápido que o esperado); partir de
-                        // "listaAtual" apagaria essas mudanças da cópia local.
-                        fila = [...fila.filter(p => p.id !== novoPedido.id), novoPedido];
-                        ordenarFila();
-
-                        // Sempre associa o pedido a este dispositivo — é o que permite mostrar
-                        // "sua posição na fila" e o botão de cancelar, independente de a pessoa
-                        // ter ativado o aviso sonoro/notificação ou não.
-                        registrarMeuPedido(novoPedido.id);
-
-                        atualizarUI();
-                        finalizarEnvioPedido(nome, mesa, btnEnviar);
                     });
                 }).catch((error) => {
                     console.error('❌ Erro ao ler a fila antes de gravar pedido:', error);
@@ -3766,7 +3832,11 @@
             // Isso evita que cada voto reenvie fila + histórico completos pra todo mundo,
             // o que estava deixando a tela do DJ "travando/recarregando" a cada voto.
             if (useFirebase && db && apresentacaoAtual.id) {
-                db.ref(caminhoBar(`apresentacaoAtual/avaliacoes/${votanteId}`)).set(nota, (error) => {
+                retentarSePermissaoNegada('avaliarApresentacao', (proximaTentativa) => {
+                    db.ref(caminhoBar(`apresentacaoAtual/avaliacoes/${votanteId}`)).set(nota, (error) => {
+                        proximaTentativa(error);
+                    });
+                }, (error) => {
                     if (error) {
                         console.error('❌ Erro ao salvar voto:', error);
                         // A estrela já mudou na tela (otimista), mas se não salvou de
