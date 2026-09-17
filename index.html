@@ -1181,6 +1181,8 @@
             if (config.corPrimaria) {
                 document.documentElement.style.setProperty('--cor-primaria', config.corPrimaria);
             }
+
+            restaurarAbaAdminSeNecessario();
         }
 
         let db = null;
@@ -1230,6 +1232,8 @@
                             console.error('❌ Erro na autenticação anônima:', error);
                         });
                     }
+
+                    restaurarAbaAdminSeNecessario();
                 });
 
                 // Carrega o nome/cor/e-mail do admin desse bar específico (config pública,
@@ -2143,6 +2147,22 @@
 
         function isAdminAuthenticated() {
             return !!(usuarioAtual && !usuarioAtual.isAnonymous && usuarioAtual.email === ADMIN_EMAIL);
+        }
+
+        // Depois do location.reload() forçado ao voltar de segundo plano (ver
+        // visibilitychange mais abaixo), a página sempre recomeça na aba "cliente" —
+        // sem isso, o DJ perderia a aba Admin/DJ toda vez que o app dele fosse pra
+        // segundo plano por tempo suficiente. Chamada tanto quando o Firebase termina
+        // de restaurar a sessão quanto quando a config do bar carrega, pois a ordem
+        // entre os dois não é garantida e precisamos dos dois pra confirmar o admin.
+        function restaurarAbaAdminSeNecessario() {
+            if (!authPronta || !barConfigCarregada) return;
+            const chave = chaveLocal('reabrir_admin_apos_reload');
+            if (sessionStorage.getItem(chave) !== '1') return;
+            sessionStorage.removeItem(chave);
+            if (isAdminAuthenticated()) {
+                switchTab('admin');
+            }
         }
 
         function showAdminModal() {
@@ -4468,6 +4488,10 @@
 
             const painelAdmin = document.getElementById('admin');
             if (painelAdmin && painelAdmin.classList.contains('active')) {
+                // Sem isso, o reload abaixo sempre volta pra aba "cliente" (a aba padrão)
+                // e o DJ precisa reabrir manualmente o painel Admin/DJ — ver
+                // restaurarAbaAdminSeNecessario().
+                sessionStorage.setItem(chaveLocal('reabrir_admin_apos_reload'), '1');
                 location.reload();
             }
         });
