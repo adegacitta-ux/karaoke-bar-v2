@@ -324,68 +324,36 @@ def test_media_de_avaliacoes(browser, base_url):
     context.close()
 
 
-def test_espera_longa_faz_pessoa_furar_a_fila(browser, base_url):
-    """Regra pedida após teste com público real: quem já cantou não pode ficar
-    preso no fim da fila pra sempre só porque gente nova continua chegando —
-    com tempo de espera suficiente, ela volta a furar a frente."""
+def test_ordenar_fila_por_vezes_cantadas_e_ordem_de_chegada(browser, base_url):
+    """A fila prioriza quem cantou menos; em empate, respeita a chegada,
+    inclusive o fallback para timestamp dos pedidos antigos. Ausentes seguem no fim."""
     context, page, erros = nova_pagina(browser, base_url)
-
-    preencher_pedido(page, "PessoaA", "MusicaA1")
-    id_a = page.evaluate("fila[0].id")
-    page.evaluate(f"acaoProximo({id_a})")
-    page.evaluate("acaoFinalizarApresentacao()")
-    page.wait_for_timeout(100)
-
-    # Pessoa A pede de novo (já com vezesCantadas=1) e Pessoa B, nova, entra depois.
-    # Pessoa B precisa ser um deviceId DIFERENTE: a identidade da fila agora é por
-    # deviceId (ver test_deviceid_impede_burlar_cooldown_trocando_nome), então se
-    # ela viesse pelo mesmo formulário/navegador desta página ela contaria como o
-    # MESMO dispositivo de Pessoa A, o que não é o que este teste quer simular.
-    preencher_pedido(page, "PessoaA", "MusicaA2")
-    page.evaluate("""
-        fila.push({
-            id: 777001, nome: 'PessoaB', mesa: null, musica: 'MusicaB1', artista: 'X',
-            deviceId: 'device-pessoab-outro-aparelho',
-            timestamp: Date.now(), timestampFila: Date.now(), vezesCantadas: 0, youtubeUrl: null
-        });
+    agora = page.evaluate("Date.now()")
+    page.evaluate(f"""
+        fila = [
+            {{id: 1, nome: 'Veterana', mesa: null, musica: 'M1', artista: 'X',
+              deviceId: 'device-veterana', timestamp: {agora - 7200000},
+              timestampFila: {agora - 7200000}, vezesCantadas: 2, youtubeUrl: null}},
+            {{id: 2, nome: 'Recente', mesa: null, musica: 'M2', artista: 'X',
+              deviceId: 'device-recente', timestamp: {agora - 60000},
+              timestampFila: {agora - 60000}, vezesCantadas: 0, youtubeUrl: null}},
+            {{id: 3, nome: 'EmpateAntigo', mesa: null, musica: 'M3', artista: 'X',
+              deviceId: 'device-empate-antigo', timestamp: {agora - 120000},
+              vezesCantadas: 0, youtubeUrl: null}},
+            {{id: 4, nome: 'Ausente', mesa: null, musica: 'M4', artista: 'X',
+              deviceId: 'device-ausente', timestamp: {agora - 180000},
+              timestampFila: {agora - 180000}, vezesCantadas: 0, youtubeUrl: null,
+              ausenteDesde: {agora}}}
+        ];
         ordenarFila();
         atualizarUI();
     """)
-    ordem_normal = page.evaluate("fila.map(p => p.nome)")
 
-    # PessoaA é a ultimoCantorKey (acabou de finalizar a apresentação, logo
-    # acima). Esse teste quer isolar a regra de fairness por espera (teto
-    # MINUTOS_ESPERA_MAXIMA) — não a proteção anti-sequência (que agora troca
-    # incondicionalmente fila[0] vs ultimoCantorKey, ver
-    # desfazerSequenciasConsecutivas). Sem resetar aqui, as duas regras se
-    # combinariam neste cenário específico (mesma pessoa que furou é também
-    # quem acabou de cantar) e a troca anti-sequência adiaria PessoaA por 1
-    # posição mesmo com o teto ativo — comportamento correto, mas não o que
-    # este teste específico mede.
-    page.evaluate("ultimoCantorKey = null;")
-
-    # Simula 20 minutos de espera no pedido da Pessoa A (mais que o limite de
-    # 15min configurado pra perdoar uma vez cantada)
-    # Simula uma espera bem maior que o limite configurado (2x + 5min de folga),
-    # pra esse teste continuar valendo mesmo se você mudar o valor do minutos-pra-perdoar
-    limite_minutos = page.evaluate("MINUTOS_PARA_PERDOAR_UMA_VEZ_CANTADA")
-    minutos_de_espera_simulada = (limite_minutos * 2) + 5
-    # "timestampFila" é o relógio de espera que a fila usa pra calcular prioridade
-    # (ver calcularPrioridadeEfetiva) — "timestamp" puro é só a hora do pedido,
-    # usada no relatório de horário de pico, e não afeta mais a ordem da fila.
-    page.evaluate(f"""
-        const pedidoA = fila.find(p => p.nome === 'PessoaA');
-        pedidoA.timestampFila = Date.now() - ({minutos_de_espera_simulada} * 60 * 1000);
-    """)
-    page.evaluate("atualizarUI()")
-    page.wait_for_timeout(100)
-    ordem_apos_espera = page.evaluate("fila.map(p => p.nome)")
-
-    ok = (ordem_normal[0] == "PessoaB" and ordem_apos_espera[0] == "PessoaA" and not erros)
-    registrar("Espera longa faz quem já cantou furar a frente de quem é novo", ok,
-               f"sem_esperar={ordem_normal}, apos_20min={ordem_apos_espera}")
+    ids_ordem = page.evaluate("fila.map(p => p.id)")
+    ok = ids_ordem == [3, 2, 1, 4] and not erros
+    registrar("Fila ordena por vezes cantadas, chegada e mantém ausentes no final", ok,
+               f"ids_ordem={ids_ordem}")
     context.close()
-
 
 def test_fila_evita_pedidos_consecutivos_da_mesma_pessoa(browser, base_url):
     """Regra anti-sequência: dois pedidos da MESMA pessoa (mesmo deviceId) não
@@ -494,7 +462,6 @@ def test_finalizar_apresentacao_nao_deixa_mesma_pessoa_como_proxima(browser, bas
     ordenarFila() sozinha (sem esse contexto) logo em seguida."""
     context, page, erros = nova_pagina(browser, base_url)
 
-    limite_minutos = page.evaluate("MINUTOS_PARA_PERDOAR_UMA_VEZ_CANTADA")
     agora = page.evaluate("Date.now()")
 
     # PessoaX tem 2 pedidos na fila (mesmo deviceId); PessoaY tem 1, chegou
@@ -519,26 +486,6 @@ def test_finalizar_apresentacao_nao_deixa_mesma_pessoa_como_proxima(browser, bas
     # pedido restante dela (MusicaX2) pra 1 (ver acaoProximo).
     page.evaluate("acaoProximo(1)")
 
-    # Simula o tempo passando DURANTE a apresentação: o pedido restante de
-    # PessoaX (MusicaX2) vai esperando mais, e sua prioridade efetiva vai
-    # descontando até ficar levemente melhor que a de PessoaY — mas a
-    # diferença continua pequena (dentro de LIMITE_TROCA_ANTI_SEQUENCIA), é
-    # exatamente o caso em que a troca anti-sequência deve valer.
-    minutos_de_espera_simulada = limite_minutos * 1.5
-    page.evaluate(f"""
-        const pedidoX2 = fila.find(p => p.deviceId === 'device-x');
-        pedidoX2.timestampFila = Date.now() - ({minutos_de_espera_simulada} * 60 * 1000);
-    """)
-
-    # Confirma que a decadência simulada realmente deixou a prioridade efetiva
-    # de MusicaX2 um pouco MELHOR (menor) que a de PessoaY, mas dentro de
-    # LIMITE_TROCA_ANTI_SEQUENCIA — sem isso o teste não estaria reproduzindo o
-    # cenário real (diferença pequena), só uma diferença grande e legítima
-    # (aí não há bug: ela merece furar a fila de verdade).
-    prioridade_x2 = page.evaluate("calcularPrioridadeEfetiva(fila.find(p => p.deviceId === 'device-x'))")
-    prioridade_y = page.evaluate("calcularPrioridadeEfetiva(fila.find(p => p.deviceId === 'device-y'))")
-    limite_troca = page.evaluate("LIMITE_TROCA_ANTI_SEQUENCIA")
-
     page.evaluate("acaoFinalizarApresentacao()")
     page.wait_for_timeout(150)
 
@@ -547,12 +494,9 @@ def test_finalizar_apresentacao_nao_deixa_mesma_pessoa_como_proxima(browser, bas
     # Sem o fix, fila[0] seria 'device-x' de novo (MusicaX2) logo depois dela
     # ter acabado de cantar MusicaX1 — a checagem abaixo é a que capturava o
     # bug relatado.
-    diferenca = prioridade_y - prioridade_x2
-    ok = (prioridade_x2 < prioridade_y and diferenca <= limite_troca
-          and ordem_final[0] == 'device-y' and not erros)
+    ok = (ordem_final[0] == 'device-y' and not erros)
     registrar("Fila não repete a mesma pessoa como próxima logo após ela finalizar", ok,
-               f"prioridade_x2={prioridade_x2}, prioridade_y={prioridade_y}, "
-               f"limite_troca={limite_troca}, apos_finalizar={ordem_final}")
+               f"apos_finalizar={ordem_final}")
     context.close()
 
 
@@ -585,163 +529,6 @@ def test_finalizar_apresentacao_mantem_no_topo_se_so_sobra_a_mesma_pessoa(browse
     ok = (ordem_final == ['device-x'] and not erros)
     registrar("Sem outra pessoa na fila, o pedido restante da mesma pessoa é mantido no topo", ok,
                f"apos_finalizar={ordem_final}")
-    context.close()
-
-
-def test_teto_de_espera_maxima_fura_mesmo_com_vezes_cantadas_alto(browser, base_url):
-    """O desconto de calcularPrioridadeEfetiva é linear e na mesma taxa pra
-    todo mundo — então a DIFERENÇA de prioridade entre dois pedidos que já
-    estão na fila nunca muda com o tempo, só porque os dois descontos crescem
-    juntos. Sem um teto, alguém com vezesCantadas bem alto (ex: 7x) ficaria
-    preso atrás de gente com vezesCantadas baixo pra sempre, não importa
-    quanto tempo espere. MINUTOS_ESPERA_MAXIMA existe pra quebrar esse
-    travamento: passado esse teto, o pedido fura pra frente de qualquer um."""
-    context, page, erros = nova_pagina(browser, base_url)
-
-    teto_minutos = page.evaluate("MINUTOS_ESPERA_MAXIMA")
-
-    # PessoaVeterana já cantou muitas vezes (prioridade efetiva ruim mesmo sem
-    # o teto) e está esperando bem mais que o teto configurado.
-    # PessoaRecente é nova (vezesCantadas=0) e chegou bem depois — sem o teto,
-    # ela ficaria na frente pra sempre, já que a diferença de prioridade entre
-    # os dois nunca diminui com o tempo (só o próprio teto quebra isso).
-    page.evaluate(f"""
-        fila.length = 0;
-        fila.push({{
-            id: 777101, nome: 'PessoaVeterana', mesa: null, musica: 'MusicaV', artista: 'X',
-            deviceId: 'device-veterana',
-            timestamp: Date.now() - ({teto_minutos} * 2 * 60 * 1000),
-            timestampFila: Date.now() - ({teto_minutos} * 2 * 60 * 1000),
-            vezesCantadas: 7, youtubeUrl: null
-        }});
-        fila.push({{
-            id: 777102, nome: 'PessoaRecente', mesa: null, musica: 'MusicaR', artista: 'X',
-            deviceId: 'device-recente',
-            timestamp: Date.now(), timestampFila: Date.now(),
-            vezesCantadas: 0, youtubeUrl: null
-        }});
-        atualizarUI();
-    """)
-    page.wait_for_timeout(100)
-    ordem_apos_teto = page.evaluate("fila.map(p => p.nome)")
-
-    ok = (ordem_apos_teto[0] == "PessoaVeterana" and not erros)
-    registrar("Teto de espera máxima fura a fila mesmo com vezesCantadas alto", ok,
-               f"teto_minutos={teto_minutos}, ordem={ordem_apos_teto}")
-    context.close()
-
-
-def test_teto_de_espera_maxima_empate_por_ordem_de_chegada(browser, base_url):
-    """Quando MÚLTIPLOS pedidos passam do teto ao mesmo tempo (todos com
-    prioridade forçada a -Infinity), o empate deve ser resolvido por quem
-    está esperando há mais tempo (timestampFila mais antigo primeiro) —
-    mesmo tie-break de sempre, usado em qualquer empate de ordenarFila()."""
-    context, page, erros = nova_pagina(browser, base_url)
-
-    teto_minutos = page.evaluate("MINUTOS_ESPERA_MAXIMA")
-
-    page.evaluate(f"""
-        fila.length = 0;
-        fila.push({{
-            id: 777201, nome: 'MaisAntiga', mesa: null, musica: 'M1', artista: 'X',
-            deviceId: 'device-mais-antiga',
-            timestamp: Date.now() - ({teto_minutos} * 3 * 60 * 1000),
-            timestampFila: Date.now() - ({teto_minutos} * 3 * 60 * 1000),
-            vezesCantadas: 0, youtubeUrl: null
-        }});
-        fila.push({{
-            id: 777202, nome: 'MaisNova', mesa: null, musica: 'M2', artista: 'X',
-            deviceId: 'device-mais-nova',
-            timestamp: Date.now() - ({teto_minutos} * 2 * 60 * 1000),
-            timestampFila: Date.now() - ({teto_minutos} * 2 * 60 * 1000),
-            vezesCantadas: 5, youtubeUrl: null
-        }});
-        atualizarUI();
-    """)
-    page.wait_for_timeout(100)
-    ordem = page.evaluate("fila.map(p => p.nome)")
-
-    ok = (ordem == ["MaisAntiga", "MaisNova"] and not erros)
-    registrar("Empate entre pedidos acima do teto respeita ordem de chegada", ok,
-               f"teto_minutos={teto_minutos}, ordem={ordem}")
-    context.close()
-
-
-# --- Testes de INTERAÇÃO entre regras (combinação de 2-3 regras ao mesmo
-# tempo) — diferente dos testes acima, que cobrem cada regra isolada. Estes
-# só CONFIRMAM (ou descartam) comportamentos suspeitos, sem corrigir nada
-# ainda. Cada um documenta qual comportamento está confirmando; não achei um
-# arquivo "mapa-regras-fila.md" neste repositório no momento em que este
-# teste foi escrito, então a referência abaixo é a descrição do comportamento
-# em si (recebida junto com a tarefa), não um número de item de um documento.
-# ok=True nestes 3 testes específicos == a suspeita é REAL (bug confirmado);
-# ok=False == o sistema já se comporta bem (falsa suspeita).
-
-def test_suspeita_espera_maxima_anula_protecao_anti_sequencia(browser, base_url):
-    """[Combinação: MINUTOS_ESPERA_MAXIMA (calcularPrioridadeEfetiva, ~linha
-    2954) + LIMITE_TROCA_ANTI_SEQUENCIA (desfazerSequenciasConsecutivas,
-    ~linha 2996)] FIXADO: o caso fila[0] vs ultimoCantorKey em
-    desfazerSequenciasConsecutivas (a garantia de "nunca chamar a mesma
-    pessoa duas vezes seguidas") agora troca de forma INCONDICIONAL, sem
-    passar pelo LIMITE_TROCA_ANTI_SEQUENCIA — diferente do loop de pares no
-    meio da fila, que continua respeitando esse limite (é uma otimização de
-    prioridade, não uma garantia de UX). Antes do fix, quando o segundo
-    pedido de quem ACABOU de cantar já tinha passado do teto de espera
-    máxima (prioridade forçada a -Infinity por calcularPrioridadeEfetiva), a
-    diferença contra qualquer prioridade finita sempre excedia
-    LIMITE_TROCA_ANTI_SEQUENCIA e a troca nunca acontecia — a pessoa era
-    chamada de novo em seguida mesmo com outra pessoa esperando logo atrás.
-    Este teste agora confirma que a troca acontece nesse caso."""
-    context, page, erros = nova_pagina(browser, base_url, bar="TESTE")
-
-    teto_minutos = page.evaluate("MINUTOS_ESPERA_MAXIMA")
-    limite_troca = page.evaluate("LIMITE_TROCA_ANTI_SEQUENCIA")
-    agora = page.evaluate("Date.now()")
-
-    # PessoaX tem 2 pedidos (mesmo deviceId); PessoaY tem 1, prioridade normal.
-    page.evaluate(f"""
-        fila = [
-            {{id: 1, nome: 'PessoaX', mesa: null, musica: 'MusicaX1', artista: 'A',
-              deviceId: 'device-x', timestamp: {agora}, timestampFila: {agora},
-              vezesCantadas: 0, youtubeUrl: null}},
-            {{id: 2, nome: 'PessoaX', mesa: null, musica: 'MusicaX2', artista: 'A',
-              deviceId: 'device-x', timestamp: {agora}, timestampFila: {agora},
-              vezesCantadas: 0, youtubeUrl: null}},
-            {{id: 3, nome: 'PessoaY', mesa: null, musica: 'MusicaY1', artista: 'A',
-              deviceId: 'device-y', timestamp: {agora - 500}, timestampFila: {agora - 500},
-              vezesCantadas: 0, youtubeUrl: null}}
-        ];
-        ordenarFila();
-        atualizarUI();
-    """)
-
-    # PessoaX começa a cantar MusicaX1 -> ultimoCantorKey = chave dela.
-    page.evaluate("acaoProximo(1)")
-
-    # O pedido restante dela (MusicaX2) já passou (bem) do teto de espera
-    # máxima -> calcularPrioridadeEfetiva força -Infinity nele.
-    page.evaluate(f"""
-        const pedidoX2 = fila.find(p => p.deviceId === 'device-x');
-        pedidoX2.timestampFila = Date.now() - ({teto_minutos} + 5) * 60 * 1000;
-    """)
-
-    prioridade_x2 = page.evaluate("calcularPrioridadeEfetiva(fila.find(p => p.deviceId === 'device-x'))")
-    prioridade_y = page.evaluate("calcularPrioridadeEfetiva(fila.find(p => p.deviceId === 'device-y'))")
-
-    page.evaluate("acaoFinalizarApresentacao()")
-    page.wait_for_timeout(150)
-
-    ordem_final = page.evaluate("fila.map(p => p.deviceId)")
-
-    # ok=True confirma a suspeita: mesmo com PessoaY esperando logo atrás
-    # (prioridade normal, finita), a troca anti-sequência nunca roda porque a
-    # diferença contra -Infinity sempre excede LIMITE_TROCA_ANTI_SEQUENCIA —
-    # PessoaX (device-x) permanece no topo e seria chamada de novo.
-    ok = (prioridade_x2 == float('-inf') and prioridade_y != float('-inf')
-          and ordem_final[0] == 'device-x' and not erros)
-    registrar("[SUSPEITA CONFIRMADA?] Espera máxima (-Infinity) anula a proteção anti-sequência", ok,
-               f"prioridade_x2={prioridade_x2}, prioridade_y={prioridade_y}, "
-               f"limite_troca={limite_troca}, ordem_final={ordem_final}")
     context.close()
 
 
@@ -1189,7 +976,7 @@ def test_modo_semi_automatico_desligado_nao_chama_sozinho(browser, base_url):
 def test_chamada_automatica_usa_topo_atual_da_fila_no_disparo(browser, base_url):
     """PR B: a contagem regressiva do modo semi-automático leva
     SEGUNDOS_AUTO_CHAMAR_PROXIMO segundos, e a fila pode mudar nesse meio-tempo
-    (ex: alguém furar a fila por MINUTOS_ESPERA_MAXIMA). A AÇÃO final
+    (ex: uma alteração de pedidos ou contagens). A AÇÃO final
     (acaoProximo) precisa reconferir o topo da fila ATIVA no momento exato em
     que dispara — não usar quem era o topo quando a contagem começou."""
     context, page, erros = nova_pagina(browser, base_url)
@@ -1555,6 +1342,7 @@ def test_meus_pedidos_posicao_e_cancelamento(browser, base_url):
     page.wait_for_timeout(150)
     visivel_depois = page.evaluate("!document.getElementById('secao-meus-pedidos').classList.contains('hidden')")
     texto = page.evaluate("document.getElementById('lista-meus-pedidos').innerText")
+    regra_fila = page.evaluate("document.querySelector('[data-i18n=\"proximos_regra_fila\"]').innerText")
 
     meu_id = page.evaluate("fila.find(p => p.nome === 'EuMesmo').id")
 
@@ -1570,11 +1358,13 @@ def test_meus_pedidos_posicao_e_cancelamento(browser, base_url):
     ainda_na_fila = page.evaluate("fila.some(p => p.nome === 'EuMesmo')")
     outra_pessoa_continua = page.evaluate("fila.some(p => p.nome === 'OutraPessoa')")
 
-    ok = (escondido_antes and visivel_depois and "MinhaMusica" in texto
+    ok = (escondido_antes and visivel_depois and "MinhaMusica" in texto and "cerca de 5 min" in texto
+          and "quem cantou menos hoje vai primeiro" in regra_fila
           and ainda_la_apos_primeiro_clique and tem_opcao_manter
           and not ainda_na_fila and outra_pessoa_continua and not erros)
     registrar("Cartão 'Seus Pedidos': cancelar pede confirmação clara antes de remover", ok,
                f"escondido_antes={escondido_antes}, visivel_depois={visivel_depois}, "
+               f"estimativa_exibida={'cerca de 5 min' in texto}, regra_exibida={'quem cantou menos hoje vai primeiro' in regra_fila}, "
                f"opcao_manter_aparece={tem_opcao_manter}, "
                f"nao_removeu_no_1o_clique={ainda_la_apos_primeiro_clique}, "
                f"removido_apos_confirmar={not ainda_na_fila}, outra_pessoa_intacta={outra_pessoa_continua}")
@@ -2740,15 +2530,12 @@ def main():
             test_admin_exige_login(browser, base_url)
             test_youtube_preenche_musica_e_libera_artista(browser, base_url)
             test_media_de_avaliacoes(browser, base_url)
-            test_espera_longa_faz_pessoa_furar_a_fila(browser, base_url)
+            test_ordenar_fila_por_vezes_cantadas_e_ordem_de_chegada(browser, base_url)
             test_fila_evita_pedidos_consecutivos_da_mesma_pessoa(browser, base_url)
             test_fila_mantem_sequencia_quando_so_sobra_a_mesma_pessoa(browser, base_url)
             test_fila_nao_fura_prioridade_pra_desfazer_sequencia(browser, base_url)
             test_finalizar_apresentacao_nao_deixa_mesma_pessoa_como_proxima(browser, base_url)
             test_finalizar_apresentacao_mantem_no_topo_se_so_sobra_a_mesma_pessoa(browser, base_url)
-            test_teto_de_espera_maxima_fura_mesmo_com_vezes_cantadas_alto(browser, base_url)
-            test_teto_de_espera_maxima_empate_por_ordem_de_chegada(browser, base_url)
-            test_suspeita_espera_maxima_anula_protecao_anti_sequencia(browser, base_url)
             test_suspeita_fila_curta_conta_ausentes_como_gente_esperando(browser, base_url)
             test_calcular_tempo_estimado_ignora_ausentes(browser, base_url)
             test_marcar_ausente_remove_da_ordenacao_normal(browser, base_url)
