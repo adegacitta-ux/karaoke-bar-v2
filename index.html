@@ -346,6 +346,9 @@
                         <div class="mt-6 text-center text-xs text-gray-500" data-i18n="proximos_nota_realtime">
                             A lista é atualizada em tempo real (quando o Firebase está conectado) ou ao recarregar a página.
                         </div>
+                        <p class="mt-3 text-center text-xs text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2" data-i18n="proximos_regra_fila">
+                            Ordem justa: quem cantou menos hoje vai primeiro; em empate, quem pediu primeiro. Também evitamos a mesma pessoa em apresentações seguidas.
+                        </p>
                     </div>
                 </div>
 
@@ -901,6 +904,7 @@
                 proximos_mostrando: 'Mostrando até 10 próximos.',
                 proximos_vazio: 'Nenhuma música na fila no momento.',
                 proximos_nota_realtime: 'A lista é atualizada em tempo real (quando o Firebase está conectado) ou ao recarregar a página.',
+                proximos_regra_fila: 'Ordem justa: quem cantou menos hoje vai primeiro; em empate, quem pediu primeiro. Também evitamos a mesma pessoa em apresentações seguidas.',
                 mesa_inline: 'Mesa',
                 historico_titulo: 'Já Cantadas',
                 historico_subtitulo: 'Quem já se apresentou hoje e as notas que recebeu.',
@@ -916,7 +920,9 @@
                 meu_pedido_proximo: '🎤 Você é o próximo!',
                 meu_pedido_falta_singular: 'Falta {n} pessoa antes de você',
                 meu_pedido_falta_plural: 'Faltam {n} pessoas antes de você',
+                meu_pedido_estimativa: 'Estimativa: cerca de {minutos} min',
                 meu_pedido_aguardando_dj: 'Aguardando o DJ',
+                meu_pedido_ausente_info: 'Quando voltar, o DJ devolve seu pedido à fila normal.',
                 remover_pedido_pergunta: 'Remover esse pedido da fila?',
                 sim_cancelar: 'Sim, cancelar',
                 manter_pedido: 'Manter pedido',
@@ -997,6 +1003,7 @@
                 proximos_mostrando: 'Showing up to 10 next.',
                 proximos_vazio: 'No songs in the queue right now.',
                 proximos_nota_realtime: 'The list updates in real time (when Firebase is connected) or when the page is reloaded.',
+                proximos_regra_fila: 'Fair order: people who have sung less today go first; ties follow request order. We also avoid the same person singing twice in a row.',
                 mesa_inline: 'Table',
                 historico_titulo: 'Already Sung',
                 historico_subtitulo: 'Who has performed today and the ratings they received.',
@@ -1012,7 +1019,9 @@
                 meu_pedido_proximo: "🎤 You're next!",
                 meu_pedido_falta_singular: '{n} person ahead of you',
                 meu_pedido_falta_plural: '{n} people ahead of you',
+                meu_pedido_estimativa: 'Estimated wait: about {minutos} min',
                 meu_pedido_aguardando_dj: 'Waiting for the DJ',
+                meu_pedido_ausente_info: 'When you return, the DJ will place your request back in the regular queue.',
                 remover_pedido_pergunta: 'Remove this request from the queue?',
                 sim_cancelar: 'Yes, cancel',
                 manter_pedido: 'Keep request',
@@ -1890,6 +1899,9 @@
                     : (posicao === 0
                         ? t('meu_pedido_proximo')
                         : t(posicao === 1 ? 'meu_pedido_falta_singular' : 'meu_pedido_falta_plural', { n: posicao }));
+                const textoEstimativa = pedido.ausenteDesde
+                    ? t('meu_pedido_ausente_info')
+                    : (posicao > 0 ? t('meu_pedido_estimativa', { minutos: posicao * TEMPO_MEDIO_MUSICA }) : '');
                 const corFundo = (!pedido.ausenteDesde && posicao === 0) ? 'bg-indigo-50 border-indigo-200' : 'bg-gray-50 border-gray-200';
 
                 html += `
@@ -1897,6 +1909,7 @@
                         <div class="flex justify-between items-start gap-2">
                             <div class="min-w-0">
                                 <div class="text-sm font-semibold text-gray-800">${textoPosicao}</div>
+                                ${textoEstimativa ? `<div class="text-xs text-indigo-600 mt-0.5">${escaparHtml(textoEstimativa)}</div>` : ''}
                                 <div class="text-xs text-gray-500 truncate">${escaparHtml(pedido.musica)}</div>
                             </div>
                             <div id="acoes-pedido-${pedido.id}" class="flex-shrink-0">
@@ -2940,8 +2953,8 @@
                     deviceId: DEVICE_ID,
                     // "timestamp" é a hora em que a música foi PEDIDA — nunca muda depois
                     // disso, é o que o relatório de horário de pico usa. Já
-                    // "timestampFila" é o "relógio de espera" da fila (usado pra
-                    // calcular prioridade) e É alterado quando o DJ usa "Pular Vez"
+                    // "timestampFila" registra a ordem de chegada na fila e É alterado
+                    // quando o DJ usa "Pular Vez"
                     // (ver acaoPular) — se os dois fossem o mesmo campo, pular a vez de
                     // alguém reescrevia a hora do pedido dela com a hora atual,
                     // fazendo o relatório mostrar a hora que ela cantou em vez da hora
@@ -4175,11 +4188,10 @@
             // autenticado grava isso.
             verificarTimeoutAusentes();
 
-            // Reordena a cada atualização de tela — é o que faz quem está esperando
-            // subir na fila sozinho com o tempo, mesmo sem nenhuma ação nova acontecer
-            // (novo pedido, voto, etc). Só reordena a lista local pra exibição — não
-            // salva essa reordenação no Firebase, todo mundo calcula a mesma ordem
-            // sozinho a partir dos mesmos dados (vezesCantadas + horário do pedido).
+            // Reordena a cada atualização de tela para refletir pedidos, apresentações
+            // e retornos de ausência. Só reordena a lista local pra exibição — não salva
+            // essa reordenação no Firebase; todo mundo calcula a mesma ordem a partir
+            // dos mesmos dados (vezesCantadas + horário de chegada na fila).
             ordenarFila();
 
             const tempoEstimado = calcularTempoEstimado();

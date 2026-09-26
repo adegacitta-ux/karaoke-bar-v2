@@ -1418,6 +1418,7 @@ def test_meus_pedidos_posicao_e_cancelamento(browser, base_url):
     page.wait_for_timeout(150)
     visivel_depois = page.evaluate("!document.getElementById('secao-meus-pedidos').classList.contains('hidden')")
     texto = page.evaluate("document.getElementById('lista-meus-pedidos').innerText")
+    regra_fila = page.evaluate("document.querySelector('[data-i18n=\"proximos_regra_fila\"]').innerText")
 
     meu_id = page.evaluate("fila.find(p => p.nome === 'EuMesmo').id")
 
@@ -1433,11 +1434,13 @@ def test_meus_pedidos_posicao_e_cancelamento(browser, base_url):
     ainda_na_fila = page.evaluate("fila.some(p => p.nome === 'EuMesmo')")
     outra_pessoa_continua = page.evaluate("fila.some(p => p.nome === 'OutraPessoa')")
 
-    ok = (escondido_antes and visivel_depois and "MinhaMusica" in texto
+    ok = (escondido_antes and visivel_depois and "MinhaMusica" in texto and "cerca de 5 min" in texto
+          and "quem cantou menos hoje vai primeiro" in regra_fila
           and ainda_la_apos_primeiro_clique and tem_opcao_manter
           and not ainda_na_fila and outra_pessoa_continua and not erros)
     registrar("Cartão 'Seus Pedidos': cancelar pede confirmação clara antes de remover", ok,
                f"escondido_antes={escondido_antes}, visivel_depois={visivel_depois}, "
+               f"estimativa_exibida={'cerca de 5 min' in texto}, regra_exibida={'quem cantou menos hoje vai primeiro' in regra_fila}, "
                f"opcao_manter_aparece={tem_opcao_manter}, "
                f"nao_removeu_no_1o_clique={ainda_la_apos_primeiro_clique}, "
                f"removido_apos_confirmar={not ainda_na_fila}, outra_pessoa_intacta={outra_pessoa_continua}")
