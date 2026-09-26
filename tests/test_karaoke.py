@@ -1342,6 +1342,82 @@ def test_dois_pedidos_simultaneos_nao_se_perdem(browser, base_url):
     context.close()
 
 
+def test_retentativa_automatica_apos_permission_denied_no_pedido(browser, base_url):
+    """Hotfix de resiliência de autenticação: em produção, clientes reais
+    receberam permission_denied ao enviar o primeiro pedido mesmo com
+    firebase.auth().currentUser já confirmado ativo — corrida entre o SDK do
+    Auth já ter resolvido a sessão no JS e a conexão websocket do Realtime
+    Database ainda não estar autenticada de verdade no servidor. Este teste
+    simula exatamente esse cenário (primeiro .set() falha com
+    permission_denied, segundo sucede) e confirma que adicionarPedido()
+    retenta sozinho e completa o pedido — usando o MESMO pedidoId nas duas
+    tentativas (mesmo remontando o objeto do zero via montarNovoPedido() a
+    cada retentativa, já que currentUid() pode ter mudado nesse meio tempo),
+    sem criar um pedido duplicado."""
+    context, page, erros = nova_pagina(browser, base_url)
+
+    page.evaluate("""
+        window.__servidorFila = {};
+        window.__idsTentados = [];
+        window.__numeroDeTentativas = 0;
+        useFirebase = true;
+        db = {
+            ref: function(path) {
+                const matchPedido = path.match(/\\/fila\\/(.+)$/);
+                if (matchPedido) {
+                    const pedidoId = matchPedido[1];
+                    return {
+                        set: function(valor, cb) {
+                            window.__numeroDeTentativas++;
+                            window.__idsTentados.push(pedidoId);
+                            if (window.__numeroDeTentativas === 1) {
+                                // Primeira tentativa: simula a corrida de autenticação
+                                setTimeout(() => cb({code: 'PERMISSION_DENIED', message: 'Permission denied'}), 10);
+                                return;
+                            }
+                            window.__servidorFila[pedidoId] = valor;
+                            setTimeout(() => cb(null), 10);
+                        }
+                    };
+                }
+                if (path.endsWith('/fila')) {
+                    return {
+                        once: function() {
+                            return new Promise((resolve) => {
+                                setTimeout(() => resolve({ val: () => window.__servidorFila }), 10);
+                            });
+                        },
+                        on: function(){}
+                    };
+                }
+                return { on: function(){}, once: function(){ return Promise.resolve({val: () => null}); } };
+            }
+        };
+    """)
+
+    page.evaluate("""
+        document.getElementById('input-nome').value = 'Retentativa';
+        document.getElementById('input-musica').value = 'MusicaRetentativa';
+        document.getElementById('input-artista').value = 'Artista';
+        adicionarPedido({preventDefault: () => {}});
+    """)
+    page.wait_for_timeout(700)  # cobre o atraso de 300ms antes da primeira retentativa
+
+    numero_de_tentativas = page.evaluate("window.__numeroDeTentativas")
+    ids_tentados = page.evaluate("window.__idsTentados")
+    nomes_servidor = page.evaluate("Object.values(window.__servidorFila).map(p => p.nome)")
+    fila_local = page.evaluate("fila.map(p => p.nome)")
+
+    ok = (numero_de_tentativas == 2
+          and len(set(ids_tentados)) == 1  # mesmo pedidoId nas duas tentativas — sem duplicar
+          and nomes_servidor == ["Retentativa"]
+          and fila_local == ["Retentativa"]
+          and not erros)
+    registrar("Retentativa automática após permission_denied cria o pedido sem duplicar", ok,
+              f"tentativas={numero_de_tentativas}, ids={ids_tentados}, servidor={nomes_servidor}, local={fila_local}")
+    context.close()
+
+
 def test_limite_de_creditos_bloqueia_sexto_pedido_com_fila_cheia(browser, base_url):
     """Teto de créditos por dispositivo: depois de LIMITE_PEDIDOS_ATIVOS_POR_DEVICE
     pedidos pendentes do mesmo device, o próximo é bloqueado — desde que haja
@@ -2762,6 +2838,7 @@ def main():
             test_chamada_automatica_usa_topo_atual_da_fila_no_disparo(browser, base_url)
             test_chamada_automatica_fila_vazia_no_disparo_nao_chama_ninguem(browser, base_url)
             test_dois_pedidos_simultaneos_nao_se_perdem(browser, base_url)
+            test_retentativa_automatica_apos_permission_denied_no_pedido(browser, base_url)
             test_limite_de_creditos_bloqueia_sexto_pedido_com_fila_cheia(browser, base_url)
             test_limite_de_creditos_libera_com_fila_curta(browser, base_url)
             test_cancelamento_admin_libera_credito_imediatamente(browser, base_url)
