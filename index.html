@@ -3124,48 +3124,11 @@
             document.getElementById('input-nome').focus();
         }
 
-        // A cada X minutos esperando, "perdoa" uma vez cantada anteriormente na hora de
-        // ordenar a fila — assim quem já cantou não fica preso atrás de gente nova pra
-        // sempre; com tempo suficiente de espera, ela volta a furar a frente. Ajuste esse
-        // número se quiser que a fila "perdoe" mais rápido ou mais devagar.
-        const MINUTOS_PARA_PERDOAR_UMA_VEZ_CANTADA = 25;
-
-        // Teto de espera: como o desconto acima é linear e na MESMA taxa pra todo
-        // mundo, a diferença de prioridade entre dois pedidos que já estão na fila
-        // nunca muda com o tempo (os dois descontos crescem juntos, o gap fica igual).
-        // Ou seja, sem um teto, alguém com vezesCantadas alto (ex: 6-7x) pode ficar
-        // preso atrás de quem tem vezesCantadas baixo pra sempre, não importa quanto
-        // tempo espere. Esse teto quebra esse travamento: depois dele, o pedido fura
-        // pra frente ignorando vezesCantadas.
-        const MINUTOS_ESPERA_MAXIMA = 40; // acima disso, o pedido fura pra frente
-
-        // Calcula a prioridade "de verdade" de um pedido NESTE momento: começa igual a
-        // quantas vezes a pessoa já cantou, e vai descontando conforme o tempo de espera
-        // desse pedido específico passa. Quanto MENOR o número, mais cedo ela canta.
-        function calcularPrioridadeEfetiva(pedido) {
-            // "timestampFila" é o relógio de espera da fila (reiniciado pelo "Pular
-            // Vez" — ver acaoPular); o "|| pedido.timestamp" é só compatibilidade com
-            // pedidos que já estavam na fila antes desse campo existir.
-            const referencia = pedido.timestampFila || pedido.timestamp;
-            const minutosEsperando = (Date.now() - referencia) / 60000;
-
-            // Passou do teto: força a prioridade pro mínimo possível, furando todo
-            // mundo independente de vezesCantadas. Empate entre vários pedidos acima
-            // do teto é resolvido pelo tie-break de timestampFila em ordenarFila().
-            if (minutosEsperando > MINUTOS_ESPERA_MAXIMA) {
-                return -Infinity;
-            }
-
-            return pedido.vezesCantadas - (minutosEsperando / MINUTOS_PARA_PERDOAR_UMA_VEZ_CANTADA);
-        }
-
-        // Diferença máxima de calcularPrioridadeEfetiva que a passada
-        // anti-sequência (ver desfazerSequenciasConsecutivas) aceita pra trazer
-        // o pedido de outra pessoa pra frente. Mantido pequeno (~1, equivalente a
-        // uns 25min de espera perdoados) de propósito: só desfaz a sequência
-        // quando as prioridades já estavam bem próximas, nunca furando a fila de
-        // alguém com prioridade bem pior só pra evitar dois pedidos seguidos da
-        // mesma pessoa.
+        // Diferença máxima de vezesCantadas que a passada anti-sequência (ver
+        // desfazerSequenciasConsecutivas) aceita pra trazer o pedido de outra pessoa
+        // pra frente. Mantido pequeno: só desfaz a sequência quando as prioridades já
+        // estavam bem próximas, nunca furando a fila de alguém com prioridade bem pior
+        // só pra evitar dois pedidos seguidos da mesma pessoa.
         const LIMITE_TROCA_ANTI_SEQUENCIA = 1;
 
         // Depois de fila.sort() por prioridade, dois pedidos da MESMA pessoa
@@ -3199,11 +3162,8 @@
             // "nunca chamar a mesma pessoa duas vezes seguidas" — não uma
             // otimização de prioridade como o loop abaixo. Por isso a troca
             // aqui é INCONDICIONAL e não passa pelo LIMITE_TROCA_ANTI_SEQUENCIA:
-            // mesmo que fila[j] "mereça" ir primeiro pela lógica de fairness
-            // (ex: prioridade -Infinity por MINUTOS_ESPERA_MAXIMA, que faria a
-            // diferença de prioridade estourar qualquer limite), ele só é
-            // adiado por 1 posição — ainda vai ser chamado logo em seguida, não
-            // indefinidamente. Sem essa troca, a mesma pessoa seria chamada de
+            // ele só é adiado por 1 posição — ainda vai ser chamado logo em seguida,
+            // não indefinidamente. Sem essa troca, a mesma pessoa seria chamada de
             // novo na sequência mesmo com alguém esperando logo atrás.
             if (ultimoCantorKey && limite > 0 &&
                 obterChaveIdentidade(fila[0]) === ultimoCantorKey) {
@@ -3232,7 +3192,7 @@
                     break; // só sobrou pedido da mesma pessoa: mantém a sequência
                 }
 
-                const diferenca = calcularPrioridadeEfetiva(fila[j]) - calcularPrioridadeEfetiva(fila[i]);
+                const diferenca = fila[j].vezesCantadas - fila[i].vezesCantadas;
                 if (diferenca > LIMITE_TROCA_ANTI_SEQUENCIA) {
                     continue; // prioridade bem pior: não vale furar fila só pra desfazer a sequência
                 }
@@ -3243,9 +3203,8 @@
         }
 
         function ordenarFila() {
-            // Regra: menos vezes cantadas primeiro — mas o "peso" de já ter cantado
-            // vai diminuindo com o tempo de espera (ver calcularPrioridadeEfetiva).
-            // Em empate, ordem de chegada na fila (timestampFila).
+            // Regra: menos vezes cantadas primeiro. Em empate, ordem de chegada na
+            // fila (timestampFila; timestamp para pedidos antigos).
             //
             // Pedidos ausentes (ver acaoMarcarAusente) NÃO entram nessa conta: vão
             // sempre pro final, fora da ordenação normal — é isso que os tira da
@@ -3260,8 +3219,8 @@
                     return 0; // ordem entre ausentes não importa, eles não aparecem na fila normal
                 }
 
-                const diferenca = calcularPrioridadeEfetiva(a) - calcularPrioridadeEfetiva(b);
-                if (Math.abs(diferenca) > 0.0001) {
+                const diferenca = a.vezesCantadas - b.vezesCantadas;
+                if (diferenca !== 0) {
                     return diferenca;
                 }
                 return (a.timestampFila || a.timestamp) - (b.timestampFila || b.timestamp);
@@ -3329,7 +3288,7 @@
                     // Reconfere o topo da fila ATIVA agora, no momento exato em que
                     // a ação dispara — NÃO usa a variável `proximo` capturada lá em
                     // cima, porque a fila pode ter mudado durante os segundos da
-                    // contagem (ex: alguém furou por MINUTOS_ESPERA_MAXIMA). O texto
+                    // contagem (ex: pedidos ou contagens mudaram). O texto
                     // da contagem na tela pode continuar mostrando o nome antigo sem
                     // problema — só a ação final que chama precisa estar atualizada.
                     const topoAtual = filaAtiva()[0];
@@ -4041,8 +4000,7 @@
         // espera" da fila (timestampFila) — é como se esse relógio tivesse
         // pausado durante a ausência — e devolve o pedido pra fila normal.
         // ordenarFila() já calcula sozinha a posição certa pra ele a partir
-        // daí (ver calcularPrioridadeEfetiva), sem fila paralela nem furar
-        // quem esperou certinho.
+        // daí, sem fila paralela nem furar quem esperou certinho.
         function acaoVoltouAusencia(id) {
             if (useFirebase && db) {
                 db.ref(caminhoBar('fila')).transaction((filaAtualDoServidor) => {
