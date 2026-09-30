@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Karaokê Manager</title>
+    <title>Karaokê do Città | Città Boteco de Vinhos</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20100%20100%22%3E%3Ctext%20y%3D%22.9em%22%20font-size%3D%2290%22%3E%F0%9F%8E%A4%3C%2Ftext%3E%3C%2Fsvg%3E">
     <!-- PWA: manifest, cores de instalação e tags específicas de iOS (iOS não lê manifest.json integralmente) -->
     <link rel="manifest" href="manifest.json">
@@ -142,6 +142,17 @@
             0%, 100% { filter: brightness(1); }
             50% { filter: brightness(1.25); }
         }
+
+        /* Identidade Città: camada visual independente dos fluxos do karaokê. */
+        :root { --citta-bordo: #7F1D1D; --citta-vinho: #5B0F14; --citta-ouro: #D4AF37; --citta-creme: #F8F4EC; --citta-preto: #111827; }
+        html { scroll-behavior: smooth; }
+        body { background: var(--citta-vinho); color: var(--citta-creme); }
+        body::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none; background: radial-gradient(circle at 12% 4%, rgba(212,175,55,.2), transparent 24rem), radial-gradient(circle at 92% 30%, rgba(127,29,29,.62), transparent 31rem), linear-gradient(135deg, #18070b 0%, var(--citta-vinho) 47%, #240b12 100%); }
+        .citta-nav { background: rgba(24, 7, 11, .76); border-bottom: 1px solid rgba(212,175,55,.22); backdrop-filter: blur(18px); }
+        .citta-nav .text-indigo-600 { color: var(--citta-ouro); }.citta-nav .hover\:bg-gray-100:hover, .citta-nav .toggle-tema-btn:hover { background: rgba(248,244,236,.1); color: var(--citta-creme); }
+        .citta-shell { max-width: 1400px; }.citta-hero { position: relative; overflow: hidden; margin: 1.25rem 0 1.75rem; padding: clamp(2rem, 5vw, 4.5rem); border: 1px solid rgba(212,175,55,.35); border-radius: 28px; background: linear-gradient(110deg, rgba(91,15,20,.93), rgba(17,24,39,.77)); box-shadow: 0 24px 60px rgba(0,0,0,.28); }.citta-hero::after { content: ''; position: absolute; width: 19rem; height: 19rem; right: -5rem; top: -11rem; border: 1px solid rgba(212,175,55,.3); border-radius: 999px; box-shadow: 0 0 0 2.5rem rgba(212,175,55,.05), 0 0 0 5rem rgba(212,175,55,.035); }.citta-kicker { color: #f6d879; font-size: .75rem; font-weight: 800; letter-spacing: .2em; text-transform: uppercase; }.citta-hero h2 { max-width: 700px; margin: .65rem 0; color: var(--citta-creme); font-size: clamp(2rem, 5vw, 4.2rem); font-weight: 800; line-height: 1; letter-spacing: -.04em; }.citta-hero p { position: relative; z-index: 1; margin: 0; color: rgba(248,244,236,.8); font-size: clamp(1rem, 2vw, 1.2rem); }
+        .client-layout { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(310px, .85fr); gap: clamp(1.25rem, 3vw, 2.5rem); align-items: start; }.client-primary { min-width: 0; }#cliente .max-w-md { max-width: none; margin: 0; }.client-primary > .bg-white, .live-card, #secao-meus-pedidos { border: 1px solid rgba(212,175,55,.18); background: rgba(248,244,236,.97); box-shadow: 0 18px 48px rgba(0,0,0,.22); }.client-primary .bg-gradient-custom { background: linear-gradient(120deg, var(--citta-vinho), var(--citta-bordo) 58%, #9d3c22); }.client-primary input[type="text"] { min-height: 3.25rem; border-color: #d8cfc0; border-radius: .85rem; background: #fffdf8; color: var(--citta-preto); transition: border-color .2s, box-shadow .2s, transform .2s; }.client-primary input[type="text"]:focus { border-color: var(--citta-ouro); box-shadow: 0 0 0 4px rgba(212,175,55,.22); outline: none; }.client-primary label { color: #3c2630; font-weight: 700; }#btn-abrir-youtube { width: 100%; justify-content: center; border-color: #d13a36; border-radius: .85rem; padding: .75rem 1rem; }#btn-enviar { min-height: 3.8rem; border-radius: 1rem; background: linear-gradient(110deg, var(--citta-ouro), #a97619); color: #21130b; letter-spacing: .06em; box-shadow: 0 12px 24px rgba(104,64,7,.26); transform: translateY(0); }#btn-enviar:hover { transform: translateY(-2px); filter: brightness(1.06); }#btn-enviar:focus-visible, button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid var(--citta-ouro); outline-offset: 3px; }
+        .live-aside { position: sticky; top: 1rem; display: grid; gap: 1rem; }.live-card { position: relative; overflow: hidden; border-radius: 1.25rem; padding: 1.35rem; color: var(--citta-preto); transition: transform .2s ease, box-shadow .2s ease; }.live-card:hover { transform: translateY(-3px); box-shadow: 0 24px 50px rgba(0,0,0,.27); }.live-card--now { background: linear-gradient(140deg, #fffaf0, #f4dfad); border-color: rgba(212,175,55,.6); }.live-label { display: flex; align-items: center; gap: .55rem; color: var(--citta-bordo); font-size: .75rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }.live-name { margin-top: 1rem; color: var(--citta-vinho); font-size: 1.35rem; font-weight: 800; line-height: 1.2; }.live-song { margin-top: .35rem; color: #5f4a43; font-size: .92rem; line-height: 1.45; }.live-empty { margin-top: 1rem; color: #7c6b65; font-size: .92rem; }.queue-count { margin-top: .65rem; color: var(--citta-vinho); font-size: clamp(2.25rem, 5vw, 3.35rem); font-weight: 800; line-height: 1; }.queue-caption { margin-top: .45rem; color: #765e58; font-size: .85rem; }.song-ranking { display: grid; gap: .55rem; margin: 1rem 0 0; padding: 0; list-style: none; }.song-ranking li { display: flex; align-items: baseline; gap: .65rem; padding-bottom: .55rem; border-bottom: 1px solid rgba(91,15,20,.1); color: #4b3131; font-size: .88rem; }.song-ranking li:last-child { border: 0; padding-bottom: 0; }.song-ranking b { color: var(--citta-ouro); font-size: .75rem; }.citta-skeleton { display: inline-block; width: 72%; height: 1em; border-radius: 999px; background: linear-gradient(90deg, #e4dbcf 25%, #f5efe6 37%, #e4dbcf 63%); background-size: 400% 100%; animation: shimmer 1.4s ease infinite; }@keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }@media (max-width: 900px) { .client-layout { grid-template-columns: 1fr; }.live-aside { position: static; grid-template-columns: repeat(2, minmax(0, 1fr)); }.live-card--now, .live-card--ranking { grid-column: 1 / -1; } }@media (max-width: 560px) { .citta-shell { padding-left: 1rem; padding-right: 1rem; }.citta-hero { margin-top: .75rem; padding: 2rem 1.35rem; border-radius: 1.35rem; }.live-aside { grid-template-columns: 1fr; }.live-card--now, .live-card--ranking { grid-column: auto; } }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
@@ -168,8 +179,8 @@
     </div>
 
     <!-- Header / Navegação Simples para o Protótipo -->
-    <nav class="bg-white shadow-sm mb-4">
-        <div class="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
+    <nav class="citta-nav shadow-sm mb-4">
+        <div class="citta-shell mx-auto px-4 py-3 flex justify-between items-center">
             <h1 class="text-xl font-bold text-indigo-600"><span id="nome-do-bar">Karaokê Manager</span></h1>
             <div class="flex items-center space-x-2" role="tablist" aria-label="Navegação principal">
                 <button type="button" onclick="switchTab('cliente')" id="tab-cliente" role="tab" aria-selected="true" aria-controls="cliente" class="px-3 py-1 text-sm font-medium rounded-md hover:bg-gray-100" data-i18n="nav_pedir_musica">Pedir Música</button>
@@ -184,11 +195,11 @@
         </div>
     </nav>
 
-    <main class="max-w-5xl mx-auto px-4 pb-12">
+    <main class="citta-shell mx-auto px-4 pb-12"><header class="citta-hero"><div class="citta-kicker"><i class="fas fa-wine-glass-alt mr-2" aria-hidden="true"></i>Città Boteco de Vinhos</div><h2>🎤 Karaokê do Città</h2><p>Música <span aria-hidden="true">•</span> Amigos <span aria-hidden="true">•</span> Bons Vinhos</p></header>
 
         <!-- INTERFACE DO CLIENTE -->
         <section id="cliente" class="tab-content active" role="tabpanel" aria-labelledby="tab-cliente">
-            <div class="max-w-md mx-auto space-y-6">
+            <div class="client-layout"><div class="client-primary space-y-6">
 
                 <!-- SEUS PEDIDOS — só aparece se este dispositivo tiver pedido(s) na fila -->
                 <div id="secao-meus-pedidos" class="hidden bg-white rounded-2xl shadow-xl overflow-hidden border-2 border-indigo-300">
@@ -365,6 +376,13 @@
                         </ul>
                     </div>
                 </div>
+                </div>
+                <aside class="live-aside" aria-label="Painéis ao vivo da fila">
+                    <section class="live-card live-card--now" aria-live="polite"><div class="live-label"><i class="fas fa-microphone" aria-hidden="true"></i> Cantando agora</div><div id="live-now-name" class="live-name"><span class="citta-skeleton"></span></div><div id="live-now-song" class="live-song">Atualizando apresentação…</div></section>
+                    <section class="live-card" aria-live="polite"><div class="live-label"><i class="fas fa-music" aria-hidden="true"></i> Próximo da fila</div><div id="live-next-name" class="live-name"><span class="citta-skeleton"></span></div><div id="live-next-song" class="live-song">Consultando a fila…</div></section>
+                    <section class="live-card" aria-live="polite"><div class="live-label"><i class="fas fa-users" aria-hidden="true"></i> Pessoas na fila</div><div id="live-queue-count" class="queue-count">—</div><div class="queue-caption">na ordem para cantar</div></section>
+                    <section class="live-card live-card--ranking" aria-live="polite"><div class="live-label"><i class="fas fa-trophy" aria-hidden="true"></i> Mais cantadas da noite</div><ol id="live-song-ranking" class="song-ranking"><li><span class="citta-skeleton"></span></li><li><span class="citta-skeleton"></span></li><li><span class="citta-skeleton"></span></li></ol></section>
+                </aside>
             </div>
         </section>
 
@@ -4212,6 +4230,31 @@
             } else {
                 form.classList.remove('opacity-20', 'pointer-events-none');
                 msgEncerrado.classList.add('hidden');
+            }
+
+            // Painéis ao vivo do cliente: apenas refletem o estado já carregado;
+            // não escrevem nem ordenam dados, preservando as regras da fila.
+            const filaAoVivo = filaAtiva();
+            const liveNowName = document.getElementById('live-now-name');
+            const liveNowSong = document.getElementById('live-now-song');
+            const liveNextName = document.getElementById('live-next-name');
+            const liveNextSong = document.getElementById('live-next-song');
+            const liveQueueCount = document.getElementById('live-queue-count');
+            const liveRanking = document.getElementById('live-song-ranking');
+            if (liveNowName) {
+                liveNowName.textContent = apresentacaoAtual ? apresentacaoAtual.nome : 'Palco livre por enquanto';
+                liveNowSong.textContent = apresentacaoAtual ? formatarMusicaArtista(apresentacaoAtual.musica, apresentacaoAtual.artista) : 'A próxima voz pode ser a sua.';
+                liveNextName.textContent = filaAoVivo[0] ? filaAoVivo[0].nome : 'Aguardando o próximo pedido';
+                liveNextSong.textContent = filaAoVivo[0] ? formatarMusicaArtista(filaAoVivo[0].musica, filaAoVivo[0].artista) : 'Escolha uma música e inaugure a fila.';
+                liveQueueCount.textContent = filaAoVivo.length;
+                const ranking = Object.entries(historico.reduce((contagem, item) => {
+                    const chave = `${item.musica || ''}${item.artista ? ` — ${item.artista}` : ''}`.trim();
+                    if (chave) contagem[chave] = (contagem[chave] || 0) + 1;
+                    return contagem;
+                }, {})).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 5);
+                liveRanking.innerHTML = ranking.length
+                    ? ranking.map(([musica, quantidade], indice) => `<li><b>${indice + 1}</b><span>${escaparHtml(musica)}</span><span class="ml-auto text-xs text-gray-500">${quantidade}x</span></li>`).join('')
+                    : '<li class="live-empty">As favoritas da noite vão aparecer aqui.</li>';
             }
 
             // UI Admin
