@@ -3188,6 +3188,18 @@
         // só pra evitar dois pedidos seguidos da mesma pessoa.
         const LIMITE_TROCA_ANTI_SEQUENCIA = 1;
 
+        // Teto de espera: ninguém espera mais que isso na fila, mesmo que já tenha
+        // cantado mais vezes que os outros. Passou do teto, o pedido vai pra frente
+        // de todos que ainda não estouraram (entre os estourados, o que espera há
+        // mais tempo vem primeiro). O relógio é o timestampFila, que já desconta o
+        // tempo em que a pessoa ficou ausente (ver acaoVoltouAusencia).
+        const MINUTOS_ESPERA_MAXIMA = 90;
+
+        function estourouEsperaMaxima(pedido, agora) {
+            const chegada = pedido.timestampFila || pedido.timestamp;
+            return (agora - chegada) >= MINUTOS_ESPERA_MAXIMA * 60000;
+        }
+
         // Depois de fila.sort() por prioridade, dois pedidos da MESMA pessoa
         // (mesmo obterChaveIdentidade) podem acabar consecutivos no topo — ex:
         // ela pediu 2 músicas e vezesCantadas está baixo. Isso fura quem já
@@ -3249,6 +3261,11 @@
                     break; // só sobrou pedido da mesma pessoa: mantém a sequência
                 }
 
+                // Quem estourou o teto de espera não pode ser empurrado pra trás.
+                if (estourouEsperaMaxima(fila[i], Date.now())) {
+                    continue;
+                }
+
                 const diferenca = fila[j].vezesCantadas - fila[i].vezesCantadas;
                 if (diferenca > LIMITE_TROCA_ANTI_SEQUENCIA) {
                     continue; // prioridade bem pior: não vale furar fila só pra desfazer a sequência
@@ -3262,10 +3279,13 @@
         function ordenarFila() {
             // Regra: menos vezes cantadas primeiro. Em empate, ordem de chegada na
             // fila (timestampFila; timestamp para pedidos antigos).
+            // Exceção: pedido que já espera há MINUTOS_ESPERA_MAXIMA ou mais fura
+            // essa regra e vai pra frente (ver estourouEsperaMaxima).
             //
             // Pedidos ausentes (ver acaoMarcarAusente) NÃO entram nessa conta: vão
             // sempre pro final, fora da ordenação normal — é isso que os tira da
             // fila visível/ordenada enquanto o DJ espera a pessoa voltar.
+            const agora = Date.now();
             fila.sort((a, b) => {
                 const ausenteA = !!a.ausenteDesde;
                 const ausenteB = !!b.ausenteDesde;
@@ -3274,6 +3294,14 @@
                 }
                 if (ausenteA && ausenteB) {
                     return 0; // ordem entre ausentes não importa, eles não aparecem na fila normal
+                }
+
+                // Teto de espera (MINUTOS_ESPERA_MAXIMA): quem estourou passa na
+                // frente de quem não estourou, independente de vezesCantadas.
+                const estourouA = estourouEsperaMaxima(a, agora);
+                const estourouB = estourouEsperaMaxima(b, agora);
+                if (estourouA !== estourouB) {
+                    return estourouA ? -1 : 1;
                 }
 
                 const diferenca = a.vezesCantadas - b.vezesCantadas;
