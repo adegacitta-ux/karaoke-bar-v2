@@ -259,7 +259,7 @@
                 <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
                     <div class="bg-gradient-custom p-6 text-white text-center">
                         <h2 class="text-2xl font-bold" data-i18n="peca_sua_musica_titulo">Peça sua Música</h2>
-                        <p class="opacity-90 text-sm" data-i18n="peca_sua_musica_subtitulo">Sua vez depende de quantas vezes já cantou!</p>
+                        <p class="opacity-90 text-sm" data-i18n="peca_sua_musica_subtitulo">Quem cantou menos vai primeiro — e ninguém espera mais de 90 minutos!</p>
                     </div>
 
                     <div class="p-6">
@@ -398,7 +398,7 @@
                         </div>
 
                         <div class="mt-6 text-center text-xs text-gray-500" data-i18n="proximos_nota_realtime">
-                            A lista é atualizada em tempo real (quando o Firebase está conectado) ou ao recarregar a página.
+                            A lista atualiza sozinha.
                         </div>
                         <p class="mt-3 text-center text-xs text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2" data-i18n="proximos_regra_fila">
                             Ordem justa: quem cantou menos hoje vai primeiro; em empate, quem pediu primeiro. Também evitamos a mesma pessoa em apresentações seguidas.
@@ -933,9 +933,9 @@
                 minha_vez_padrao: 'Prepare-se! Você é o próximo a cantar.',
                 seus_pedidos_titulo: 'Seus Pedidos',
                 peca_sua_musica_titulo: 'Peça sua Música',
-                peca_sua_musica_subtitulo: 'Sua vez depende de quantas vezes já cantou!',
+                peca_sua_musica_subtitulo: 'Quem cantou menos vai primeiro — e ninguém espera mais de 90 minutos!',
                 fila_encerrada_msg: 'Fila encerrada para esta noite. Já atingimos o limite de músicas que conseguimos tocar até as 23h! Obrigado.',
-                espera_estimada_label: 'Espera estimada:',
+                espera_estimada_label: 'Se pedir agora, você canta em cerca de:',
                 avisar_minha_vez: 'Avisar quando for minha vez',
                 aviso_iphone_texto: 'No iPhone, esse aviso funciona melhor com a aba aberta e a tela ligada — a notificação do sistema só chega direitinho se você adicionar este site à tela de início (compartilhar → "Adicionar à Tela de Início").',
                 label_nome: 'Seu Nome / Apelido',
@@ -966,8 +966,8 @@
                 proximos_subtitulo: 'Veja a ordem atual e quem serão os próximos a cantar.',
                 proximos_mostrando: 'Mostrando até 10 próximos.',
                 proximos_vazio: 'Nenhuma música na fila no momento.',
-                proximos_nota_realtime: 'A lista é atualizada em tempo real (quando o Firebase está conectado) ou ao recarregar a página.',
-                proximos_regra_fila: 'Ordem justa: quem cantou menos hoje vai primeiro; em empate, quem pediu primeiro. Também evitamos a mesma pessoa em apresentações seguidas.',
+                proximos_nota_realtime: 'A lista atualiza sozinha.',
+                proximos_regra_fila: 'Ordem justa: quem cantou menos hoje vai primeiro; em empate, quem pediu primeiro. Passou de 90 minutos esperando, sua música sobe pra frente. Também evitamos a mesma pessoa em apresentações seguidas.',
                 mesa_inline: 'Mesa',
                 historico_titulo: 'Já Cantadas',
                 historico_subtitulo: 'Quem já se apresentou hoje e as notas que recebeu.',
@@ -984,6 +984,7 @@
                 meu_pedido_falta_singular: 'Falta {n} pessoa antes de você',
                 meu_pedido_falta_plural: 'Faltam {n} pessoas antes de você',
                 meu_pedido_estimativa: 'Estimativa: cerca de {minutos} min',
+                meu_pedido_teto: 'Sobe pra frente em {minutos} min se ninguém te chamar antes',
                 meu_pedido_aguardando_dj: 'Aguardando o DJ',
                 meu_pedido_ausente_info: 'Quando voltar, o DJ devolve seu pedido à fila normal.',
                 remover_pedido_pergunta: 'Remover esse pedido da fila?',
@@ -1008,9 +1009,9 @@
                 erro_musica_link: 'Isso parece um link, não o nome da música. Digite o nome ou use o botão Buscar no YouTube.',
                 erro_artista_vazio: 'Digite o nome do artista (ou busque a música no YouTube).',
                 erro_artista_longo: 'Nome do artista muito longo (máximo 100 caracteres).',
-                fila_encerrada_alert: 'Fila encerrada!',
+                fila_encerrada_alert: 'Fila encerrada por hoje: já atingimos o limite de músicas até as 23h. Obrigado!',
                 erro_enviar_pedido: 'Não deu pra enviar seu pedido agora. Tente de novo em alguns segundos.',
-                limite_creditos_alert: 'Você já tem músicas suficientes na fila — aguarde ou tente de novo em alguns minutos.',
+                limite_creditos_alert: 'Você já tem {n} músicas na fila. Libera outro pedido em cerca de {minutos} min.',
                 dispositivo_bloqueado_alert: 'Não foi possível enviar seu pedido. Fale com o responsável pelo karaokê.',
                 indicador_creditos_texto: '{usados} de {limite} pedidos usados — libera em {minutos} min',
                 youtube_modal_titulo: 'Buscar Karaokê no YouTube',
@@ -1033,9 +1034,9 @@
                 minha_vez_padrao: "Get ready! You're next to sing.",
                 seus_pedidos_titulo: 'Your Requests',
                 peca_sua_musica_titulo: 'Request Your Song',
-                peca_sua_musica_subtitulo: "Your turn depends on how many times you've already sung!",
+                peca_sua_musica_subtitulo: 'Whoever has sung less goes first — and nobody waits more than 90 minutes!',
                 fila_encerrada_msg: "The queue is closed for tonight. We've reached the limit of songs we can play before 11 PM! Thank you.",
-                espera_estimada_label: 'Estimated wait:',
+                espera_estimada_label: 'If you request now, you sing in about:',
                 avisar_minha_vez: "Notify me when it's my turn",
                 aviso_iphone_texto: 'On iPhone, this works best with the tab open and the screen on — the system notification only arrives reliably if you add this site to your Home Screen (Share → "Add to Home Screen").',
                 label_nome: 'Your Name / Nickname',
@@ -1066,8 +1067,8 @@
                 proximos_subtitulo: "See the current order and who's singing next.",
                 proximos_mostrando: 'Showing up to 10 next.',
                 proximos_vazio: 'No songs in the queue right now.',
-                proximos_nota_realtime: 'The list updates in real time (when Firebase is connected) or when the page is reloaded.',
-                proximos_regra_fila: 'Fair order: people who have sung less today go first; ties follow request order. We also avoid the same person singing twice in a row.',
+                proximos_nota_realtime: 'The list updates automatically.',
+                proximos_regra_fila: 'Fair order: people who have sung less today go first; ties follow request order. After waiting 90 minutes, your song moves to the front. We also avoid the same person singing twice in a row.',
                 mesa_inline: 'Table',
                 historico_titulo: 'Already Sung',
                 historico_subtitulo: 'Who has performed today and the ratings they received.',
@@ -1084,6 +1085,7 @@
                 meu_pedido_falta_singular: '{n} person ahead of you',
                 meu_pedido_falta_plural: '{n} people ahead of you',
                 meu_pedido_estimativa: 'Estimated wait: about {minutos} min',
+                meu_pedido_teto: 'Moves to the front in {minutos} min if not called before',
                 meu_pedido_aguardando_dj: 'Waiting for the DJ',
                 meu_pedido_ausente_info: 'When you return, the DJ will place your request back in the regular queue.',
                 remover_pedido_pergunta: 'Remove this request from the queue?',
@@ -1108,9 +1110,9 @@
                 erro_musica_link: 'That looks like a link, not a song name. Type the song title or use the Search YouTube button.',
                 erro_artista_vazio: "Enter the artist's name (or search for the song on YouTube).",
                 erro_artista_longo: 'Artist name too long (maximum 100 characters).',
-                fila_encerrada_alert: 'Queue is closed!',
+                fila_encerrada_alert: 'Queue closed for tonight: we have reached the song limit until 11 PM. Thank you!',
                 erro_enviar_pedido: "Couldn't send your request right now. Please try again in a few seconds.",
-                limite_creditos_alert: "You already have enough songs in the queue — please wait or try again in a few minutes.",
+                limite_creditos_alert: 'You already have {n} songs in the queue. Another request frees up in about {minutos} min.',
                 dispositivo_bloqueado_alert: "We couldn't send your request. Please speak with the karaoke host.",
                 indicador_creditos_texto: '{usados} of {limite} requests used — next one frees up in {minutos} min',
                 youtube_modal_titulo: 'Search Karaoke on YouTube',
@@ -1966,6 +1968,9 @@
                 const textoEstimativa = pedido.ausenteDesde
                     ? t('meu_pedido_ausente_info')
                     : (posicao > 0 ? t('meu_pedido_estimativa', { minutos: posicao * TEMPO_MEDIO_MUSICA }) : '');
+                const _restoTeto = Math.ceil((MINUTOS_ESPERA_MAXIMA * 60000 - (Date.now() - (pedido.timestampFila || pedido.timestamp))) / 60000);
+                const textoTeto = (!pedido.ausenteDesde && posicao > 0 && _restoTeto > 0)
+                    ? t('meu_pedido_teto', { minutos: _restoTeto }) : '';
                 const corFundo = (!pedido.ausenteDesde && posicao === 0) ? 'bg-indigo-50 border-indigo-200' : 'bg-gray-50 border-gray-200';
 
                 html += `
@@ -1974,6 +1979,7 @@
                             <div class="min-w-0">
                                 <div class="text-sm font-semibold text-gray-800">${textoPosicao}</div>
                                 ${textoEstimativa ? `<div class="text-xs text-indigo-600 mt-0.5">${escaparHtml(textoEstimativa)}</div>` : ''}
+                                ${textoTeto ? `<div class="text-xs text-gray-500">${escaparHtml(textoTeto)}</div>` : ''}
                                 <div class="text-xs text-gray-500 truncate">${escaparHtml(pedido.musica)}</div>
                             </div>
                             <div id="acoes-pedido-${pedido.id}" class="flex-shrink-0">
@@ -2244,8 +2250,9 @@
         }
 
         function dispararAvisoDeVez(pedido) {
-            // 1) Som
+            // 1) Som + vibração (Android)
             tocarBipe();
+            try { if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 600]); } catch (e) {}
 
             // 2) Banner na própria tela (funciona sempre, mesmo sem permissão de notificação)
             const banner = document.getElementById('minha-vez-banner');
@@ -3051,6 +3058,32 @@
             }
         }
 
+        // Aviso na própria tela (some sozinho) no lugar do alert() nativo.
+        function mostrarAvisoCliente(texto) {
+            let el = document.getElementById('aviso-cliente');
+            if (!el) {
+                el = document.createElement('div');
+                el.id = 'aviso-cliente';
+                el.setAttribute('role', 'alert');
+                el.className = 'mb-4 p-3 rounded-lg text-sm font-semibold text-center';
+                el.style.cssText = 'background:#fef2f2;border:1px solid #fca5a5;color:#991b1b;';
+                const form = document.getElementById('form-pedido');
+                form.parentNode.insertBefore(el, form);
+            }
+            el.textContent = texto;
+            el.classList.remove('hidden');
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            clearTimeout(el._timer);
+            el._timer = setTimeout(() => el.classList.add('hidden'), 9000);
+        }
+
+        function textoLimiteCreditos() {
+            const ativos = pedidosAtivosDoDevice(fila, DEVICE_ID);
+            const maisAntigo = ativos.length ? Math.min(...ativos.map(p => p.timestamp)) : Date.now();
+            const minutos = Math.max(1, Math.ceil((maisAntigo + MINUTOS_RECARGA_CREDITO * 60000 - Date.now()) / 60000));
+            return t('limite_creditos_alert', { n: ativos.length, minutos });
+        }
+
         let _enviandoPedido = false;
         function adicionarPedido(e) {
             e.preventDefault();
@@ -3075,7 +3108,7 @@
             e.preventDefault();
 
             if (isFilaBloqueada()) {
-                alert(t('fila_encerrada_alert'));
+                mostrarAvisoCliente(t('fila_encerrada_alert'));
                 return;
             }
 
@@ -3094,11 +3127,11 @@
             // mensagem genérica de propósito — não entrega pra quem tentou burlar o
             // sistema que o motivo real foi um bloqueio (evita virar "troféu").
             if (dispositivoBloqueado(DEVICE_ID)) {
-                alert(t('dispositivo_bloqueado_alert'));
+                mostrarAvisoCliente(t('dispositivo_bloqueado_alert'));
                 return;
             }
             if (!podeAdicionarPedido(fila, DEVICE_ID)) {
-                alert(t('limite_creditos_alert'));
+                mostrarAvisoCliente(textoLimiteCreditos());
                 return;
             }
 
@@ -3187,12 +3220,12 @@
                     // ANTES de qualquer outra coisa.
                     if (dispositivoBloqueado(DEVICE_ID, dispositivosBloqueados)) {
                         if (btnEnviar) { btnEnviar.disabled = false; }
-                        alert(t('dispositivo_bloqueado_alert'));
+                        mostrarAvisoCliente(t('dispositivo_bloqueado_alert'));
                         return;
                     }
                     if (!podeAdicionarPedido(listaAtual, DEVICE_ID)) {
                         if (btnEnviar) { btnEnviar.disabled = false; }
-                        alert(t('limite_creditos_alert'));
+                        mostrarAvisoCliente(textoLimiteCreditos());
                         return;
                     }
 
@@ -4407,13 +4440,23 @@
 
             const tempoEstimado = calcularTempoEstimado();
             const bloqueada = isFilaBloqueada();
+            const _btnEnviar = document.getElementById('btn-enviar');
+            if (_btnEnviar) {
+                if (bloqueada) { _btnEnviar.disabled = true; _btnEnviar.dataset.filaFechada = '1'; }
+                else if (_btnEnviar.dataset.filaFechada) { _btnEnviar.disabled = false; delete _btnEnviar.dataset.filaFechada; }
+            }
 
             verificarMinhaVez();
             atualizarMeusPedidos();
             atualizarIndicadorCreditos();
 
             // UI Cliente
-            document.getElementById('cliente-tempo-espera').innerText = `${tempoEstimado} min`;
+            // Estimativa PERSONALIZADA: quantos pedidos ativos passariam na frente de um
+            // pedido novo deste aparelho agora (mesma regra de ordenarFila).
+            const _agora = Date.now();
+            const _minhaContagem = contagemCantores[obterChaveIdentidade({ deviceId: DEVICE_ID })] || 0;
+            const _aFrente = filaAtiva().filter(p => estourouEsperaMaxima(p, _agora) || p.vezesCantadas <= _minhaContagem).length;
+            document.getElementById('cliente-tempo-espera').innerText = `${_aFrente * TEMPO_MEDIO_MUSICA} min`;
             const form = document.getElementById('form-pedido');
             const msgEncerrado = document.getElementById('msg-encerrado');
             
