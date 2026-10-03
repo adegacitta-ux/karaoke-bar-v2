@@ -296,8 +296,8 @@
 
                             <!-- NOVO CAMPO: Número da Mesa -->
                             <div>
-                                <label for="input-mesa" class="block text-sm font-medium text-gray-700 mb-1" data-i18n="label_mesa">Número da Mesa (opcional)</label>
-                                <input type="text" id="input-mesa" placeholder="Ex: 12" data-i18n-placeholder="placeholder_mesa" maxlength="20" aria-describedby="erro-mesa" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                                <label for="input-mesa" class="block text-sm font-medium text-gray-700 mb-1" data-i18n="label_mesa">Número da Mesa</label>
+                                <input type="text" id="input-mesa" required placeholder="Ex: 12" data-i18n-placeholder="placeholder_mesa" maxlength="20" aria-describedby="erro-mesa" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
                                 <p id="erro-mesa" class="hidden text-xs text-red-600 mt-1" role="alert"></p>
                             </div>
 
@@ -915,7 +915,9 @@
             return id;
         }
 
-        const DEVICE_ID = obterOuCriarDeviceId();
+        // "let" porque herdarIdentidadeSeHouver() pode trocar o deviceId deste aparelho
+        // pelo de quem já cantou com o mesmo nome (parecido) e a mesma mesa hoje.
+        let DEVICE_ID = obterOuCriarDeviceId();
 
         // --- IDIOMA (tradução do lado do cliente para inglês) ---
         // Cobre só a interface do CLIENTE (aba "Pedir Música" + modal do YouTube) —
@@ -938,7 +940,7 @@
                 aviso_iphone_texto: 'No iPhone, esse aviso funciona melhor com a aba aberta e a tela ligada — a notificação do sistema só chega direitinho se você adicionar este site à tela de início (compartilhar → "Adicionar à Tela de Início").',
                 label_nome: 'Seu Nome / Apelido',
                 nao_e_voce: 'Não é você? Trocar',
-                label_mesa: 'Número da Mesa (opcional)',
+                label_mesa: 'Número da Mesa',
                 placeholder_mesa: 'Ex: 12',
                 label_musica: 'Nome da Música',
                 aria_buscar_youtube: 'Buscar o karaokê dessa música no YouTube',
@@ -998,6 +1000,7 @@
                 notif_sem_problema: 'Sem problemas — o aviso ainda vai aparecer na tela do site enquanto estiver aberto.',
                 erro_nome_vazio: 'Digite seu nome ou apelido.',
                 erro_nome_longo: 'Nome muito longo (máximo 50 caracteres).',
+                erro_mesa_vazia: 'Digite o número da sua mesa.',
                 erro_mesa_longa: 'Número da mesa muito longo.',
                 erro_mesa_invalida: 'Use só letras, números e hífen.',
                 erro_musica_vazia: 'Digite o nome da música.',
@@ -1037,7 +1040,7 @@
                 aviso_iphone_texto: 'On iPhone, this works best with the tab open and the screen on — the system notification only arrives reliably if you add this site to your Home Screen (Share → "Add to Home Screen").',
                 label_nome: 'Your Name / Nickname',
                 nao_e_voce: 'Not you? Switch',
-                label_mesa: 'Table Number (optional)',
+                label_mesa: 'Table Number',
                 placeholder_mesa: 'E.g.: 12',
                 label_musica: 'Song Name',
                 aria_buscar_youtube: "Search for this song's karaoke on YouTube",
@@ -1097,6 +1100,7 @@
                 notif_sem_problema: "No problem — the alert will still appear on the site's screen while it's open.",
                 erro_nome_vazio: 'Enter your name or nickname.',
                 erro_nome_longo: 'Name too long (maximum 50 characters).',
+                erro_mesa_vazia: 'Enter your table number.',
                 erro_mesa_longa: 'Table number too long.',
                 erro_mesa_invalida: 'Use only letters, numbers, and hyphens.',
                 erro_musica_vazia: 'Enter the song name.',
@@ -1648,8 +1652,7 @@
 
         // --- VALIDAÇÃO DO FORMULÁRIO ---
         // Cada validador devolve { valido, mensagem } — a mensagem só é usada quando
-        // valido é false. Os campos "opcionais" (mesa) só falham se preenchidos errado,
-        // nunca por estarem vazios.
+        // valido é false. A mesa é obrigatória (ver herdarIdentidadeSeHouver).
         const VALIDADORES = {
             nome: (valor) => {
                 const v = (valor || '').trim();
@@ -1659,7 +1662,7 @@
             },
             mesa: (valor) => {
                 const v = (valor || '').trim();
-                if (v.length === 0) return { valido: true }; // campo opcional
+                if (v.length === 0) return { valido: false, mensagem: t('erro_mesa_vazia') }; // obrigatória: é a âncora pra reconhecer quem troca de celular
                 if (v.length > 20) return { valido: false, mensagem: t('erro_mesa_longa') };
                 if (!/^[a-zA-Z0-9\-\s]+$/.test(v)) return { valido: false, mensagem: t('erro_mesa_invalida') };
                 return { valido: true };
@@ -2949,7 +2952,126 @@
             badge.classList.remove('hidden');
         }
 
+        // --- HERANÇA DE IDENTIDADE (anti-burla de "trocar de celular") ---
+        // A prioridade é contada pelo deviceId. Quem troca de aparelho (ou limpa os
+        // dados do site) viraria alguém com 0 músicas cantadas. Pra evitar isso, ao
+        // enviar um pedido procuramos, nos dados da noite (fila, quem está cantando e
+        // histórico), alguém de OUTRO deviceId com a MESMA mesa e nome igual ou
+        // parecido (1 letra de diferença, nomes com 4+ letras). Achando, este
+        // aparelho passa a usar o deviceId dessa pessoa: contagem de músicas,
+        // créditos e bloqueio passam a valer juntos, sem campo novo no Firebase.
+        // ⚠️ Falso positivo possível (duas pessoas da mesma mesa com nomes quase
+        // iguais, ex: "Mari" e "Maria") — nesse caso a segunda herda as músicas da primeira.
+        function normalizarMesaParaComparar(mesa) {
+            return (mesa || '').toString().toLowerCase()
+                .replace(/^\s*mesa\s*/, '')
+                .replace(/[^a-z0-9]/g, '')
+                .replace(/^0+(?=\d)/, '');
+        }
+
+        function normalizarNomeParaComparar(nome) {
+            return (nome || '').toString().trim().split('/')[0].trim().split(/\s+/)[0]
+                .toLowerCase()
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-z0-9]/g, '');
+        }
+
+        function distanciaEdicao(a, b) {
+            if (a === b) return 0;
+            const m = a.length, n = b.length;
+            if (Math.abs(m - n) > 1) return 2; // só interessa 0 ou 1
+            let anterior = Array.from({ length: n + 1 }, (_, j) => j);
+            for (let i = 1; i <= m; i++) {
+                const atual = [i];
+                for (let j = 1; j <= n; j++) {
+                    atual[j] = Math.min(
+                        anterior[j] + 1,
+                        atual[j - 1] + 1,
+                        anterior[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
+                    );
+                }
+                anterior = atual;
+            }
+            return anterior[n];
+        }
+
+        function nomesParecidos(a, b) {
+            if (!a || !b) return false;
+            if (a === b) return true;
+            if (a.length < 4 || b.length < 4) return false; // nome curto só vale se for idêntico
+            return distanciaEdicao(a, b) <= 1;
+        }
+
+        // Entre todos os registros da noite, devolve o deviceId (diferente do atual)
+        // de quem bate com nome+mesa. Havendo mais de um, escolhe o de maior contagem.
+        function acharDeviceIdAnterior(registros, nome, mesa) {
+            const nomeAlvo = normalizarNomeParaComparar(nome);
+            const mesaAlvo = normalizarMesaParaComparar(mesa);
+            if (!nomeAlvo || !mesaAlvo) return null;
+
+            let melhor = null;
+            let melhorContagem = -1;
+            registros.forEach(r => {
+                if (!r || !r.deviceId || r.deviceId === DEVICE_ID) return;
+                if (normalizarMesaParaComparar(r.mesa) !== mesaAlvo) return;
+                if (!nomesParecidos(normalizarNomeParaComparar(r.nome), nomeAlvo)) return;
+                const contagem = contagemCantores[obterChaveIdentidade({ deviceId: r.deviceId })] || 0;
+                if (contagem > melhorContagem) {
+                    melhor = r.deviceId;
+                    melhorContagem = contagem;
+                }
+            });
+            return melhor;
+        }
+
+        function adotarDeviceId(novoId) {
+            DEVICE_ID = novoId;
+            try { localStorage.setItem('cantoke_device_id', novoId); }
+            catch (e) { console.warn('⚠️ Não foi possível salvar o deviceId herdado no localStorage:', e); }
+            try { gravarCookie('cantoke_device_id', novoId); }
+            catch (e) { console.warn('⚠️ Não foi possível salvar o deviceId herdado no cookie:', e); }
+        }
+
+        async function herdarIdentidadeSeHouver(nome, mesa) {
+            let historicoDaNoite = historico;
+            if (useFirebase && db) {
+                try {
+                    // O histórico local do cliente tem só os últimos itens; busca o da noite inteira.
+                    const snapshot = await db.ref(caminhoBar('historico')).once('value');
+                    historicoDaNoite = objetoParaArray(snapshot.val());
+                } catch (e) {
+                    console.warn('⚠️ Não foi possível ler o histórico completo pra checar identidade; usando o local:', e);
+                }
+            }
+            const registros = [...fila, ...(apresentacaoAtual ? [apresentacaoAtual] : []), ...historicoDaNoite];
+            const anterior = acharDeviceIdAnterior(registros, nome, mesa);
+            if (anterior) {
+                console.log('🔁 Identidade herdada de outro aparelho (mesmo nome parecido + mesma mesa)');
+                adotarDeviceId(anterior);
+            }
+        }
+
+        let _enviandoPedido = false;
         function adicionarPedido(e) {
+            e.preventDefault();
+            if (_enviandoPedido) return;
+
+            // Fila encerrada ou campos inválidos: o fluxo normal mostra os avisos.
+            if (isFilaBloqueada() || !validarFormularioPedido()) {
+                adicionarPedidoInterno(e);
+                return;
+            }
+
+            _enviandoPedido = true;
+            const nome = document.getElementById('input-nome').value.trim();
+            const mesa = document.getElementById('input-mesa').value.trim();
+            herdarIdentidadeSeHouver(nome, mesa)
+                .catch(err => console.warn('⚠️ Falha ao checar identidade anterior:', err))
+                .then(() => adicionarPedidoInterno(e))
+                .finally(() => { _enviandoPedido = false; });
+        }
+
+        function adicionarPedidoInterno(e) {
             e.preventDefault();
 
             if (isFilaBloqueada()) {
