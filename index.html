@@ -3663,7 +3663,7 @@
             // Marca quem acabou de começar a cantar agora, pra ordenarFila()
             // não deixar a "próxima" da fila ser a mesma pessoa (ver
             // ultimoCantorKey e desfazerSequenciasConsecutivas).
-            ultimoCantorKey = key;
+            ultimoCantorKey = obterChaveAntiSequencia(pedido);
             ordenarFila();
             salvarNoLocalStorage();
             atualizarUI();
@@ -3745,7 +3745,7 @@
                         }
                         fila = snapshotFila ? mapaFilaParaArray(snapshotFila.val()) : fila;
                         apresentacaoAtual = pedidoConfirmado;
-                        ultimoCantorKey = key;
+                        ultimoCantorKey = obterChaveAntiSequencia(pedido);
                         atualizarUI();
 
                         if (anuncioVozAtivo()) anunciarProximoPorVoz(pedidoConfirmado);
