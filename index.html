@@ -1798,6 +1798,16 @@
             return pedido.deviceId ? `device:${pedido.deviceId}` : `legado:${pedido.id}`;
         }
 
+        // Identidade usada exclusivamente pela proteção anti-sequência. Um mesmo
+        // usuário autenticado pode ter pedidos em dispositivos diferentes; quando
+        // criadoPor coincide, tratamos como a mesma pessoa. Em modo local/legado,
+        // usamos a identidade já existente baseada em deviceId/id.
+        // Nome não é identificador: pessoas diferentes podem ter nomes iguais.
+        function obterChaveAntiSequencia(pedido) {
+            if (pedido.criadoPor) return `uid:${pedido.criadoPor}`;
+            return obterChaveIdentidade(pedido);
+        }
+
         // --- NOTIFICAÇÃO "É A SUA VEZ" (via Notification API do navegador + som) ---
         // Não depende de servidor/API paga: funciona enquanto o cliente mantiver
         // a aba do site aberta no celular/computador.
@@ -3358,7 +3368,7 @@
         // pra frente. Mantido pequeno: só desfaz a sequência quando as prioridades já
         // estavam bem próximas, nunca furando a fila de alguém com prioridade bem pior
         // só pra evitar dois pedidos seguidos da mesma pessoa.
-        const LIMITE_TROCA_ANTI_SEQUENCIA = 1;
+        // A proteção anti-sequência pode adiar o pedido repetido uma posição para intercalar outro cantor.
 
         // Teto de espera: ninguém espera mais que isso na fila, mesmo que já tenha
         // cantado mais vezes que os outros. Passou do teto, o pedido vai pra frente
@@ -3377,7 +3387,7 @@
         // ela pediu 2 músicas e vezesCantadas está baixo. Isso fura quem já
         // estava esperando, então trazemos pra frente o próximo pedido de OUTRA
         // pessoa que esteja logo depois na lista, desde que a diferença de
-        // prioridade entre os dois seja pequena (LIMITE_TROCA_ANTI_SEQUENCIA).
+        // prioridade entre os dois seja pequena; a proteção agora prioriza evitar repetição imediata.
         // Se todos os pedidos restantes forem da mesma pessoa, não tem outra
         // pessoa pra trazer pra frente — a sequência é mantida (não dá pra evitar).
         // Ausentes ficam sempre no final de "fila" (ver ordenarFila) — esse limite é
@@ -3402,14 +3412,14 @@
             // Esse caso (fila[0] vs ultimoCantorKey) é uma garantia de UX —
             // "nunca chamar a mesma pessoa duas vezes seguidas" — não uma
             // otimização de prioridade como o loop abaixo. Por isso a troca
-            // aqui é INCONDICIONAL e não passa pelo LIMITE_TROCA_ANTI_SEQUENCIA:
+            // aqui é INCONDICIONAL: a prioridade não deve permitir repetição imediata:
             // ele só é adiado por 1 posição — ainda vai ser chamado logo em seguida,
             // não indefinidamente. Sem essa troca, a mesma pessoa seria chamada de
             // novo na sequência mesmo com alguém esperando logo atrás.
             if (ultimoCantorKey && limite > 0 &&
-                obterChaveIdentidade(fila[0]) === ultimoCantorKey) {
+                obterChaveAntiSequencia(fila[0]) === ultimoCantorKey) {
                 let j = 1;
-                while (j < limite && obterChaveIdentidade(fila[j]) === ultimoCantorKey) {
+                while (j < limite && obterChaveAntiSequencia(fila[j]) === ultimoCantorKey) {
                     j++;
                 }
                 if (j < limite) {
@@ -3421,27 +3431,21 @@
             }
 
             for (let i = 1; i < limite; i++) {
-                if (obterChaveIdentidade(fila[i]) !== obterChaveIdentidade(fila[i - 1])) {
+                if (obterChaveAntiSequencia(fila[i]) !== obterChaveAntiSequencia(fila[i - 1])) {
                     continue;
                 }
 
                 let j = i + 1;
-                while (j < limite && obterChaveIdentidade(fila[j]) === obterChaveIdentidade(fila[i])) {
+                while (j < limite && obterChaveAntiSequencia(fila[j]) === obterChaveAntiSequencia(fila[i])) {
                     j++;
                 }
                 if (j >= limite) {
                     break; // só sobrou pedido da mesma pessoa: mantém a sequência
                 }
 
-                // Quem estourou o teto de espera não pode ser empurrado pra trás.
-                if (estourouEsperaMaxima(fila[i], Date.now())) {
-                    continue;
-                }
-
-                const diferenca = fila[j].vezesCantadas - fila[i].vezesCantadas;
-                if (diferenca > LIMITE_TROCA_ANTI_SEQUENCIA) {
-                    continue; // prioridade bem pior: não vale furar fila só pra desfazer a sequência
-                }
+                // O teto de espera continua ordenando a fila inicialmente. Quando há
+                // outro cantor ativo, a proteção intercala-o e adia o pedido repetido
+                // somente uma posição, sem alterar vezesCantadas ou timestamps.
 
                 const [trocado] = fila.splice(j, 1);
                 fila.splice(i, 0, trocado);
@@ -3659,7 +3663,7 @@
             // Marca quem acabou de começar a cantar agora, pra ordenarFila()
             // não deixar a "próxima" da fila ser a mesma pessoa (ver
             // ultimoCantorKey e desfazerSequenciasConsecutivas).
-            ultimoCantorKey = key;
+            ultimoCantorKey = obterChaveAntiSequencia(pedido);
             ordenarFila();
             salvarNoLocalStorage();
             atualizarUI();
@@ -3741,7 +3745,7 @@
                         }
                         fila = snapshotFila ? mapaFilaParaArray(snapshotFila.val()) : fila;
                         apresentacaoAtual = pedidoConfirmado;
-                        ultimoCantorKey = key;
+                        ultimoCantorKey = obterChaveAntiSequencia(pedido);
                         atualizarUI();
 
                         if (anuncioVozAtivo()) anunciarProximoPorVoz(pedidoConfirmado);
@@ -3846,7 +3850,7 @@
             // palco. Atualiza ultimoCantorKey pra ordenarFila() (chamada logo
             // abaixo por atualizarUI(), e de novo mais adiante) não deixar a fila
             // mostrar essa mesma pessoa como próxima (ver desfazerSequenciasConsecutivas).
-            ultimoCantorKey = obterChaveIdentidade(pedido);
+            ultimoCantorKey = obterChaveAntiSequencia(pedido);
             apresentacaoAtual = null;
             atualizarUI();
 
