@@ -356,11 +356,8 @@ def test_ordenar_fila_por_vezes_cantadas_e_ordem_de_chegada(browser, base_url):
     context.close()
 
 def test_fila_evita_pedidos_consecutivos_da_mesma_pessoa(browser, base_url):
-    """Regra anti-sequência: dois pedidos da MESMA pessoa (mesmo deviceId) não
-    devem ficar colados um atrás do outro no topo da fila, furando quem já
-    está esperando — mesmo que a prioridade "bruta" colocasse os dois juntos.
-    ordenarFila() deve trazer pra frente o próximo pedido de outra pessoa,
-    já que a diferença de prioridade entre os dois é pequena aqui."""
+    """Dois pedidos da mesma identidade não ficam colados quando há outro
+    cantor ativo, mesmo que a prioridade seja diferente."""
     context, page, erros = nova_pagina(browser, base_url)
 
     agora = page.evaluate("Date.now()")
@@ -416,14 +413,11 @@ def test_fila_mantem_sequencia_quando_so_sobra_a_mesma_pessoa(browser, base_url)
     context.close()
 
 
-def test_fila_nao_fura_prioridade_pra_desfazer_sequencia(browser, base_url):
-    """A troca anti-sequência só deve acontecer se a diferença de prioridade
-    entre os dois pedidos envolvidos for pequena (LIMITE_TROCA_ANTI_SEQUENCIA)
-    — não vale furar a frente de alguém com prioridade bem pior só pra separar
-    os pedidos consecutivos da mesma pessoa."""
+def test_fila_separa_mesma_pessoa_mesmo_com_prioridade_muito_diferente(browser, base_url):
+    """A anti-sequência deve intercalar outro cantor ativo mesmo quando ele
+    tem mais vezesCantadas; o pedido repetido só é adiado uma posição."""
     context, page, erros = nova_pagina(browser, base_url)
 
-    limite = page.evaluate("LIMITE_TROCA_ANTI_SEQUENCIA")
     agora = page.evaluate("Date.now()")
     page.evaluate(f"""
         fila = [
@@ -431,20 +425,49 @@ def test_fila_nao_fura_prioridade_pra_desfazer_sequencia(browser, base_url):
               deviceId: 'device-a', timestamp: {agora}, timestampFila: {agora},
               vezesCantadas: 0, youtubeUrl: null}},
             {{id: 2, nome: 'PessoaA', mesa: null, musica: 'MusicaA2', artista: 'X',
-              deviceId: 'device-a', timestamp: {agora}, timestampFila: {agora},
+              deviceId: 'device-a', timestamp: {agora + 1000}, timestampFila: {agora + 1000},
               vezesCantadas: 0, youtubeUrl: null}},
             {{id: 3, nome: 'PessoaB', mesa: null, musica: 'MusicaB1', artista: 'X',
-              deviceId: 'device-b', timestamp: {agora}, timestampFila: {agora},
-              vezesCantadas: {limite + 5}, youtubeUrl: null}}
+              deviceId: 'device-b', timestamp: {agora + 2000}, timestampFila: {agora + 2000},
+              vezesCantadas: 5, youtubeUrl: null}}
         ];
         ordenarFila();
         atualizarUI();
     """)
 
     ids_ordem = page.evaluate("fila.map(p => p.id)")
-    ok = ids_ordem == [1, 2, 3] and not erros
-    registrar("Troca anti-sequência não fura fila de quem tem prioridade bem pior", ok,
-               f"ids_ordem={ids_ordem}, limite={limite}")
+    ok = ids_ordem == [1, 3, 2] and not erros
+    registrar("Anti-sequência intercala outro cantor mesmo com prioridade diferente", ok,
+               f"ids_ordem={ids_ordem}")
+    context.close()
+
+
+def test_identidade_anti_sequencia_prioriza_uid_sobre_deviceid(browser, base_url):
+    """Pedidos com o mesmo criadoPor são a mesma identidade anti-sequência
+    mesmo se vierem de deviceIds diferentes; UIDs diferentes continuam separados."""
+    context, page, erros = nova_pagina(browser, base_url)
+    resultado = page.evaluate("""
+        ({
+            mesmaPessoa: obterChaveAntiSequencia({
+                id: 1, criadoPor: 'uid-compartilhado', deviceId: 'device-a'
+            }) === obterChaveAntiSequencia({
+                id: 2, criadoPor: 'uid-compartilhado', deviceId: 'device-b'
+            }),
+            pessoasDiferentes: obterChaveAntiSequencia({
+                id: 3, nome: 'Camila', criadoPor: 'uid-a', deviceId: 'device-a'
+            }) !== obterChaveAntiSequencia({
+                id: 4, nome: 'CAMILA', criadoPor: 'uid-b', deviceId: 'device-b'
+            }),
+            nomeComCaixaDiferenteMesmoDevice: obterChaveAntiSequencia({
+                id: 5, nome: 'Camila', deviceId: 'device-x'
+            }) === obterChaveAntiSequencia({
+                id: 6, nome: 'CAMILA', deviceId: 'device-x'
+            })
+        })
+    """)
+    ok = all(resultado.values()) and not erros
+    registrar("Identidade anti-sequência usa UID quando disponível e não une UIDs distintos",
+               ok, f"resultado={resultado}, erros={erros}")
     context.close()
 
 
