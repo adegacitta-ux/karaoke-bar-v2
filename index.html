@@ -3370,124 +3370,107 @@
         // só pra evitar dois pedidos seguidos da mesma pessoa.
         // A proteção anti-sequência pode adiar o pedido repetido uma posição para intercalar outro cantor.
 
-        // Teto de espera: ninguém espera mais que isso na fila, mesmo que já tenha
-        // cantado mais vezes que os outros. Passou do teto, o pedido vai pra frente
-        // de todos que ainda não estouraram (entre os estourados, o que espera há
-        // mais tempo vem primeiro). O relógio é o timestampFila, que já desconta o
-        // tempo em que a pessoa ficou ausente (ver acaoVoltouAusencia).
+        // Teto de espera de 90 minutos. Os pedidos que atingiram esse limite
+        // ficam à frente dos demais; a rotação entre pessoas acontece dentro de
+        // cada grupo para não permitir que pedidos normais ultrapassem os atrasados.
         const MINUTOS_ESPERA_MAXIMA = 90;
 
         function estourouEsperaMaxima(pedido, agora) {
-            const chegada = pedido.timestampFila || pedido.timestamp;
+            const chegada = pedido.timestampFila || pedido.timestamp || agora;
             return (agora - chegada) >= MINUTOS_ESPERA_MAXIMA * 60000;
         }
 
-        // Depois de fila.sort() por prioridade, dois pedidos da MESMA pessoa
-        // (mesmo obterChaveIdentidade) podem acabar consecutivos no topo — ex:
-        // ela pediu 2 músicas e vezesCantadas está baixo. Isso fura quem já
-        // estava esperando, então trazemos pra frente o próximo pedido de OUTRA
-        // pessoa que esteja logo depois na lista, desde que a diferença de
-        // prioridade entre os dois seja pequena; a proteção agora prioriza evitar repetição imediata.
-        // Se todos os pedidos restantes forem da mesma pessoa, não tem outra
-        // pessoa pra trazer pra frente — a sequência é mantida (não dá pra evitar).
-        // Ausentes ficam sempre no final de "fila" (ver ordenarFila) — esse limite é
-        // o índice onde a parte ativa (participa da ordenação normal) termina e os
-        // ausentes começam. Usado pra impedir que desfazerSequenciasConsecutivas
-        // mexa com eles.
-        function limiteFilaAtiva() {
-            const primeiroAusente = fila.findIndex(p => p.ausenteDesde);
-            return primeiroAusente === -1 ? fila.length : primeiroAusente;
+        // Intercala os pedidos sem alterar sua prioridade relativa: menos músicas
+        // cantadas primeiro e, em caso de empate, pedido mais antigo primeiro.
+        // Cada pessoa recebe uma oportunidade por rodada antes de repetir.
+        function intercalarPedidosPorPessoa(pedidos) {
+            const restantes = [...pedidos];
+            const resultado = [];
+            const pessoasDaRodada = new Set();
+
+            while (restantes.length > 0) {
+                let indice = restantes.findIndex(pedido =>
+                    !pessoasDaRodada.has(obterChaveAntiSequencia(pedido))
+                );
+
+                if (indice === -1) {
+                    pessoasDaRodada.clear();
+                    indice = restantes.findIndex(pedido =>
+                        !pessoasDaRodada.has(obterChaveAntiSequencia(pedido))
+                    );
+                }
+
+                if (indice < 0) {
+                    resultado.push(...restantes);
+                    break;
+                }
+
+                const [pedido] = restantes.splice(indice, 1);
+                resultado.push(pedido);
+                pessoasDaRodada.add(obterChaveAntiSequencia(pedido));
+            }
+
+            return resultado;
         }
 
-        // Trata fila[0] como um caso especial ANTES do loop abaixo: o loop só
-        // compara fila[i] com fila[i-1], então nunca pegaria o caso de fila[0]
-        // ser a MESMA pessoa que acabou de começar/terminar de se apresentar
-        // (ultimoCantorKey — ver declaração dela) — essa pessoa não está mais
-        // dentro de "fila" pra comparar com fila[-1]. Sem esse caso especial, se
-        // ela tivesse outro pedido com prioridade próxima do topo, ele subia pra
-        // posição 0 e ela era chamada de novo em seguida.
-        function desfazerSequenciasConsecutivas() {
-            const limite = limiteFilaAtiva();
+        // A pessoa que acabou de cantar não volta imediatamente ao topo quando
+        // há outra pessoa elegível dentro do mesmo grupo de espera.
+        function evitarRepeticaoDoUltimoCantor(pedidos, agora) {
+            if (!ultimoCantorKey || pedidos.length < 2) return pedidos;
 
-            // Esse caso (fila[0] vs ultimoCantorKey) é uma garantia de UX —
-            // "nunca chamar a mesma pessoa duas vezes seguidas" — não uma
-            // otimização de prioridade como o loop abaixo. Por isso a troca
-            // aqui é INCONDICIONAL: a prioridade não deve permitir repetição imediata:
-            // ele só é adiado por 1 posição — ainda vai ser chamado logo em seguida,
-            // não indefinidamente. Sem essa troca, a mesma pessoa seria chamada de
-            // novo na sequência mesmo com alguém esperando logo atrás.
-            if (ultimoCantorKey && limite > 0 &&
-                obterChaveAntiSequencia(fila[0]) === ultimoCantorKey) {
-                let j = 1;
-                while (j < limite && obterChaveAntiSequencia(fila[j]) === ultimoCantorKey) {
-                    j++;
-                }
-                if (j < limite) {
-                    const [trocado] = fila.splice(j, 1);
-                    fila.splice(0, 0, trocado);
-                }
-                // Se ninguém qualificar (só sobrou pedido dela), mantém como
-                // está — não tem ninguém pra trocar.
+            const primeiroEhAtrasado = estourouEsperaMaxima(pedidos[0], agora);
+            if (obterChaveAntiSequencia(pedidos[0]) !== ultimoCantorKey) {
+                return pedidos;
             }
 
-            for (let i = 1; i < limite; i++) {
-                if (obterChaveAntiSequencia(fila[i]) !== obterChaveAntiSequencia(fila[i - 1])) {
-                    continue;
-                }
+            const alternativa = pedidos.findIndex((pedido, indice) =>
+                indice > 0 &&
+                obterChaveAntiSequencia(pedido) !== ultimoCantorKey &&
+                estourouEsperaMaxima(pedido, agora) === primeiroEhAtrasado
+            );
 
-                let j = i + 1;
-                while (j < limite && obterChaveAntiSequencia(fila[j]) === obterChaveAntiSequencia(fila[i])) {
-                    j++;
-                }
-                if (j >= limite) {
-                    break; // só sobrou pedido da mesma pessoa: mantém a sequência
-                }
-
-                // O teto de espera continua ordenando a fila inicialmente. Quando há
-                // outro cantor ativo, a proteção intercala-o e adia o pedido repetido
-                // somente uma posição, sem alterar vezesCantadas ou timestamps.
-
-                const [trocado] = fila.splice(j, 1);
-                fila.splice(i, 0, trocado);
+            if (alternativa > 0) {
+                const [pedidoAlternativo] = pedidos.splice(alternativa, 1);
+                pedidos.unshift(pedidoAlternativo);
             }
+
+            return pedidos;
         }
 
         function ordenarFila() {
-            // Regra: menos vezes cantadas primeiro. Em empate, ordem de chegada na
-            // fila (timestampFila; timestamp para pedidos antigos).
-            // Exceção: pedido que já espera há MINUTOS_ESPERA_MAXIMA ou mais fura
-            // essa regra e vai pra frente (ver estourouEsperaMaxima).
-            //
-            // Pedidos ausentes (ver acaoMarcarAusente) NÃO entram nessa conta: vão
-            // sempre pro final, fora da ordenação normal — é isso que os tira da
-            // fila visível/ordenada enquanto o DJ espera a pessoa voltar.
             const agora = Date.now();
-            fila.sort((a, b) => {
-                const ausenteA = !!a.ausenteDesde;
-                const ausenteB = !!b.ausenteDesde;
-                if (ausenteA !== ausenteB) {
-                    return ausenteA ? 1 : -1;
-                }
-                if (ausenteA && ausenteB) {
-                    return 0; // ordem entre ausentes não importa, eles não aparecem na fila normal
-                }
 
-                // Teto de espera (MINUTOS_ESPERA_MAXIMA): quem estourou passa na
-                // frente de quem não estourou, independente de vezesCantadas.
-                const estourouA = estourouEsperaMaxima(a, agora);
-                const estourouB = estourouEsperaMaxima(b, agora);
-                if (estourouA !== estourouB) {
-                    return estourouA ? -1 : 1;
-                }
+            // Ausentes ficam fora da ordenação e permanecem ao final, preservados.
+            const ativos = fila.filter(p => !p.ausenteDesde);
+            const ausentes = fila.filter(p => !!p.ausenteDesde);
 
-                const diferenca = a.vezesCantadas - b.vezesCantadas;
-                if (diferenca !== 0) {
-                    return diferenca;
-                }
-                return (a.timestampFila || a.timestamp) - (b.timestampFila || b.timestamp);
-            });
+            function compararPrioridade(a, b) {
+                const diferenca = (a.vezesCantadas || 0) - (b.vezesCantadas || 0);
+                if (diferenca !== 0) return diferenca;
 
-            desfazerSequenciasConsecutivas();
+                return (a.timestampFila || a.timestamp || 0) -
+                       (b.timestampFila || b.timestamp || 0);
+            }
+
+            // Prioridade absoluta para quem já espera 90 minutos ou mais.
+            // A intercalação é separada por grupo para preservar essa regra.
+            const estouraram = ativos
+                .filter(p => estourouEsperaMaxima(p, agora))
+                .sort(compararPrioridade);
+
+            const naoEstouraram = ativos
+                .filter(p => !estourouEsperaMaxima(p, agora))
+                .sort(compararPrioridade);
+
+            const novaFila = [
+                ...intercalarPedidosPorPessoa(estouraram),
+                ...intercalarPedidosPorPessoa(naoEstouraram)
+            ];
+
+            evitarRepeticaoDoUltimoCantor(novaFila, agora);
+
+            // Preserva a identidade do array global fila, usada por outras funções.
+            fila.splice(0, fila.length, ...novaFila, ...ausentes);
         }
 
         // Pedidos que participam da fila normal (visível/ordenada) — exclui quem
