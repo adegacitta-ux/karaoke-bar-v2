@@ -1,1079 +1,145 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel de Exibição - Karaokê Do Città</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20100%20100%22%3E%3Ctext%20y%3D%22.9em%22%20font-size%3D%2290%22%3E%F0%9F%8E%A4%3C%2Ftext%3E%3C%2Fsvg%3E">
-    <!-- PWA: manifest, cores de instalação e tags específicas de iOS (iOS não lê manifest.json integralmente) -->
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#08090D">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Cantokê">
-    <link rel="apple-touch-icon" href="icons/icon-192.png">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..900;1,6..96,400..900&family=Oswald:wght@300;400;500;600;700&display=swap');
-
-        /* Paleta de alto contraste pra leitura de longe num telão de bar —
-           fundo quase preto puro, texto branco, amarelo pros destaques
-           (títulos e nome da música), magenta pra identidade/decoração e
-           verde-turquesa pro status "conectado". Nada de dourado escuro
-           sobre vinho nem cinza em informação importante. */
-        :root {
-            --cor-fundo-1: #08090D;
-            --cor-fundo-2: #111217;
-            --cor-painel: #101218;
-            --cor-painel-clara: #171a22;
-            --cor-ouro: #FFD43B;
-            --cor-ouro-claro: #FFE180;
-            --cor-neon: #FF4F81;
-            --cor-marfim: #FFFFFF;
-            --cor-suave: #A9AFC0;
-            --cor-status-ok: #22D3A6;
-            --cor-texto-sobre-destaque: #0B0C10;
-        }
-
-        /* box-sizing explícito: o layout novo depende de padding grande +
-           height:100vh batendo certinho, e não dá pra confiar só no preflight
-           do Tailwind CDN pra isso — essa página já assume que o CDN pode
-           falhar no wifi do bar (ver comentário logo abaixo). */
-        *, *::before, *::after { box-sizing: border-box; }
-        * { font-family: 'Oswald', sans-serif; }
-
-        /* Rede de segurança: se o CDN do Tailwind demorar/falhar num wifi
-           ruim do bar, os estados (aguardando / próximo / fila encerrada)
-           não podem aparecer todos sobrepostos na tela. */
-        .hidden { display: none !important; }
-
-        body {
-            background:
-                radial-gradient(ellipse 900px 620px at 50% -8%, rgba(255, 212, 59, 0.18), transparent 60%),
-                radial-gradient(ellipse 800px 560px at 92% 105%, rgba(255, 79, 129, 0.16), transparent 60%),
-                linear-gradient(180deg, var(--cor-fundo-1) 0%, var(--cor-fundo-2) 100%);
-            color: var(--cor-marfim);
-            margin: 0;
-            padding: 0;
-            min-height: 100vh;
-            overflow: hidden;
-        }
-
-        /* Moldura de lâmpadas correndo, como a marquise de um teatro/clube antigo */
-        .marquise {
-            position: fixed;
-            top: 0; left: 0; right: 0;
-            height: 12px;
-            z-index: 5;
-            pointer-events: none;
-        }
-        .marquise::before, .marquise::after {
-            content: '';
-            position: absolute;
-            left: -28px; right: -28px;
-            height: 6px;
-        }
-        .marquise::before {
-            top: 0;
-            background: radial-gradient(circle, var(--cor-ouro) 0 3px, transparent 4px) 0 0 / 28px 6px repeat-x;
-            filter: drop-shadow(0 0 4px rgba(255, 212, 59, 0.8));
-            animation: correrLampadas 1.6s linear infinite;
-        }
-        .marquise::after {
-            top: 6px;
-            background: radial-gradient(circle, var(--cor-neon) 0 2.5px, transparent 3.5px) 14px 0 / 28px 6px repeat-x;
-            filter: drop-shadow(0 0 4px rgba(255, 79, 129, 0.7));
-            opacity: 0.85;
-            animation: correrLampadas 1.6s linear infinite reverse;
-        }
-        @keyframes correrLampadas {
-            from { background-position-x: 0; }
-            to { background-position-x: 28px; }
-        }
-
-        .main-container {
-            position: relative;
-            z-index: 10;
-            display: flex;
-            flex-direction: row;
-            flex-wrap: wrap;
-            height: 100vh;
-            justify-content: center;
-            align-items: center;
-            gap: clamp(16px, 2.2vw, 40px);
-            padding: 16px;
-            /* "hidden", não "auto": numa TV de bar uma barra de rolagem nunca
-               é aceitável. O ajuste de escala em JS (ajustarEscalaConteudo)
-               garante que o conteúdo caiba antes de chegar aqui — isto é só
-               a rede de segurança pra nenhuma barra aparecer de jeito nenhum. */
-            overflow: hidden;
-        }
-
-        /* Cartaz principal: cara de "passe de bastidor", não de card de app */
-        .display-card {
-            /* Multiplicador de fonte ajustado via JS (ajustarEscalaConteudo)
-               depois de renderizar — o clamp() sozinho só reage ao tamanho da
-               tela, não ao tamanho do texto de verdade (nome de dupla longo,
-               música com título grande...), então às vezes sobrava espaço e
-               às vezes precisava rolar. Isso encolhe só o necessário pra
-               nunca precisar de barra de rolagem; overflow:hidden abaixo é
-               a garantia de que, mesmo no pior caso, nenhuma barra aparece. */
-            --escala-conteudo: 1;
-            background: var(--cor-painel);
-            border-radius: clamp(18px, 1.4vw, 32px);
-            padding: calc(clamp(20px, 2.2vw, 44px) * var(--escala-conteudo, 1)) calc(clamp(28px, 4.4vw, 84px) * var(--escala-conteudo, 1));
-            box-shadow: 0 0 0 1px rgba(255, 212, 59, 0.35), 0 0 0 7px rgba(255, 212, 59, 0.08), 0 30px 70px rgba(0, 0, 0, 0.6);
-            text-align: center;
-            max-width: min(66vw, 1320px);
-            width: 100%;
-            /* Reserva fixa de espaço pro status pill (topo) e pra barra de
-               controles (rodapé), que são position:fixed e não empurram
-               este container — por isso a reserva é feita aqui, não no
-               padding do .main-container (evita ter duas contas pra
-               manter sincronizadas em cada resolução). */
-            max-height: calc(100vh - 280px);
-            flex: 1 1 480px;
-            overflow: hidden;
-            animation: slideIn 0.8s ease-out;
-        }
-
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateY(24px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .display-logo {
-            width: clamp(90px, 8vw, 170px);
-            height: auto;
-            margin-bottom: clamp(12px, 1.2vw, 24px);
-        }
-
-        /* "Título principal": o estado da tela (Aguardando / Próximo a Cantar /
-           Fila Encerrada) — precisa ser lido em 1 segundo a 5+ metros de distância. */
-        .titulo-proximo {
-            font-size: calc(clamp(28px, 2.7vw, 58px) * var(--escala-conteudo, 1));
-            color: var(--cor-ouro);
-            margin-bottom: calc(clamp(10px, 1.4vw, 26px) * var(--escala-conteudo, 1));
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: clamp(2px, 0.35vw, 6px);
-        }
-
-        .mensagem-secundaria {
-            font-size: calc(clamp(26px, 2vw, 44px) * var(--escala-conteudo, 1));
-            color: var(--cor-marfim);
-            font-weight: 400;
-            margin-top: calc(clamp(4px, 0.6vw, 12px) * var(--escala-conteudo, 1));
-        }
-
-        /* Nome de quem vai cantar: o elemento-herói da tela, o maior de todos —
-           responde "quem está cantando?" de longe, sem precisar chegar perto.
-           Cor sólida (não gradiente) e sem itálico: de longe, tanto o
-           gradiente quanto a inclinação do itálico atrapalham mais do que
-           ajudam a reconhecer as letras rápido. */
-        .cantor-nombre {
-            font-family: 'Bodoni Moda', serif;
-            font-size: calc(clamp(52px, 5.6vw, 148px) * var(--escala-conteudo, 1));
-            font-weight: 800;
-            line-height: 1.05;
-            color: var(--cor-ouro-claro);
-            text-shadow: 0 0 40px rgba(255, 212, 59, 0.35);
-            margin-bottom: calc(clamp(4px, 0.8vw, 14px) * var(--escala-conteudo, 1));
-            animation: scaleIn 0.6s ease-out;
-            overflow-wrap: break-word;
-            word-break: break-word;
-        }
-
-        @keyframes scaleIn {
-            from { opacity: 0; transform: scale(0.85); }
-            to { opacity: 1; transform: scale(1); }
-        }
-
-        /* "Canhoto de ingresso": painel de dados com friso pontilhado (perfuração) */
-        .musica-info {
-            position: relative;
-            background: var(--cor-painel-clara);
-            border: 1px dashed rgba(255, 212, 59, 0.4);
-            padding: calc(clamp(10px, 1.4vw, 20px) * var(--escala-conteudo, 1)) calc(18px * var(--escala-conteudo, 1)) calc(clamp(8px, 1.1vw, 16px) * var(--escala-conteudo, 1));
-            border-radius: 14px;
-            margin: calc(clamp(10px, 1.4vw, 18px) * var(--escala-conteudo, 1)) 0 0;
-        }
-        .musica-info::before, .musica-info::after {
-            content: '';
-            position: absolute;
-            top: -9px;
-            width: 18px; height: 18px;
-            border-radius: 50%;
-            background: var(--cor-painel);
-            box-shadow: 0 0 0 1px rgba(255, 212, 59, 0.35) inset;
-        }
-        .musica-info::before { left: -9px; }
-        .musica-info::after { right: -9px; }
-
-        /* Nome da música: o segundo elemento mais importante — precisa
-           "dominar a tela" junto com o nome de quem canta. Amarelo, não
-           branco, porque é informação de destaque, não texto corrido. */
-        .musica-titulo {
-            font-size: calc(clamp(44px, 4.5vw, 118px) * var(--escala-conteudo, 1));
-            line-height: 1.05;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: var(--cor-ouro);
-            margin-bottom: calc(clamp(2px, 0.5vw, 8px) * var(--escala-conteudo, 1));
-            overflow-wrap: break-word;
-            word-break: break-word;
-        }
-
-        .musica-artista {
-            font-size: calc(clamp(28px, 2.4vw, 54px) * var(--escala-conteudo, 1));
-            color: var(--cor-suave);
-            font-weight: 400;
-            margin-bottom: calc(clamp(8px, 1vw, 20px) * var(--escala-conteudo, 1));
-            overflow-wrap: break-word;
-            word-break: break-word;
-        }
-
-        .veces-cantadas {
-            display: inline-block;
-            background: transparent;
-            border: 2px solid var(--cor-ouro);
-            color: var(--cor-ouro-claro);
-            padding: calc(clamp(6px, 0.6vw, 12px) * var(--escala-conteudo, 1)) calc(clamp(16px, 1.6vw, 30px) * var(--escala-conteudo, 1));
-            border-radius: 50px;
-            font-size: calc(clamp(17px, 1.2vw, 27px) * var(--escala-conteudo, 1));
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .fila-info {
-            margin-top: calc(clamp(16px, 1.6vw, 32px) * var(--escala-conteudo, 1));
-            display: flex;
-            justify-content: space-around;
-            gap: calc(clamp(10px, 1.2vw, 22px) * var(--escala-conteudo, 1));
-        }
-
-        /* Status da fila (2ª prioridade da hierarquia) e "A seguir" (secundário):
-           bem maiores que a versão original, mas conscientemente menores que o
-           nome de quem canta/música — senão competem pela atenção. */
-        .fila-stat {
-            background: var(--cor-painel-clara);
-            border: 1px dashed rgba(255, 212, 59, 0.28);
-            padding: calc(clamp(8px, 0.8vw, 16px) * var(--escala-conteudo, 1)) calc(clamp(6px, 0.7vw, 12px) * var(--escala-conteudo, 1));
-            border-radius: clamp(8px, 0.8vw, 14px);
-            flex: 1;
-        }
-
-        .stat-numero {
-            font-family: 'Bodoni Moda', serif;
-            font-size: calc(clamp(24px, 1.9vw, 42px) * var(--escala-conteudo, 1));
-            font-weight: 700;
-            color: var(--cor-ouro-claro);
-            line-height: 1;
-        }
-
-        .stat-label {
-            font-size: clamp(12px, 0.95vw, 17px);
-            color: var(--cor-suave);
-            text-transform: uppercase;
-            letter-spacing: 1.2px;
-            margin-top: calc(clamp(3px, 0.5vw, 8px) * var(--escala-conteudo, 1));
-        }
-
-        /* Controles secundários: grandes o bastante pra apontar/tocar com
-           facilidade, mas visualmente mais discretos que a música em cartaz —
-           ficam apagados (transparentes) até o hover/foco. */
-        .control-bar {
-            position: fixed;
-            bottom: clamp(14px, 1.6vw, 30px);
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(8, 9, 13, 0.9);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 212, 59, 0.3);
-            padding: clamp(10px, 0.9vw, 18px) clamp(16px, 1.6vw, 30px);
-            border-radius: 60px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
-            display: flex;
-            gap: clamp(10px, 1.2vw, 22px);
-            z-index: 50;
-        }
-
-        .control-btn {
-            background: transparent;
-            border: 2px solid rgba(255, 212, 59, 0.5);
-            color: var(--cor-ouro-claro);
-            min-height: clamp(54px, 4.2vw, 72px);
-            padding: 0 clamp(22px, 2vw, 38px);
-            border-radius: 50px;
-            font-size: clamp(19px, 1.5vw, 28px);
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            transition: background 0.25s, color 0.25s, transform 0.15s;
-        }
-
-        .control-btn:active { transform: scale(0.97); }
-
-        .control-btn:hover {
-            background: var(--cor-ouro);
-            color: var(--cor-texto-sobre-destaque);
-        }
-
-        .control-btn:focus-visible,
-        .fullscreen-btn:focus-visible {
-            outline: 2px solid var(--cor-neon);
-            outline-offset: 2px;
-        }
-
-        .pulse {
-            animation: pulse 2.6s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(255, 212, 59, 0.45), 0 0 0 1px rgba(255, 212, 59, 0.35); }
-            50% { box-shadow: 0 0 0 16px rgba(255, 212, 59, 0), 0 0 0 1px rgba(255, 212, 59, 0.35); }
-        }
-
-        @media (max-width: 1024px) {
-            /* Abaixo de 1024px não sobra largura pra card + QR lado a lado
-               (isso é celular/tablet, não TV) — volta a empilhar. Tamanhos
-               fixos aqui também passam por --escala-conteudo — sem isso o
-               ajuste de encolher-pra-caber do JS não tinha efeito nenhum
-               num celular/tablet, só nas resoluções de TV. */
-            .main-container { flex-direction: column; padding-top: 90px; }
-            .display-card { padding: calc(26px * var(--escala-conteudo, 1)) calc(30px * var(--escala-conteudo, 1)); max-width: 100%; flex: none; }
-            .qr-card { max-width: 100%; flex: none; }
-            .cantor-nombre { font-size: calc(54px * var(--escala-conteudo, 1)); }
-            .titulo-proximo { font-size: calc(17px * var(--escala-conteudo, 1)); }
-            .musica-titulo { font-size: calc(28px * var(--escala-conteudo, 1)); }
-            .musica-artista { font-size: calc(20px * var(--escala-conteudo, 1)); }
-        }
-
-        @media (max-width: 768px) {
-            .display-card { padding: calc(20px * var(--escala-conteudo, 1)) calc(20px * var(--escala-conteudo, 1)); }
-            .display-logo { width: 90px; }
-            .cantor-nombre { font-size: calc(42px * var(--escala-conteudo, 1)); }
-            .titulo-proximo { font-size: calc(16px * var(--escala-conteudo, 1)); letter-spacing: 3px; }
-            .musica-titulo { font-size: calc(26px * var(--escala-conteudo, 1)); }
-            .musica-artista { font-size: calc(19px * var(--escala-conteudo, 1)); }
-            .fila-info { flex-direction: column; gap: 8px; }
-            .veces-cantadas { font-size: calc(14px * var(--escala-conteudo, 1)); }
-            .mensagem-secundaria { font-size: calc(20px * var(--escala-conteudo, 1)); }
-        }
-
-        /* 1280x720 e 1366x768 (TVs reais, resoluções-alvo) já caem aqui por
-           altura — não é "janela pequena", é uma TV de verdade. Por isso este
-           bloco só entra numa altura bem menor (janela de preview não-maximizada,
-           não uma TV em tela cheia) e só ajusta espaçamento, nunca reduz a
-           tipografia principal a ponto de ficar ilegível de longe. */
-        @media (max-height: 560px) {
-            /* Mesmos valores de antes, só que agora também multiplicados por
-               --escala-conteudo — senão esses números fixos sobrescreviam o
-               padding/margin já encolhido pelo JS e o card voltava a não caber
-               (a reduzir só a fonte não sobra espaço vertical suficiente). */
-            .display-card { padding: calc(16px * var(--escala-conteudo, 1)) calc(24px * var(--escala-conteudo, 1)); }
-            .musica-info { padding: calc(10px * var(--escala-conteudo, 1)) calc(14px * var(--escala-conteudo, 1)) calc(8px * var(--escala-conteudo, 1)); margin: calc(10px * var(--escala-conteudo, 1)) 0 0; }
-            .fila-info { margin-top: calc(8px * var(--escala-conteudo, 1)); }
-            .fila-stat { padding: calc(6px * var(--escala-conteudo, 1)) calc(8px * var(--escala-conteudo, 1)); }
-            .mini-fila-lista { margin-top: calc(8px * var(--escala-conteudo, 1)); }
-            .mini-fila-item { padding: calc(5px * var(--escala-conteudo, 1)) calc(12px * var(--escala-conteudo, 1)); margin-bottom: calc(3px * var(--escala-conteudo, 1)); }
-            .display-logo { width: 60px; margin-bottom: 6px; }
-        }
-
-        .fullscreen-btn {
-            position: fixed;
-            top: clamp(16px, 1.6vw, 30px);
-            right: clamp(16px, 1.6vw, 30px);
-            background: rgba(8, 9, 13, 0.75);
-            border: 1px solid rgba(255, 212, 59, 0.45);
-            color: var(--cor-ouro-claro);
-            width: clamp(44px, 3vw, 60px);
-            height: clamp(44px, 3vw, 60px);
-            border-radius: 50%;
-            cursor: pointer;
-            font-size: clamp(17px, 1.3vw, 24px);
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.35);
-            z-index: 110;
-            transition: transform 0.3s, background 0.3s;
-        }
-
-        .fullscreen-btn:hover {
-            transform: scale(1.08);
-            background: rgba(255, 212, 59, 0.2);
-        }
-
-        /* Timer e status do Firebase: informação de apoio, não de destaque —
-           ficam no topo, pequenos, sem competir com música/QR Code. */
-        .timer {
-            position: fixed;
-            top: clamp(16px, 1.6vw, 30px);
-            left: clamp(16px, 1.6vw, 30px);
-            background: rgba(8, 9, 13, 0.75);
-            border: 1px solid rgba(255, 212, 59, 0.45);
-            padding: clamp(8px, 0.7vw, 14px) clamp(14px, 1.3vw, 24px);
-            border-radius: 50px;
-            font-size: clamp(15px, 1.1vw, 22px);
-            font-weight: 600;
-            color: var(--cor-ouro-claro);
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.35);
-        }
-
-        /* Vira só uma bolinha com o emoji dentro — o texto continua existindo
-           (visualmente escondido) pra acessibilidade e pros testes, mas na
-           tela é só um indicador discreto de status, sem competir com nada. */
-        .firebase-status {
-            position: fixed;
-            top: clamp(16px, 1.6vw, 30px);
-            left: 50%;
-            transform: translateX(-50%);
-            width: clamp(34px, 2.6vw, 46px);
-            height: clamp(34px, 2.6vw, 46px);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: clamp(16px, 1.3vw, 22px);
-            z-index: 100;
-            background: rgb(34, 211, 166);
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.35);
-            animation: pulse 2.6s infinite;
-        }
-
-        .sr-only {
-            position: absolute;
-            width: 1px; height: 1px;
-            padding: 0; margin: -1px;
-            overflow: hidden;
-            clip: rect(0, 0, 0, 0);
-            white-space: nowrap;
-            border: 0;
-        }
-
-        /* Fagulhas/notas subindo do palco no fundo */
-        .notas-flutuantes {
-            position: fixed;
-            inset: 0;
-            overflow: hidden;
-            z-index: 0;
-            pointer-events: none;
-        }
-
-        .nota-flutuante {
-            position: absolute;
-            bottom: -60px;
-            color: var(--cor-ouro);
-            opacity: 0.16;
-            animation: subirNota linear infinite;
-        }
-        .nota-flutuante:nth-child(3n) { color: var(--cor-neon); }
-
-        @keyframes subirNota {
-            0% { transform: translateY(0) rotate(0deg); opacity: 0; }
-            10% { opacity: 0.16; }
-            90% { opacity: 0.16; }
-            100% { transform: translateY(-110vh) rotate(25deg); opacity: 0; }
-        }
-
-        .qr-card, .control-bar, .timer, .firebase-status {
-            /* Importante: NÃO definir "position" aqui — cada um já tem seu próprio
-               position: fixed declarado antes. Sobrescrever pra "relative" aqui foi
-               o bug que tirava tudo do lugar (timer, QR e botão de tela cheia).
-               O .fullscreen-btn foi removido dessa lista porque precisa de um
-               z-index mais alto (110) pra nunca ficar escondido atrás de nada. */
-            z-index: 10;
-        }
-
-        /* Card do QR Code para pedidos — segue o mesmo idioma visual de "passe" —
-           fica abaixo do card principal, no fluxo normal da página */
-        /* Bloco "Quer Cantar?": precisa ser grande e óbvio — é o único jeito
-           de alguém sentado longe da tela entrar na fila. QR Code grande
-           o bastante pra escanear sem precisar chegar perto da TV. */
-        .qr-card {
-            background: rgba(16, 18, 24, 0.92);
-            border: 2px dashed rgba(255, 212, 59, 0.5);
-            border-radius: clamp(14px, 1.2vw, 24px);
-            padding: clamp(18px, 1.8vw, 34px) clamp(16px, 1.8vw, 32px);
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            text-align: center;
-            gap: clamp(10px, 1.2vw, 20px);
-            max-width: min(25vw, 380px);
-            width: 100%;
-            max-height: calc(100vh - 280px);
-            overflow: hidden;
-            flex: 0 1 280px;
-            margin: 0;
-        }
-
-        .qr-card img {
-            width: clamp(120px, 12vw, 220px);
-            height: clamp(120px, 12vw, 220px);
-            border-radius: 12px;
-            flex-shrink: 0;
-            background: #fff;
-            padding: 6px;
-        }
-
-        .qr-card .qr-texto { text-align: center; }
-        .qr-card .qr-titulo {
-            font-size: clamp(26px, 2.3vw, 46px);
-            font-weight: 800;
-            color: var(--cor-ouro);
-            line-height: 1.15;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        .qr-card .qr-sub {
-            font-size: clamp(17px, 1.4vw, 26px);
-            color: var(--cor-suave);
-            font-weight: 500;
-            line-height: 1.3;
-            margin-top: clamp(4px, 0.5vw, 10px);
-        }
-
-        /* Lista de próximos na fila, dentro do card principal */
-        .mini-fila-lista { margin-top: calc(clamp(10px, 1vw, 20px) * var(--escala-conteudo, 1)); text-align: left; }
-        .mini-fila-titulo {
-            font-size: calc(clamp(12px, 0.85vw, 16px) * var(--escala-conteudo, 1));
-            font-weight: 700;
-            color: var(--cor-suave);
-            text-transform: uppercase;
-            letter-spacing: 2.5px;
-            margin-bottom: calc(clamp(6px, 0.6vw, 12px) * var(--escala-conteudo, 1));
-            text-align: center;
-        }
-        .mini-fila-item {
-            display: flex; justify-content: space-between; align-items: center;
-            background: var(--cor-painel-clara); border-radius: 10px;
-            padding: calc(clamp(6px, 0.6vw, 12px) * var(--escala-conteudo, 1)) calc(clamp(10px, 1vw, 18px) * var(--escala-conteudo, 1));
-            margin-bottom: calc(clamp(4px, 0.5vw, 8px) * var(--escala-conteudo, 1));
-            border-left: 3px solid var(--cor-ouro);
-        }
-        .mini-fila-item .mini-fila-nome {
-            font-weight: 600;
-            color: var(--cor-marfim);
-            font-size: calc(clamp(15px, 1.1vw, 21px) * var(--escala-conteudo, 1));
-            overflow-wrap: break-word;
-            word-break: break-word;
-        }
-        .mini-fila-item .mini-fila-musica {
-            color: var(--cor-suave);
-            font-size: calc(clamp(13px, 0.9vw, 17px) * var(--escala-conteudo, 1));
-            overflow-wrap: break-word;
-            word-break: break-word;
-        }
-        .mini-fila-posicao {
-            background: var(--cor-ouro); color: var(--cor-texto-sobre-destaque);
-            width: calc(clamp(20px, 1.6vw, 28px) * var(--escala-conteudo, 1)); height: calc(clamp(20px, 1.6vw, 28px) * var(--escala-conteudo, 1));
-            border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            font-size: calc(clamp(14px, 1.1vw, 20px) * var(--escala-conteudo, 1)); font-weight: 700; margin-right: calc(clamp(8px, 0.9vw, 16px) * var(--escala-conteudo, 1));
-            flex-shrink: 0;
-        }
-
-        @media (max-width: 768px) {
-            /* Celular/tablet estreito: card e QR não cabem lado a lado —
-               volta a empilhar, QR embaixo do card principal. */
-            .main-container { flex-direction: column; padding-top: 90px; }
-            .display-card { max-width: 100%; flex: none; }
-            .qr-card { max-width: 100%; flex: none; }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-            .marquise::before, .marquise::after,
-            .nota-flutuante,
-            .pulse,
-            .display-card,
-            .cantor-nombre {
-                animation: none !important;
-            }
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0b0d12">
+  <title>Karaokê do Città — Telão</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🎤%3C/text%3E%3C/svg%3E">
+  <style>
+    :root{--bg:#0b0d12;--panel:#141821;--panel2:#1b202b;--gold:#ffd34e;--pink:#ff3d81;--white:#f8f9fc;--muted:#aab2c2;--green:#29d6a2;--line:rgba(255,255,255,.09)}
+    *{box-sizing:border-box} html,body{margin:0;width:100%;height:100%;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--white)}
+    body{overflow:hidden;background:radial-gradient(ellipse at 15% 0%,rgba(255,211,78,.09),transparent 35%),radial-gradient(ellipse at 100% 100%,rgba(255,61,129,.09),transparent 34%),var(--bg)}
+    .screen{height:100dvh;min-height:0;padding:clamp(14px,2vw,32px);display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:clamp(12px,1.6vw,24px)}
+    .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;min-width:0}.brand{display:flex;align-items:center;gap:12px;min-width:0}.brand-mark{display:grid;place-items:center;width:clamp(42px,4vw,62px);height:clamp(42px,4vw,62px);border-radius:16px;background:var(--gold);color:#171717;font-size:clamp(23px,2.5vw,36px);flex-shrink:0}.brand-title{font-size:clamp(17px,2vw,28px);font-weight:800;letter-spacing:.04em;text-transform:uppercase}.brand-sub{font-size:clamp(10px,1vw,14px);color:var(--muted);margin-top:4px;letter-spacing:.16em;text-transform:uppercase}.status{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:clamp(11px,1vw,15px);white-space:nowrap}.status-dot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 12px currentColor}.status.offline .status-dot{background:#ff5353}
+    .content{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(280px,.85fr);gap:clamp(12px,1.6vw,24px);min-height:0}
+    .hero,.queue{background:linear-gradient(145deg,rgba(255,255,255,.035),transparent 50%),var(--panel);border:1px solid var(--line);border-radius:clamp(18px,2vw,30px);min-height:0;overflow:hidden}
+    .hero{display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:clamp(18px,3vw,48px);position:relative}.hero:before{content:"";position:absolute;top:0;left:0;right:0;height:5px;background:linear-gradient(90deg,var(--gold),var(--pink))}.eyebrow{font-size:clamp(12px,1.3vw,18px);font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:var(--gold);margin-bottom:clamp(12px,2vw,26px)}.singer{font-size:clamp(42px,7.3vw,120px);font-weight:900;line-height:.98;letter-spacing:-.045em;overflow-wrap:anywhere;max-width:100%;text-transform:uppercase}.song-wrap{margin-top:clamp(18px,3vw,42px);width:min(100%,900px);padding-top:clamp(16px,2vw,28px);border-top:1px solid rgba(255,211,78,.3)}.song-label{font-size:clamp(10px,1vw,14px);letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}.song{font-size:clamp(25px,4vw,64px);font-weight:800;line-height:1.06;color:var(--gold);overflow-wrap:anywhere}.artist{font-size:clamp(16px,2vw,30px);color:#d7dbe5;margin-top:10px;overflow-wrap:anywhere}.live-tag{margin-top:clamp(18px,2.5vw,34px);display:inline-flex;align-items:center;gap:9px;background:rgba(255,61,129,.12);border:1px solid rgba(255,61,129,.3);color:#ff8eb5;border-radius:999px;padding:9px 16px;font-size:clamp(11px,1.1vw,15px);font-weight:800;letter-spacing:.1em;text-transform:uppercase}.live-dot{width:8px;height:8px;background:var(--pink);border-radius:50%;box-shadow:0 0 10px var(--pink)}
+    .queue{display:flex;flex-direction:column;padding:clamp(14px,1.6vw,24px)}.queue-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-bottom:clamp(12px,1.4vw,20px);border-bottom:1px solid var(--line)}.queue-title{font-size:clamp(15px,1.5vw,23px);font-weight:900;text-transform:uppercase;letter-spacing:.06em}.queue-count{display:grid;place-items:center;min-width:34px;height:34px;padding:0 9px;border-radius:11px;background:var(--pink);font-weight:900;font-size:17px}.queue-list{display:flex;flex-direction:column;gap:clamp(7px,.8vw,12px);padding-top:clamp(12px,1.4vw,20px);overflow:hidden;min-height:0}.queue-item{display:grid;grid-template-columns:clamp(28px,3vw,42px) minmax(0,1fr);align-items:center;gap:12px;padding:clamp(9px,1vw,15px);background:var(--panel2);border-radius:14px;min-height:0}.queue-number{display:grid;place-items:center;width:clamp(28px,3vw,42px);height:clamp(28px,3vw,42px);border-radius:12px;background:rgba(255,211,78,.13);color:var(--gold);font-size:clamp(14px,1.4vw,20px);font-weight:900}.queue-name{font-size:clamp(14px,1.4vw,21px);font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.queue-song{font-size:clamp(11px,1vw,15px);color:var(--muted);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.empty{display:grid;place-items:center;text-align:center;color:var(--muted);height:100%;font-size:clamp(15px,1.5vw,22px);line-height:1.5;padding:20px}.footer{display:flex;align-items:center;justify-content:space-between;gap:16px}.stats{display:flex;gap:clamp(8px,1.2vw,18px);min-width:0}.stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:clamp(9px,1vw,14px) clamp(12px,1.5vw,22px);min-width:0}.stat-value{font-size:clamp(17px,2vw,28px);font-weight:900;color:var(--gold);line-height:1}.stat-label{font-size:clamp(9px,.85vw,12px);color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-top:6px;white-space:nowrap}.qr-prompt{display:flex;align-items:center;gap:12px;text-align:right}.qr-prompt img{width:clamp(54px,5vw,76px);height:clamp(54px,5vw,76px);background:#fff;border-radius:8px;padding:4px;flex-shrink:0}.qr-title{font-size:clamp(13px,1.3vw,19px);font-weight:900;color:var(--white);text-transform:uppercase}.qr-sub{font-size:clamp(10px,.9vw,13px);color:var(--muted);margin-top:4px}.fullscreen{position:fixed;right:12px;top:12px;width:32px;height:32px;border:0;border-radius:9px;background:rgba(255,255,255,.07);color:#fff;opacity:.25;cursor:pointer;z-index:5}.fullscreen:hover{opacity:1}
+    @media(max-width:850px){body{overflow:auto}.screen{height:auto;min-height:100dvh;grid-template-rows:auto auto auto;overflow:visible}.content{grid-template-columns:1fr}.hero{min-height:48vh}.queue{min-height:280px}.queue-list{overflow:visible}.footer{align-items:flex-start;flex-direction:column}.qr-prompt{text-align:left}.qr-prompt img{order:-1}.stats{width:100%;flex-wrap:wrap}.stat{flex:1}.status span.status-text{display:none}}
+    @media(max-height:650px) and (min-width:851px){.screen{padding:12px;gap:10px}.topbar .brand-mark{width:38px;height:38px}.content{gap:10px}.hero{padding:16px}.song-wrap{margin-top:14px;padding-top:12px}.live-tag{margin-top:12px;padding:6px 12px}.queue{padding:12px}.queue-list{gap:6px;padding-top:10px}.queue-item{padding:7px 9px}.footer .stat{padding:8px 12px}.qr-prompt img{width:48px;height:48px}}
+    @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+  </style>
 </head>
 <body>
-
-    <!-- Moldura de lâmpadas correndo -->
-    <div class="marquise"></div>
-
-    <!-- Fagulhas/notas musicais decorativas -->
-    <div class="notas-flutuantes" id="notas-flutuantes"></div>
-
-    <!-- Status Firebase: só a bolinha com emoji é visível; o texto existe
-         pra acessibilidade/leitor de tela e pra checar a conexão nos testes -->
-    <div class="firebase-status" id="firebase-status" role="status" aria-live="polite">
-        <span id="firebase-status-icone" aria-hidden="true">🔥</span>
-        <span id="status-text" class="sr-only">🔥 Conectado ao Firebase</span>
-    </div>
-
-    <!-- Timer -->
-    <div class="timer">
-        <i class="fas fa-hourglass-half mr-2"></i><span id="tempo-display">0 min</span>
-    </div>
-
-    <!-- Botão Tela Cheia -->
-    <button class="fullscreen-btn" onclick="toggleFullscreen()" title="Tela cheia">
-        <i class="fas fa-expand"></i>
-    </button>
-
-    <!-- Contenedor Principal -->
-    <div class="main-container">
-        <div class="display-card pulse" id="display-card">
-
-            <!-- Estado Inicial -->
-            <div id="estado-inicial" class="hidden">
-                <h1 class="titulo-proximo">Karaokê Do Città</h1>
-                <p class="mensagem-secundaria">Aguardando próxima música...</p>
-            </div>
-
-            <!-- Fila Vazia -->
-            <div id="fila-vazia" class="hidden">
-                <h1 class="titulo-proximo">Fila Encerrada</h1>
-                <p class="mensagem-secundaria">Obrigado por participar!</p>
-            </div>
-
-            <!-- Apresentação em Andamento ou Próximo Cantor -->
-            <div id="proximo-cantor" class="hidden">
-
-                <h1 class="titulo-proximo" id="titulo-apresentacao">Próximo a Cantar</h1>
-
-                <div class="cantor-nombre" id="cantor-nombre">-</div>
-
-                <div class="musica-info">
-                    <div class="musica-titulo" id="musica-titulo">-</div>
-                    <div class="musica-artista" id="musica-artista">-</div>
-                    <div style="margin-top:12px;" id="avaliacao-info"></div>
-                    <div class="veces-cantadas" id="veces-cantadas">0x</div>
-                </div>
-
-                <div class="fila-info">
-                    <div class="fila-stat">
-                        <div class="stat-numero" id="proximos-na-fila">0</div>
-                        <div class="stat-label">Próximos na Fila</div>
-                    </div>
-                    <div class="fila-stat">
-                        <div class="stat-numero" id="tempo-espera-display">0</div>
-                        <div class="stat-label">min de Espera</div>
-                    </div>
-                    <div class="fila-stat">
-                        <div class="stat-numero" id="ja-cantadas-hoje">0</div>
-                        <div class="stat-label">Já Cantaram Hoje</div>
-                    </div>
-                </div>
-
-                <div class="mini-fila-lista" id="mini-fila-lista">
-                    <div class="mini-fila-titulo">A Seguir</div>
-                    <div id="mini-fila-itens"></div>
-                </div>
-            </div>
-
-        </div>
-
-        <!-- Card com QR Code para pedir música — abaixo do card principal,
-             nunca sobrepondo o conteúdo -->
-        <div class="qr-card">
-            <img id="qr-code-img" src="" alt="QR Code para pedir música" />
-            <div class="qr-texto">
-                <div class="qr-titulo">Quer Cantar?</div>
-                <div class="qr-sub"><i class="fas fa-mobile-alt mr-1"></i>Aponte a câmera do celular</div>
-                <div class="qr-sub"><i class="fas fa-qrcode mr-1"></i>Escaneie e escolha sua música</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Barra de Control -->
-    <div class="control-bar">
-        <button class="control-btn" onclick="atualizarDisplay()">
-            <i class="fas fa-sync mr-2"></i>Atualizar
-        </button>
-        <button class="control-btn" onclick="window.location.href='index.html'">
-            <i class="fas fa-arrow-left mr-2"></i>Voltar
-        </button>
-        <button class="control-btn" onclick="resetarDisplay()">
-            <i class="fas fa-redo mr-2"></i>Resetar
-        </button>
-    </div>
-
-    <script>
-        // --- CONFIGURAÇÃO FIREBASE ---
-        const firebaseConfig = {
-            apiKey: "AIzaSyB-jzmAdf2eFqpEQVKkFdf7wkURvbzTZBY",
-            authDomain: "karaoke-bar-v2.firebaseapp.com",
-            databaseURL: "https://karaoke-bar-v2-default-rtdb.firebaseio.com",
-            projectId: "karaoke-bar-v2",
-            storageBucket: "karaoke-bar-v2.firebasestorage.app",
-            messagingSenderId: "851258881456",
-            appId: "1:851258881456:web:fb899c2fad3e142b755275",
-            measurementId: "G-1WZ9VRTQ67"
-        };
-
-        let db = null;
-        let firebaseConnected = false;
-        const TEMPO_MEDIO_MUSICA = 5; // minutos
-
-        // --- IDENTIFICAÇÃO DO BAR (multi-tenant) — mesmo esquema do index.html ---
-        function obterBarId() {
-            const params = new URLSearchParams(window.location.search);
-            const bar = (params.get('bar') || '').trim().toLowerCase();
-            return bar.replace(/[^a-z0-9-]/g, '');
-        }
-        const BAR_ID = obterBarId();
-        function caminhoBar(sufixo) {
-            return `bares/${BAR_ID}/karaoke${sufixo ? '/' + sufixo : ''}`;
-        }
-
-        function mostrarErroSemBar() {
-            document.body.innerHTML = `
-                <div style="display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:20px;font-family:sans-serif;color:#FFFFFF;background:#08090D;">
-                    <div>
-                        <h1 style="font-size:22px;margin-bottom:10px;">⚠️ Link incompleto</h1>
-                        <p>Essa página precisa saber qual bar exibir.<br>Peça o link correto pro responsável (algo como <code>?bar=nomedobar</code> no final do endereço).</p>
-                    </div>
-                </div>`;
-        }
-
-        // Gera fagulhas/notas musicais subindo do palco, para dar mais vida à tela
-        function criarNotasFlutuantes() {
-            const container = document.getElementById('notas-flutuantes');
-            const icones = ['fa-music', 'fa-microphone', 'fa-headphones-alt'];
-            const total = 14;
-            for (let i = 0; i < total; i++) {
-                const nota = document.createElement('i');
-                const icone = icones[Math.floor(Math.random() * icones.length)];
-                nota.className = `fas ${icone} nota-flutuante`;
-                nota.style.left = `${Math.random() * 100}%`;
-                nota.style.fontSize = `${20 + Math.random() * 30}px`;
-                nota.style.animationDuration = `${12 + Math.random() * 10}s`;
-                nota.style.animationDelay = `${Math.random() * 15}s`;
-                container.appendChild(nota);
-            }
-        }
-
-        // Monta o QR Code apontando para a página de pedidos (index.html) do MESMO bar,
-        // usando a mesma pasta/domínio de onde o display.html está sendo servido
-        function configurarQrCode() {
-            const urlPedidos = new URL('index.html?bar=' + encodeURIComponent(BAR_ID), window.location.href).href;
-            const qrImg = document.getElementById('qr-code-img');
-            qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(urlPedidos)}`;
-        }
-
-        // Inicializar Firebase
-        function initFirebase() {
-            if (!BAR_ID) {
-                mostrarErroSemBar();
-                return;
-            }
-
-            try {
-                firebase.initializeApp(firebaseConfig);
-                db = firebase.database();
-                firebaseConnected = true;
-                console.log('✅ Firebase inicializado en display.html');
-                atualizarDisplay();
-
-                // Sincronizar cada cambio en tiempo real
-                const ref = db.ref(caminhoBar());
-                ref.on('value', (snapshot) => {
-                    console.log('📡 Datos actualizados en tiempo real');
-                    atualizarDisplayWithData(snapshot.val());
-                });
-
-                // Mesmo esquema do index.html (monitorarConexaoReal): ".info/connected"
-                // é o jeito oficial do Firebase de saber se ESTE dispositivo está
-                // realmente conectado em tempo real — sem isso, o badge "Conectado ao
-                // Firebase" ficava preso mostrando verde pra sempre (era fixo no CSS),
-                // mesmo com a internet caída, e a equipe do bar não tinha como saber
-                // que o telão parou de atualizar.
-                db.ref('.info/connected').on('value', (snapshot) => {
-                    firebaseConnected = snapshot.val() === true;
-                    atualizarStatusFirebaseDisplay(firebaseConnected);
-                });
-
-                // Rede de segurança: além do tempo real, força uma checagem a cada 5s.
-                // Isso evita que o telão fique "atrasado" caso a conexão em tempo real
-                // engasgue por algum instante (wifi instável, muita gente votando, etc.)
-                setInterval(atualizarDisplay, 5000);
-            } catch (error) {
-                console.error('❌ Error Firebase:', error);
-                firebaseConnected = false;
-            }
-        }
-
-        // Atualiza o badge "Conectado ao Firebase" (texto + cor de fundo) de forma
-        // honesta — precisa refletir a conexão de verdade, não ficar fixo em verde.
-        function atualizarStatusFirebaseDisplay(connected) {
-            const statusText = document.getElementById('status-text');
-            const statusEl = document.getElementById('firebase-status');
-            const icone = document.getElementById('firebase-status-icone');
-            if (connected) {
-                statusText.innerText = '🔥 Conectado ao Firebase';
-                icone.textContent = '🔥';
-                statusEl.style.background = 'rgb(34, 211, 166)';
-            } else {
-                statusText.innerText = '⚠️ Sem conexão com o Firebase';
-                icone.textContent = '⚠️';
-                statusEl.style.background = 'rgb(220, 38, 38)';
-            }
-        }
-
-        // "fila" agora é gravada no Firebase como um MAPA { $pedidoId: pedido }
-        // (ver database.rules.json e migracao-fila-por-pedido.md no repo do
-        // index.html), não mais um array — converte de volta pra array ordenado
-        // antes de usar, igual sempre foi renderizado aqui. pedidoId é o próprio
-        // "id" (Date.now() + ...) gerado em montarNovoPedido(), então ordenar por
-        // ele ascendente reconstrói a mesma ordem de chegada que o array antigo
-        // já tinha (index.html só grava pedido novo no final da fila).
-        function mapaFilaParaArray(mapa) {
-            if (!mapa) return [];
-            if (Array.isArray(mapa)) return mapa; // dado antigo (schema anterior), só por segurança
-            return Object.keys(mapa)
-                .sort((a, b) => Number(a) - Number(b))
-                .map((pedidoId) => ({ ...mapa[pedidoId], id: Number(pedidoId) }));
-        }
-
-        function calcularMediaAvaliacoes(avaliacoes) {
-            const notas = Object.values(avaliacoes || {}).map(n => Number(n)).filter(n => !isNaN(n));
-            if (notas.length === 0) return null;
-            const soma = notas.reduce((a,b) => a + b, 0);
-            return Number((soma / notas.length).toFixed(2));
-        }
-
-        function atualizarDisplay() {
-            if (!firebaseConnected || !db) {
-                console.warn('⚠️ Firebase no disponible');
-                return;
-            }
-
-            const ref = db.ref(caminhoBar());
-            ref.once('value', (snapshot) => {
-                atualizarDisplayWithData(snapshot.val());
-            }).catch((error) => {
-                console.error('❌ Error al obtener datos:', error);
-            });
-        }
-
-        function atualizarDisplayWithData(data) {
-            // Ocultar todos los estados
-            document.getElementById('estado-inicial').classList.add('hidden');
-            document.getElementById('fila-vazia').classList.add('hidden');
-            document.getElementById('proximo-cantor').classList.add('hidden');
-            document.getElementById('mini-fila-lista').classList.add('hidden');
-
-            // Actualizar status firebase badge
-            atualizarStatusFirebaseDisplay(firebaseConnected);
-
-            if (!data) {
-                document.getElementById('estado-inicial').classList.remove('hidden');
-                document.getElementById('tempo-display').innerText = '0 min';
-                return;
-            }
-
-            // Se houver uma apresentação em andamento, priorizamos ela
-            if (data.apresentacaoAtual) {
-                const ap = data.apresentacaoAtual;
-                const media = calcularMediaAvaliacoes(ap.avaliacoes);
-                const votos = Object.keys(ap.avaliacoes || {}).length;
-
-                document.getElementById('titulo-apresentacao').innerText = 'Apresentação em Andamento';
-                document.getElementById('cantor-nombre').innerText = ap.nome || '-';
-                document.getElementById('musica-titulo').innerText = ap.musica || '-';
-                document.getElementById('musica-artista').innerText = ap.artista || '-';
-
-                const avalArea = document.getElementById('avaliacao-info');
-                if (media !== null) {
-                    avalArea.innerHTML = `<div style="font-size:22px;color:#FFFFFF;font-weight:700;">Avaliação média: ★ ${media} <span style="font-size:14px;color:#A9AFC0;margin-left:8px;">(${votos} ${votos === 1 ? 'voto' : 'votos'})</span></div>`;
-                } else {
-                    avalArea.innerHTML = `<div style="font-size:19px;color:#A9AFC0;">Sem avaliações ainda — incentive o público a votar!</div>`;
-                }
-
-                // vezes cantadas: se disponível no nó (poder vir com o objeto), senão '-'
-                document.getElementById('veces-cantadas').innerText = '-';
-
-                // info de fila
-                const fila = mapaFilaParaArray(data.fila);
-                document.getElementById('proximos-na-fila').innerText = Math.max(0, fila.length);
-                const tempoEstimado = Math.max(0, fila.length) * TEMPO_MEDIO_MUSICA;
-                document.getElementById('tempo-espera-display').innerText = tempoEstimado;
-                document.getElementById('tempo-display').innerText = tempoEstimado + ' min';
-                document.getElementById('ja-cantadas-hoje').innerText = (data.historico || []).length;
-
-                popularMiniFila(fila, 0);
-
-                document.getElementById('proximo-cantor').classList.remove('hidden');
-                ajustarEscalaConteudo();
-                return;
-            }
-
-            // Sem apresentacaoAtual: usamos a fila para mostrar o próximo
-            const fila = mapaFilaParaArray(data.fila);
-            if (!fila || fila.length === 0) {
-                if (data.manualFechada) {
-                    document.getElementById('fila-vazia').classList.remove('hidden');
-                } else {
-                    document.getElementById('estado-inicial').classList.remove('hidden');
-                }
-                document.getElementById('tempo-display').innerText = '0 min';
-                return;
-            }
-
-            const proximo = fila[0];
-            document.getElementById('titulo-apresentacao').innerText = 'Próximo a Cantar';
-            document.getElementById('cantor-nombre').innerText = proximo.nome || '-';
-            document.getElementById('musica-titulo').innerText = proximo.musica || '-';
-            document.getElementById('musica-artista').innerText = proximo.artista || '-';
-            document.getElementById('veces-cantadas').innerText = (typeof proximo.vezesCantadas !== 'undefined') ? `${proximo.vezesCantadas + 1}ª vez` : '-';
-            document.getElementById('avaliacao-info').innerHTML = '';
-
-            document.getElementById('proximos-na-fila').innerText = Math.max(0, fila.length - 1);
-            const tempoEstimado = Math.max(0, fila.length - 1) * TEMPO_MEDIO_MUSICA;
-            document.getElementById('tempo-espera-display').innerText = tempoEstimado;
-            document.getElementById('tempo-display').innerText = tempoEstimado + ' min';
-            document.getElementById('ja-cantadas-hoje').innerText = (data.historico || []).length;
-
-            popularMiniFila(fila, 1);
-
-            document.getElementById('proximo-cantor').classList.remove('hidden');
-            ajustarEscalaConteudo();
-        }
-
-        // Depois de renderizar o card, encolhe a fonte (via --escala-conteudo)
-        // só o suficiente pra caber sem barra de rolagem — o clamp() do CSS
-        // reage ao tamanho da TELA, não ao tamanho do TEXTO (nome de dupla
-        // longo, música com título grande...), então o quanto precisa
-        // encolher varia a cada apresentação, não dá pra fixar um valor só.
-        function ajustarEscalaConteudo() {
-            const card = document.getElementById('display-card');
-            if (!card) return;
-            requestAnimationFrame(() => {
-                card.style.setProperty('--escala-conteudo', '1');
-                const PASSO = 0.05;
-                // MINIMO baixo de propósito: o card agora tem overflow:hidden
-                // (nunca mostra barra de rolagem), então é melhor encolher
-                // bastante o texto do que cortar conteúdo escondido embaixo.
-                const MINIMO = 0.35;
-                let escala = 1;
-                // scrollHeight/clientHeight forçam layout — funciona porque
-                // a fonte menor reduz a altura do conteúdo, nunca a largura
-                // do card (que continua fixa pelo max-width).
-                while (card.scrollHeight > card.clientHeight + 1 && escala > MINIMO) {
-                    escala = Math.round((escala - PASSO) * 100) / 100;
-                    card.style.setProperty('--escala-conteudo', String(escala));
-                }
-            });
-        }
-
-        // Escapa texto de qualquer campo digitado por usuário (nome, música, artista,
-        // mesa, etc.) antes de colocar dentro de innerHTML. Sem isso, alguém poderia
-        // digitar algo como <img src=x onerror=alert(1)> no campo "Nome" e esse código
-        // rodaria na tela pública do telão (XSS).
-        function escaparHtml(texto) {
-            const div = document.createElement('div');
-            div.textContent = (texto === null || texto === undefined) ? '' : String(texto);
-            return div.innerHTML;
-        }
-
-        // Preenche a lista "A Seguir" com os próximos da fila (a partir do índice 'partirDe'),
-        // mostrando até 4 nomes
-        function popularMiniFila(fila, partirDe) {
-            const container = document.getElementById('mini-fila-itens');
-            const wrapper = document.getElementById('mini-fila-lista');
-            const proximos = fila.slice(partirDe, partirDe + 4);
-
-            if (proximos.length === 0) {
-                wrapper.classList.add('hidden');
-                return;
-            }
-
-            wrapper.classList.remove('hidden');
-            container.innerHTML = proximos.map((p, i) => `
-                <div class="mini-fila-item">
-                    <div style="display:flex;align-items:center;">
-                        <span class="mini-fila-posicao">${i + 1}</span>
-                        <div>
-                            <div class="mini-fila-nome">${escaparHtml(p.nome)}</div>
-                            <div class="mini-fila-musica">${escaparHtml(p.musica)} — ${escaparHtml(p.artista)}</div>
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function resetarDisplay() {
-            if (confirm('Deseja resetar o display?')) {
-                atualizarDisplay();
-            }
-        }
-
-        function toggleFullscreen() {
-            if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen().catch(err => {
-                    alert(`Erro ao entrar em tela cheia: ${err.message}`);
-                });
-            } else {
-                if (document.exitFullscreen) {
-                    document.exitFullscreen();
-                }
-            }
-        }
-
-        // Reaplica o auto-ajuste quando a janela muda de tamanho (inclui
-        // entrar/sair de tela cheia) — o clamp() do CSS depende da largura
-        // da tela, então uma mudança de resolução muda quanto precisa
-        // encolher. Só mexe se o card de "próximo a cantar" estiver visível.
-        let debounceResize;
-        window.addEventListener('resize', () => {
-            clearTimeout(debounceResize);
-            debounceResize = setTimeout(() => {
-                const proximoCantor = document.getElementById('proximo-cantor');
-                if (proximoCantor && !proximoCantor.classList.contains('hidden')) {
-                    ajustarEscalaConteudo();
-                }
-            }, 200);
-        });
-
-        // Igual ao index.html: navegadores throttlam o setInterval acima quando a tela do
-        // telão fica em segundo plano (TV que desliga a fonte HDMI, tablet que bloqueia,
-        // etc.). Ao voltar a ficar visível, forçamos location.reload() — reconecta tudo do
-        // zero (Firebase, listeners) em vez de confiar que o setInterval "acordou" sozinho.
-        // Diferente do index.html, aqui não existe restrição de admin nem debounce contra
-        // formulário: o telão é só exibição, sem input do usuário pra perder, então não há
-        // risco em recarregar. Mesmo assim, mantemos o debounce de ~5s para não recarregar
-        // à toa em trocas rápidas e desnecessárias de app/aba.
-        let telaFicouOcultaEm = null;
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'hidden') {
-                telaFicouOcultaEm = Date.now();
-                return;
-            }
-            if (document.visibilityState !== 'visible' || telaFicouOcultaEm === null) return;
-
-            const ficouOcultaPorMs = Date.now() - telaFicouOcultaEm;
-            telaFicouOcultaEm = null;
-
-            const LIMIAR_RELOAD_MS = 5000;
-            if (ficouOcultaPorMs >= LIMIAR_RELOAD_MS) {
-                location.reload();
-            }
-        });
-
-        // Inicialización
-        window.addEventListener('load', () => {
-            console.log('📺 Display.html carregado');
-            criarNotasFlutuantes();
-            configurarQrCode();
-            initFirebase();
-        });
-    </script>
-    <script src="pwa.js" defer></script>
-<!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b665e4a725d24b05b32a73b5bb4672d3"}'></script><!-- End Cloudflare Web Analytics -->
+  <button class="fullscreen" onclick="toggleFullscreen()" aria-label="Ativar tela cheia" title="Tela cheia">⛶</button>
+  <main class="screen">
+    <header class="topbar">
+      <div class="brand"><div class="brand-mark" aria-hidden="true">♫</div><div><div class="brand-title">Karaokê do Città</div><div class="brand-sub">Boteco de Vinhos</div></div></div>
+      <div class="status" id="connection-status" role="status"><span class="status-dot"></span><span class="status-text" id="connection-label">Conectando</span></div>
+    </header>
+    <section class="content">
+      <section class="hero" aria-live="polite">
+        <div class="eyebrow" id="presentation-label">Karaokê • Boa música, boa companhia</div>
+        <div class="singer" id="singer-name">Preparando o palco</div>
+        <div class="song-wrap"><div class="song-label">Música</div><div class="song" id="song-name">A fila vai aparecer aqui</div><div class="artist" id="artist-name"></div></div>
+        <div class="live-tag" id="live-tag"><span class="live-dot"></span><span id="live-label">Aguardando pedidos</span></div>
+      </section>
+      <aside class="queue">
+        <div class="queue-head"><div class="queue-title">A seguir</div><div class="queue-count" id="queue-count">0</div></div>
+        <div class="queue-list" id="queue-list"><div class="empty">As próximas apresentações<br>aparecerão aqui.</div></div>
+      </aside>
+    </section>
+    <footer class="footer">
+      <div class="stats">
+        <div class="stat"><div class="stat-value" id="stat-wait">0 min</div><div class="stat-label">Espera estimada</div></div>
+        <div class="stat"><div class="stat-value" id="stat-singers">0</div><div class="stat-label">Na fila</div></div>
+        <div class="stat"><div class="stat-value" id="stat-played">0</div><div class="stat-label">Apresentações concluídas</div></div>
+      </div>
+      <div class="qr-prompt"><img id="qr-code" alt="QR Code para entrar na fila"><div><div class="qr-title">Quer cantar?</div><div class="qr-sub">Aponte a câmera e escolha sua música</div></div></div>
+    </footer>
+  </main>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyB-jzmAdf2eFqpEQVKkFdf7wkURvbzTZBY",
+      authDomain: "karaoke-bar-v2.firebaseapp.com",
+      databaseURL: "https://karaoke-bar-v2-default-rtdb.firebaseio.com",
+      projectId: "karaoke-bar-v2",
+      storageBucket: "karaoke-bar-v2.firebasestorage.app",
+      messagingSenderId: "851258881456",
+      appId: "1:851258881456:web:fb899c2fad3e142b755275",
+      measurementId: "G-1WZ9VRTQ67"
+    };
+    const params = new URLSearchParams(location.search);
+    const BAR_ID = (params.get('bar') || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+    const TEMPO_MEDIO_MUSICA = 5;
+    let db = null;
+    function caminhoBar(){ return `bares/${BAR_ID}/karaoke`; }
+    function filaParaArray(fila){
+      if(!fila) return [];
+      if(Array.isArray(fila)) return fila;
+      return Object.keys(fila).sort((a,b)=>Number(a)-Number(b)).map(id=>({...fila[id],id:Number(id)}));
+    }
+    function setText(id,value){ document.getElementById(id).textContent = value == null ? '' : String(value); }
+    function setConnection(connected){
+      const el=document.getElementById('connection-status');
+      el.classList.toggle('offline',!connected);
+      setText('connection-label',connected?'Conectado':'Sem conexão');
+    }
+    function renderQueue(items){
+      const list=document.getElementById('queue-list');
+      const next=items.slice(0,6);
+      setText('queue-count',items.length);
+      setText('stat-singers',items.length);
+      setText('stat-wait',`${items.length*TEMPO_MEDIO_MUSICA} min`);
+      if(!next.length){list.innerHTML='<div class="empty">Ninguém na fila por enquanto.<br>Leia o QR Code para pedir uma música!</div>';return;}
+      list.replaceChildren();
+      next.forEach((item,index)=>{
+        const row=document.createElement('div');row.className='queue-item';
+        const number=document.createElement('div');number.className='queue-number';number.textContent=String(index+1);
+        const info=document.createElement('div');info.style.minWidth='0';
+        const name=document.createElement('div');name.className='queue-name';name.textContent=item.nome||'Participante';
+        const song=document.createElement('div');song.className='queue-song';song.textContent=[item.musica,item.artista].filter(Boolean).join(' — ')||'Música não informada';
+        info.append(name,song);row.append(number,info);list.append(row);
+      });
+    }
+    function renderData(data){
+      data=data||{};
+      const fila=filaParaArray(data.fila);
+      const atual=data.apresentacaoAtual||null;
+      setText('stat-played',(data.historico||[]).length);
+      if(atual){
+        setText('presentation-label','Cantando agora');
+        setText('singer-name',atual.nome||'No palco');
+        setText('song-name',atual.musica||'Música não informada');
+        setText('artist-name',atual.artista||'');
+        setText('live-label','Apresentação em andamento');
+        renderQueue(fila);
+      }else if(fila.length){
+        const next=fila[0];
+        setText('presentation-label','Próximo a cantar');
+        setText('singer-name',next.nome||'Próximo participante');
+        setText('song-name',next.musica||'Música não informada');
+        setText('artist-name',next.artista||'');
+        setText('live-label','Prepare a sua voz');
+        renderQueue(fila.slice(1));
+      }else{
+        setText('presentation-label',data.manualFechada?'Karaokê encerrado':'Karaokê do Città');
+        setText('singer-name',data.manualFechada?'Obrigado por participar!':'O palco é seu');
+        setText('song-name',data.manualFechada?'Até a próxima!':'Entre na fila pelo QR Code');
+        setText('artist-name','');
+        setText('live-label',data.manualFechada?'Até breve':'Aguardando pedidos');
+        renderQueue([]);
+      }
+    }
+    function toggleFullscreen(){
+      if(!document.fullscreenElement){document.documentElement.requestFullscreen?.().catch(()=>{});}
+      else{document.exitFullscreen?.();}
+    }
+    function init(){
+      const qr=document.getElementById('qr-code');
+      if(BAR_ID){const pedidos=new URL('index.html',location.href);pedidos.searchParams.set('bar',BAR_ID);qr.src='https://api.qrserver.com/v1/create-qr-code/?size=200x200&data='+encodeURIComponent(pedidos.href);}
+      else{document.querySelector('.screen').innerHTML='<div style="margin:auto;text-align:center;max-width:600px;padding:30px"><h1>Link do telão incompleto</h1><p>Adicione <code>?bar=nomedobar</code> ao endereço para identificar o estabelecimento.</p></div>';return;}
+      try{
+        if(!firebase.apps.length)firebase.initializeApp(firebaseConfig);
+        db=firebase.database();
+        db.ref('.info/connected').on('value',snap=>setConnection(snap.val()===true));
+        db.ref(caminhoBar()).on('value',snap=>renderData(snap.val()),error=>{console.error(error);setConnection(false);});
+      }catch(error){console.error('Erro ao iniciar Firebase:',error);setConnection(false);}
+    }
+    window.addEventListener('load',init);
+  </script>
 </body>
 </html>
