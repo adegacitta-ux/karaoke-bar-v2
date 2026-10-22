@@ -1794,17 +1794,19 @@
         // Pedidos de ANTES dessa mudança não têm deviceId — tratamos cada um como
         // "sem histórico" (chave isolada, baseada no próprio id do pedido): não
         // bloqueia ninguém, só não participa do agrupamento por identidade.
+        // Uma única identidade para contagem de apresentações e intercalação.
+        // Se o pedido veio de um usuário autenticado, usamos o UID: assim, a mesma
+        // pessoa continua sendo reconhecida mesmo se enviar pedidos de outro aparelho.
+        // Em modo local/legado, usamos deviceId e, como último recurso, o id do pedido.
+        // Não usamos o nome, pois pessoas diferentes podem ter o mesmo nome.
         function obterChaveIdentidade(pedido) {
+            if (pedido.criadoPor) return `uid:${pedido.criadoPor}`;
             return pedido.deviceId ? `device:${pedido.deviceId}` : `legado:${pedido.id}`;
         }
 
-        // Identidade usada exclusivamente pela proteção anti-sequência. Um mesmo
-        // usuário autenticado pode ter pedidos em dispositivos diferentes; quando
-        // criadoPor coincide, tratamos como a mesma pessoa. Em modo local/legado,
-        // usamos a identidade já existente baseada em deviceId/id.
-        // Nome não é identificador: pessoas diferentes podem ter nomes iguais.
+        // Mantém a função usada pela regra anti-sequência compatível com a identidade
+        // usada para contar apresentações, evitando tratar a mesma pessoa como duas.
         function obterChaveAntiSequencia(pedido) {
-            if (pedido.criadoPor) return `uid:${pedido.criadoPor}`;
             return obterChaveIdentidade(pedido);
         }
 
