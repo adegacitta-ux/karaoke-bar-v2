@@ -3372,10 +3372,10 @@
         // só pra evitar dois pedidos seguidos da mesma pessoa.
         // A proteção anti-sequência pode adiar o pedido repetido uma posição para intercalar outro cantor.
 
-        // Teto de espera de 90 minutos. Os pedidos que atingiram esse limite
+        // Teto de espera de 75 minutos. Os pedidos que atingiram esse limite
         // ficam à frente dos demais; a rotação entre pessoas acontece dentro de
         // cada grupo para não permitir que pedidos normais ultrapassem os atrasados.
-        const MINUTOS_ESPERA_MAXIMA = 90;
+        const MINUTOS_ESPERA_MAXIMA = 75;
 
         function estourouEsperaMaxima(pedido, agora) {
             const chegada = pedido.timestampFila || pedido.timestamp || agora;
@@ -3454,7 +3454,7 @@
                        (b.timestampFila || b.timestamp || 0);
             }
 
-            // Prioridade absoluta para quem já espera 90 minutos ou mais.
+            // Prioridade absoluta para quem já espera 75 minutos ou mais.
             // A intercalação é separada por grupo para preservar essa regra.
             const estouraram = ativos
                 .filter(p => estourouEsperaMaxima(p, agora))
