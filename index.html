@@ -1810,6 +1810,14 @@
             return obterChaveIdentidade(pedido);
         }
 
+        // Identidade do cliente nesta sessão: no Firebase a contagem é indexada
+        // pelo UID autenticado (criadoPor), não pelo deviceId. Em modo local,
+        // mantém o deviceId para preservar o comportamento offline.
+        function obterChaveIdentidadeAtual() {
+            const uid = useFirebase ? currentUid() : null;
+            return uid ? `uid:${uid}` : `device:${DEVICE_ID}`;
+        }
+
         // --- NOTIFICAÇÃO "É A SUA VEZ" (via Notification API do navegador + som) ---
         // Não depende de servidor/API paga: funciona enquanto o cliente mantiver
         // a aba do site aberta no celular/computador.
@@ -3167,9 +3175,9 @@
             // esse bug). Lembre de colar as regras atualizadas no Console do Firebase
             // depois de mexer aqui, já que esse arquivo é só cópia de referência.
             function montarNovoPedido() {
-                // A prioridade ("já cantou X vezes") é contada pelo deviceId, não pelo
-                // nome/mesa digitados — ver obterChaveIdentidade
-                const key = obterChaveIdentidade({ deviceId: DEVICE_ID });
+                // Usa a mesma identidade da contagem gravada ao chamar alguém:
+                // UID autenticado no Firebase; deviceId somente no modo local.
+                const key = obterChaveIdentidadeAtual();
                 const prioridadeCalculada = contagemCantores[key] || 0;
                 const agora = new Date().getTime();
                 return {
@@ -4443,7 +4451,7 @@
             // Estimativa PERSONALIZADA: quantos pedidos ativos passariam na frente de um
             // pedido novo deste aparelho agora (mesma regra de ordenarFila).
             const _agora = Date.now();
-            const _minhaContagem = contagemCantores[obterChaveIdentidade({ deviceId: DEVICE_ID })] || 0;
+            const _minhaContagem = contagemCantores[obterChaveIdentidadeAtual()] || 0;
             const _aFrente = filaAtiva().filter(p => estourouEsperaMaxima(p, _agora) || p.vezesCantadas <= _minhaContagem).length;
             document.getElementById('cliente-tempo-espera').innerText = `${_aFrente * TEMPO_MEDIO_MUSICA} min`;
             const form = document.getElementById('form-pedido');
