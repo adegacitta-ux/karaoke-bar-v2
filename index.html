@@ -3462,20 +3462,23 @@
                        (b.timestampFila || b.timestamp || 0);
             }
 
-            // Prioridade absoluta para quem já espera 75 minutos ou mais.
-            // A intercalação é separada por grupo para preservar essa regra.
-            const estouraram = ativos
-                .filter(p => estourouEsperaMaxima(p, agora))
-                .sort(compararPrioridade);
+            // Quem atingiu 75 minutos recebe prioridade sobre quem ainda não
+            // atingiu o teto. Dentro dessa prioridade, considera-se quem menos
+            // cantou e, no empate, quem chegou primeiro.
+            //
+            // IMPORTANTE: a intercalação acontece sobre a fila inteira, não em
+            // blocos separados de "atrasados" e "normais". Assim, se uma pessoa
+            // tiver vários pedidos (ou pedidos de um mesmo grupo/conta), os
+            // outros cantores ganham uma oportunidade antes que ela repita —
+            // mesmo quando há pedidos acima dos 75 minutos.
+            const ordenadosPorPrioridade = [...ativos].sort((a, b) => {
+                const aEstourou = estourouEsperaMaxima(a, agora);
+                const bEstourou = estourouEsperaMaxima(b, agora);
+                if (aEstourou !== bEstourou) return aEstourou ? -1 : 1;
+                return compararPrioridade(a, b);
+            });
 
-            const naoEstouraram = ativos
-                .filter(p => !estourouEsperaMaxima(p, agora))
-                .sort(compararPrioridade);
-
-            const novaFila = [
-                ...intercalarPedidosPorPessoa(estouraram),
-                ...intercalarPedidosPorPessoa(naoEstouraram)
-            ];
+            const novaFila = intercalarPedidosPorPessoa(ordenadosPorPrioridade);
 
             evitarRepeticaoDoUltimoCantor(novaFila, agora);
 
