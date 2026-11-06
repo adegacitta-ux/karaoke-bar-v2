@@ -1804,22 +1804,23 @@
             return pedido.deviceId ? `device:${pedido.deviceId}` : `legado:${pedido.id}`;
         }
 
-        // Para alternar a fila, usamos o NOME informado no pedido, não o
-        // deviceId/UID. É comum clientes compartilharem o mesmo celular para
-        // cadastrar músicas de pessoas diferentes; nesse caso, o aparelho não
-        // representa a identidade de quem vai cantar.
-        // Normalizamos acentos, caixa e espaços para "João", " JOAO " e "joão"
-        // serem reconhecidos como o mesmo cantor. A contagem geral continua
-        // usando obterChaveIdentidade(), sem alterar os dados já salvos.
-        function obterChaveAntiSequencia(pedido) {
+        // Normaliza o nome completo do cantor. O celular/UID identifica quem
+        // enviou o pedido, mas não necessariamente quem vai cantar: clientes
+        // podem compartilhar um aparelho. A contagem e a alternância usam esta
+        // chave; a identidade técnica continua disponível para permissões e
+        // controle de pedidos.
+        function obterChaveContagemCantor(pedido) {
             const nome = String(pedido && pedido.nome || '')
                 .normalize('NFD')
                 .replace(/[\u0300-\u036f]/g, '')
                 .trim()
                 .replace(/\s+/g, ' ')
                 .toLocaleLowerCase('pt-BR');
-
             return nome ? `nome:${nome}` : obterChaveIdentidade(pedido);
+        }
+
+        function obterChaveAntiSequencia(pedido) {
+            return obterChaveContagemCantor(pedido);
         }
 
         // Identidade do cliente nesta sessão: no Firebase a contagem é indexada
@@ -3187,9 +3188,8 @@
             // esse bug). Lembre de colar as regras atualizadas no Console do Firebase
             // depois de mexer aqui, já que esse arquivo é só cópia de referência.
             function montarNovoPedido() {
-                // Usa a mesma identidade da contagem gravada ao chamar alguém:
-                // UID autenticado no Firebase; deviceId somente no modo local.
-                const key = obterChaveIdentidadeAtual();
+                // A prioridade é por cantor, não pelo aparelho compartilhado.
+                const key = obterChaveContagemCantor({ nome });
                 const prioridadeCalculada = contagemCantores[key] || 0;
                 const agora = new Date().getTime();
                 return {
@@ -3660,10 +3660,10 @@
             // mesma pessoa tivesse outras músicas pedidas, elas continuavam com
             // prioridade desatualizada (mais alta do que deveriam) até o DJ
             // clicar em "Finalizar Apresentação", que podia demorar.
-            const key = obterChaveIdentidade(pedido);
+            const key = obterChaveContagemCantor(pedido);
             contagemCantores[key] = (contagemCantores[key] || 0) + 1;
             fila.forEach(p => {
-                if (obterChaveIdentidade(p) === key) {
+                if (obterChaveContagemCantor(p) === key) {
                     p.vezesCantadas = contagemCantores[key];
                 }
             });
@@ -3720,7 +3720,7 @@
                 }
 
                 const pedidoConfirmado = snapshotApresentacao.val();
-                const key = obterChaveIdentidade(pedidoConfirmado);
+                const key = obterChaveContagemCantor(pedidoConfirmado);
 
                 db.ref(caminhoBar('contagem')).transaction((atual) => {
                     const novo = { ...(atual || {}) };
@@ -3744,7 +3744,7 @@
                         return arrayFilaParaMapa(
                             mapaFilaParaArray(filaAtualDoServidor)
                                 .filter(p => p.id !== id)
-                                .map(p => obterChaveIdentidade(p) === key ? { ...p, vezesCantadas: novoValor } : p)
+                                .map(p => obterChaveContagemCantor(p) === key ? { ...p, vezesCantadas: novoValor } : p)
                         );
                     }, (errorFila, comprometidoFila, snapshotFila) => {
                         if (errorFila) {
@@ -3779,10 +3779,10 @@
                 return;
             }
 
-            const key = obterChaveIdentidade(apresentacaoAtual);
-            contagemCantores[key] = (contagemCantores[key] || 0) - 1;
+            const key = obterChaveContagemCantor(apresentacaoAtual);
+            contagemCantores[key] = Math.max(0, (contagemCantores[key] || 0) - 1);
             fila.forEach(p => {
-                if (obterChaveIdentidade(p) === key) {
+                if (obterChaveContagemCantor(p) === key) {
                     p.vezesCantadas = contagemCantores[key];
                 }
             });
@@ -3806,11 +3806,11 @@
         // pedido já está de volta na fila — assim nunca existe um instante em que
         // a apresentação já "acabou" mas o pedido ainda não voltou pra lugar nenhum.
         function acaoNaoApareceuFirebase(pedidoQueChamou) {
-            const key = obterChaveIdentidade(pedidoQueChamou);
+            const key = obterChaveContagemCantor(pedidoQueChamou);
 
             db.ref(caminhoBar('contagem')).transaction((atual) => {
                 const novo = { ...(atual || {}) };
-                novo[key] = (novo[key] || 0) - 1;
+                novo[key] = Math.max(0, (novo[key] || 0) - 1);
                 return novo;
             }, (errorContagem, comprometidoContagem, snapshotContagem) => {
                 if (errorContagem) {
@@ -3824,7 +3824,7 @@
                 const { avaliacoes, iniciadoEm, ...pedido } = pedidoQueChamou;
                 db.ref(caminhoBar('fila')).transaction((filaAtualDoServidor) => {
                     const listaAtual = mapaFilaParaArray(filaAtualDoServidor)
-                        .map(p => obterChaveIdentidade(p) === key ? { ...p, vezesCantadas: novoValor } : p);
+                        .map(p => obterChaveContagemCantor(p) === key ? { ...p, vezesCantadas: novoValor } : p);
                     return arrayFilaParaMapa([...listaAtual, { ...pedido, vezesCantadas: novoValor, ausenteDesde: Date.now() }]);
                 }, (errorFila, comprometidoFila, snapshotFila) => {
                     if (errorFila) {
