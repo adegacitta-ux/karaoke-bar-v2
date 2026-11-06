@@ -1804,19 +1804,22 @@
             return pedido.deviceId ? `device:${pedido.deviceId}` : `legado:${pedido.id}`;
         }
 
-        // Normaliza o nome completo do cantor. O celular/UID identifica quem
-        // enviou o pedido, mas não necessariamente quem vai cantar: clientes
-        // podem compartilhar um aparelho. A contagem e a alternância usam esta
-        // chave; a identidade técnica continua disponível para permissões e
-        // controle de pedidos.
+        // Identifica o cantor pelo nome completo + mesa. Isso diferencia
+        // homônimos sentados em mesas diferentes, mesmo quando compartilham
+        // o mesmo celular. Nome e mesa são normalizados para ignorar caixa,
+        // acentos e espaços extras. Sem mesa preenchida, usa apenas o nome.
         function obterChaveContagemCantor(pedido) {
-            const nome = String(pedido && pedido.nome || '')
+            const normalizar = (valor) => String(valor || '')
                 .normalize('NFD')
                 .replace(/[\u0300-\u036f]/g, '')
                 .trim()
                 .replace(/\s+/g, ' ')
                 .toLocaleLowerCase('pt-BR');
-            return nome ? `nome:${nome}` : obterChaveIdentidade(pedido);
+
+            const nome = normalizar(pedido && pedido.nome);
+            const mesa = normalizar(pedido && pedido.mesa);
+            if (!nome) return obterChaveIdentidade(pedido);
+            return mesa ? `nome:${nome}|mesa:${mesa}` : `nome:${nome}`;
         }
 
         function obterChaveAntiSequencia(pedido) {
