@@ -1804,10 +1804,22 @@
             return pedido.deviceId ? `device:${pedido.deviceId}` : `legado:${pedido.id}`;
         }
 
-        // Mantém a função usada pela regra anti-sequência compatível com a identidade
-        // usada para contar apresentações, evitando tratar a mesma pessoa como duas.
+        // Para alternar a fila, usamos o NOME informado no pedido, não o
+        // deviceId/UID. É comum clientes compartilharem o mesmo celular para
+        // cadastrar músicas de pessoas diferentes; nesse caso, o aparelho não
+        // representa a identidade de quem vai cantar.
+        // Normalizamos acentos, caixa e espaços para "João", " JOAO " e "joão"
+        // serem reconhecidos como o mesmo cantor. A contagem geral continua
+        // usando obterChaveIdentidade(), sem alterar os dados já salvos.
         function obterChaveAntiSequencia(pedido) {
-            return obterChaveIdentidade(pedido);
+            const nome = String(pedido && pedido.nome || '')
+                .normalize('NFD')
+                .replace(/[\\u0300-\\u036f]/g, '')
+                .trim()
+                .replace(/\\s+/g, ' ')
+                .toLocaleLowerCase('pt-BR');
+
+            return nome ? `nome:${nome}` : obterChaveIdentidade(pedido);
         }
 
         // Identidade do cliente nesta sessão: no Firebase a contagem é indexada
