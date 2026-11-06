@@ -1814,9 +1814,9 @@
         function obterChaveAntiSequencia(pedido) {
             const nome = String(pedido && pedido.nome || '')
                 .normalize('NFD')
-                .replace(/[\\u0300-\\u036f]/g, '')
+                .replace(/[\u0300-\u036f]/g, '')
                 .trim()
-                .replace(/\\s+/g, ' ')
+                .replace(/\s+/g, ' ')
                 .toLocaleLowerCase('pt-BR');
 
             return nome ? `nome:${nome}` : obterChaveIdentidade(pedido);
