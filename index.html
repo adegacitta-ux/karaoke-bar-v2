@@ -3753,7 +3753,10 @@
                         }
                         fila = snapshotFila ? mapaFilaParaArray(snapshotFila.val()) : fila;
                         apresentacaoAtual = pedidoConfirmado;
-                        ultimoCantorKey = obterChaveAntiSequencia(pedido);
+                        // Usa o pedido confirmado pelo Firebase. A variável
+                        // "pedido" não existe neste callback; referenciá-la
+                        // interrompia a execução antes do anúncio por voz.
+                        ultimoCantorKey = obterChaveAntiSequencia(pedidoConfirmado);
                         atualizarUI();
 
                         if (anuncioVozAtivo()) anunciarProximoPorVoz(pedidoConfirmado);
