@@ -79,6 +79,49 @@
       return Object.keys(fila).sort((a,b)=>Number(a)-Number(b)).map(id=>({...fila[id],id:Number(id)}));
     }
     function setText(id,value){ document.getElementById(id).textContent = value == null ? '' : String(value); }
+
+    // Mantém no telão a mesma ordenação usada pelo painel do DJ.
+    function chaveCantor(pedido){
+      const partes=String(pedido?.nome||'').split('/').map(parte=>
+        parte.trim().split(/\\s+/)[0].toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g,'')
+      ).filter(Boolean).sort();
+      const nome=partes.join('+');
+      const mesa=String(pedido?.mesa||'').trim().toLowerCase();
+      return nome ? `nome:${mesa ? nome+'@mesa'+mesa : nome}` : `id:${pedido?.id}`;
+    }
+    function ordenarFilaDoTelão(fila, apresentacaoAtual){
+      const agora=Date.now();
+      const teto=75*60000;
+      const ativos=fila.filter(p=>!p.ausenteDesde);
+      const ausentes=fila.filter(p=>!!p.ausenteDesde);
+      const atrasado=p=>(agora-(p.timestampFila||p.timestamp||agora))>=teto;
+      const ordenados=[...ativos].sort((a,b)=>{
+        const aa=atrasado(a), ab=atrasado(b);
+        if(aa!==ab)return aa?-1:1;
+        const diff=(a.vezesCantadas||0)-(b.vezesCantadas||0);
+        return diff || ((a.timestampFila||a.timestamp||0)-(b.timestampFila||b.timestamp||0));
+      });
+      const restantes=[...ordenados], resultado=[];
+      while(restantes.length){
+        const vistos=new Set();
+        let idx=restantes.findIndex(p=>!vistos.has(chaveCantor(p)));
+        // Uma pessoa por rodada: após esgotar os nomes distintos, inicia nova rodada.
+        if(idx<0){vistos.clear();idx=0;}
+        const [p]=restantes.splice(idx,1);
+        resultado.push(p);vistos.add(chaveCantor(p));
+      }
+      // O mesmo cantor que está no palco não deve aparecer imediatamente no topo,
+      // se houver outra pessoa elegível dentro da mesma faixa de espera.
+      if(apresentacaoAtual && resultado.length>1){
+        const ultima=chaveCantor(apresentacaoAtual);
+        if(chaveCantor(resultado[0])===ultima){
+          const faixa=atrasado(resultado[0]);
+          const alternativa=resultado.findIndex((p,i)=>i>0&&chaveCantor(p)!==ultima&&atrasado(p)===faixa);
+          if(alternativa>0)resultado.unshift(...resultado.splice(alternativa,1));
+        }
+      }
+      return [...resultado,...ausentes];
+    }
     function setConnection(connected){
       const el=document.getElementById('connection-status');
       el.classList.toggle('offline',!connected);
@@ -103,8 +146,8 @@
     }
     function renderData(data){
       data=data||{};
-      const fila=filaParaArray(data.fila);
       const atual=data.apresentacaoAtual||null;
+      const fila=ordenarFilaDoTelão(filaParaArray(data.fila),atual);
       setText('stat-played',(data.historico||[]).length);
       if(atual){
         setText('presentation-label','Cantando agora');
