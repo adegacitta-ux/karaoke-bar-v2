@@ -102,11 +102,13 @@
         return diff || ((a.timestampFila||a.timestamp||0)-(b.timestampFila||b.timestamp||0));
       });
       const restantes=[...ordenados], resultado=[];
+      let vistos=new Set();
       while(restantes.length){
-        const vistos=new Set();
         let idx=restantes.findIndex(p=>!vistos.has(chaveCantor(p)));
-        // Uma pessoa por rodada: após esgotar os nomes distintos, inicia nova rodada.
-        if(idx<0){vistos.clear();idx=0;}
+        // Quando todos os cantores restantes já tiveram uma vez na rodada,
+        // libera uma nova rodada, mantendo a prioridade relativa.
+        if(idx<0){vistos.clear();idx=restantes.findIndex(p=>!vistos.has(chaveCantor(p)));}
+        if(idx<0)break;
         const [p]=restantes.splice(idx,1);
         resultado.push(p);vistos.add(chaveCantor(p));
       }
