@@ -1804,22 +1804,16 @@
             return pedido.deviceId ? `device:${pedido.deviceId}` : `legado:${pedido.id}`;
         }
 
-        // Identifica o cantor pelo nome completo + mesa. Isso diferencia
-        // homônimos sentados em mesas diferentes, mesmo quando compartilham
-        // o mesmo celular. Nome e mesa são normalizados para ignorar caixa,
-        // acentos e espaços extras. Sem mesa preenchida, usa apenas o nome.
+        // Usa a mesma chave de nome+mesa já adotada pelo sistema para
+        // reconhecer duplas/grupos, ignorando a ordem dos nomes e sobrenomes.
+        // Ex.: "Ana Paula/Vanessa rica" e "Vanessa/Ana" viram ana+vanessa
+        // quando estão na mesma mesa. Isso mantém contagem e anti-sequência
+        // consistentes mesmo quando o grupo é cadastrado com abreviações.
         function obterChaveContagemCantor(pedido) {
-            const normalizar = (valor) => String(valor || '')
-                .normalize('NFD')
-                .replace(/[\u0300-\u036f]/g, '')
-                .trim()
-                .replace(/\s+/g, ' ')
-                .toLocaleLowerCase('pt-BR');
-
-            const nome = normalizar(pedido && pedido.nome);
-            const mesa = normalizar(pedido && pedido.mesa);
-            if (!nome) return obterChaveIdentidade(pedido);
-            return mesa ? `nome:${nome}|mesa:${mesa}` : `nome:${nome}`;
+            const nome = pedido && pedido.nome;
+            const mesa = pedido && pedido.mesa;
+            if (!String(nome || '').trim()) return obterChaveIdentidade(pedido);
+            return `nome:${obterChaveNome(nome, mesa)}`;
         }
 
         function obterChaveAntiSequencia(pedido) {
