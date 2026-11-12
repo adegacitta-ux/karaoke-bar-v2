@@ -3192,7 +3192,7 @@
             // depois de mexer aqui, já que esse arquivo é só cópia de referência.
             function montarNovoPedido() {
                 // A prioridade é por cantor, não pelo aparelho compartilhado.
-                const key = obterChaveContagemCantor({ nome });
+                const key = obterChaveContagemCantor({ nome, mesa });
                 const prioridadeCalculada = contagemCantores[key] || 0;
                 const agora = new Date().getTime();
                 return {
