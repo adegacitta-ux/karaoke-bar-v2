@@ -4286,20 +4286,24 @@
         // daí, sem fila paralela nem furar quem esperou certinho.
         function acaoVoltouAusencia(id) {
             if (useFirebase && db) {
-                db.ref(caminhoBar('fila')).transaction((filaAtualDoServidor) => {
-                    const listaAtual = mapaFilaParaArray(filaAtualDoServidor);
-                    return arrayFilaParaMapa(listaAtual.map(p => {
-                        if (p.id !== id || !p.ausenteDesde) return p;
-                        const tempoAusenteMs = Date.now() - p.ausenteDesde;
-                        return {
-                            ...p,
-                            timestampFila: (p.timestampFila || p.timestamp) + tempoAusenteMs,
-                            ausenteDesde: null
-                        };
-                    }));
+                // Atualiza somente o pedido que voltou. A transação no mapa inteiro
+                // da fila pode ser negada pelas regras por-pedido quando há músicas
+                // criadas por clientes; no nó individual a regra reconhece o DJ.
+                db.ref(caminhoBar('fila/' + id)).transaction((pedidoAtual) => {
+                    if (!pedidoAtual || !pedidoAtual.ausenteDesde) return;
+                    const tempoAusenteMs = Date.now() - pedidoAtual.ausenteDesde;
+                    return {
+                        ...pedidoAtual,
+                        timestampFila: (pedidoAtual.timestampFila || pedidoAtual.timestamp) + tempoAusenteMs,
+                        ausenteDesde: null
+                    };
                 }, (error, comprometido, snapshot) => {
                     if (error) { console.error('❌ Erro ao voltar da ausência:', error); avisarFalhaAoSalvar(error); return; }
-                    fila = mapaFilaParaArray(snapshot.val());
+                    if (comprometido && snapshot && snapshot.exists()) {
+                        const atualizado = snapshot.val();
+                        fila = fila.map(p => String(p.id) === String(id) ? atualizado : p);
+                        ordenarFila();
+                    }
                     atualizarUI();
                 });
                 return;
