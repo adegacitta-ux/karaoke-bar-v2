@@ -4115,22 +4115,24 @@
             atualizarUI();
         }
 
-        // Usa transação no modo Firebase (mesma proteção de cancelarMeuPedido) —
-        // sem isso, remover um pedido bem na hora que outra aba do admin mexe na
-        // fila (chama o próximo, marca ausente...) podia fazer uma das duas
-        // mudanças sumir, já que salvarNoFirebase() antigo sobrescrevia a fila
-        // inteira com a cópia local (que podia já estar desatualizada).
+        // O DJ remove somente o nó do pedido escolhido. Não usar transaction()
+        // no mapa inteiro da fila: as regras por pedido validam cada registro e
+        // uma transação no pai pode ser negada por pedidos criados por clientes.
+        // A remoção direta em fila/{id} é autorizada para o admin e não interfere
+        // nos pedidos que outros clientes estejam gravando simultaneamente.
         function acaoRemover(id) {
             if (useFirebase && db) {
-                db.ref(caminhoBar('fila')).transaction((filaAtualDoServidor) => {
-                    return arrayFilaParaMapa(mapaFilaParaArray(filaAtualDoServidor).filter(p => p.id !== id));
-                }, (error, comprometido, snapshot) => {
-                    if (error) { console.error('❌ Erro ao remover pedido:', error); avisarFalhaAoSalvar(error); return; }
-                    fila = mapaFilaParaArray(snapshot.val());
+                db.ref(caminhoBar('fila/' + id)).remove((error) => {
+                    if (error) {
+                        console.error('❌ Erro ao remover pedido:', error);
+                        avisarFalhaAoSalvar(error);
+                        return;
+                    }
+                    fila = fila.filter(p => String(p.id) !== String(id));
                     atualizarUI();
                 });
             } else {
-                fila = fila.filter(p => p.id !== id);
+                fila = fila.filter(p => String(p.id) !== String(id));
                 salvarNoLocalStorage();
                 atualizarUI();
             }
