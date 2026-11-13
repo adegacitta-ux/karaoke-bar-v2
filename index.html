@@ -3239,8 +3239,20 @@
                 // impostos pelas regras de segurança do Firebase), então essa janela
                 // rara não é um problema de segurança — só uma janela de "furada de
                 // crédito" que Fase 1 (ownership) não afeta.
-                db.ref(caminhoBar('fila')).once('value').then((snapshot) => {
+                Promise.all([
+                    db.ref(caminhoBar('fila')).once('value'),
+                    db.ref(caminhoBar('manualFechada')).once('value')
+                ]).then(([snapshot, fechamentoSnapshot]) => {
                     const listaAtual = mapaFilaParaArray(snapshot.val());
+                    // A decisão de aceitar pedido usa também o estado de fechamento
+                    // lido diretamente do Firebase, não apenas a cópia local do cliente.
+                    if (fechamentoSnapshot.val() === true) {
+                        filaManualFechada = true;
+                        if (btnEnviar) { btnEnviar.disabled = false; }
+                        mostrarAvisoCliente(t('fila_encerrada_alert'));
+                        atualizarUI();
+                        return;
+                    }
                     // Re-checa o bloqueio e os créditos contra o dado MAIS ATUAL do
                     // servidor (não a cópia local, que já foi checada acima mas pode
                     // estar desatualizada se outro pedido do mesmo device foi enviado
