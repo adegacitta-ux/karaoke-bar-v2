@@ -25,7 +25,7 @@
               "timestampFila": { ".validate": "newData.isNumber()" },
               "vezesCantadas": { ".validate": "newData.isNumber()" },
               "youtubeUrl": { ".validate": "newData.val() == null || (newData.isString() && newData.val().length <= 200 && newData.val().matches(/^https:\\/\\/(www\\.)?(youtube\\.com|youtu\\.be)\\/.+/))" },
-              "criadoPor": { ".validate": "newData.isString() && newData.val() == auth.uid" },
+              "criadoPor": { ".validate": "newData.isString() && auth != null && (auth.token.email == root.child('bares/' + $barId + '/config/adminEmail').val() || newData.val() == auth.uid)" },
               "$other": { ".validate": false }
             }
           },
