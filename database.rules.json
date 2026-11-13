@@ -13,7 +13,7 @@
 
           "fila": {
             "$pedidoId": {
-              ".write": "(auth != null && auth.token.email == root.child('bares/' + $barId + '/config/adminEmail').val()) || (auth != null && ((!data.exists() && newData.child('criadoPor').val() == auth.uid) || (data.exists() && data.child('criadoPor').val() == auth.uid)))",
+              ".write": "(auth != null && auth.token.email == root.child('bares/' + $barId + '/config/adminEmail').val()) || (auth != null && root.child('bares/' + $barId + '/karaoke/manualFechada').val() != true && ((!data.exists() && newData.child('criadoPor').val() == auth.uid) || (data.exists() && data.child('criadoPor').val() == auth.uid)))",
               ".validate": "newData.hasChildren(['nome', 'musica', 'deviceId', 'timestamp', 'timestampFila', 'vezesCantadas', 'criadoPor'])",
               "ausenteDesde": { ".validate": "newData.val() == null || newData.isNumber()" },
               "nome": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60" },
