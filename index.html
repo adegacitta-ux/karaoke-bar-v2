@@ -3750,21 +3750,38 @@
                     const novoValor = contagemCantores[key];
 
                     db.ref(caminhoBar('fila')).transaction((filaAtualDoServidor) => {
+                        const listaAtual = mapaFilaParaArray(filaAtualDoServidor);
+                        // Não inicia uma apresentação a partir de um pedido que já
+                        // foi removido por outra tela enquanto a chamada acontecia.
+                        if (!listaAtual.some(p => String(p.id) === String(id))) return;
                         return arrayFilaParaMapa(
-                            mapaFilaParaArray(filaAtualDoServidor)
-                                .filter(p => p.id !== id)
+                            listaAtual
+                                .filter(p => String(p.id) !== String(id))
                                 .map(p => obterChaveContagemCantor(p) === key ? { ...p, vezesCantadas: novoValor } : p)
                         );
                     }, (errorFila, comprometidoFila, snapshotFila) => {
-                        if (errorFila) {
-                            console.error('❌ Erro ao remover da fila:', errorFila);
-                            avisarFalhaAoSalvar(errorFila);
+                        if (errorFila || !comprometidoFila) {
+                            console.error('❌ Não foi possível confirmar a remoção do pedido da fila:', errorFila || 'Pedido não encontrado');
+                            // A apresentação foi reivindicada antes da remoção. Se a
+                            // remoção falhou, desfaz contagem e reivindicação para não
+                            // deixar a mesma música simultaneamente no palco e na fila.
+                            db.ref(caminhoBar('contagem')).transaction((atual) => {
+                                const novo = { ...(atual || {}) };
+                                novo[key] = Math.max(0, (novo[key] || 0) - 1);
+                                return novo;
+                            }, (erroRollback, okRollback, snapRollback) => {
+                                if (!erroRollback && okRollback) contagemCantores = snapRollback.val() || {};
+                                db.ref(caminhoBar('apresentacaoAtual')).set(null, (erroLimpar) => {
+                                    if (erroLimpar) console.error('❌ Não foi possível liberar a apresentação após falha:', erroLimpar);
+                                });
+                                apresentacaoAtual = null;
+                                avisarFalhaAoSalvar(errorFila);
+                                atualizarUI();
+                            });
+                            return;
                         }
-                        fila = snapshotFila ? mapaFilaParaArray(snapshotFila.val()) : fila;
+                        fila = mapaFilaParaArray(snapshotFila.val());
                         apresentacaoAtual = pedidoConfirmado;
-                        // Usa o pedido confirmado pelo Firebase. A variável
-                        // "pedido" não existe neste callback; referenciá-la
-                        // interrompia a execução antes do anúncio por voz.
                         ultimoCantorKey = obterChaveAntiSequencia(pedidoConfirmado);
                         atualizarUI();
 
@@ -3832,23 +3849,41 @@
 
                 const { avaliacoes, iniciadoEm, ...pedido } = pedidoQueChamou;
                 db.ref(caminhoBar('fila')).transaction((filaAtualDoServidor) => {
-                    const listaAtual = mapaFilaParaArray(filaAtualDoServidor)
+                    const listaAtual = mapaFilaParaArray(filaAtualDoServidor);
+                    // Protege contra clique repetido ou retorno duplicado.
+                    if (listaAtual.some(p => String(p.id) === String(pedido.id))) return;
+                    const atualizados = listaAtual
                         .map(p => obterChaveContagemCantor(p) === key ? { ...p, vezesCantadas: novoValor } : p);
-                    return arrayFilaParaMapa([...listaAtual, { ...pedido, vezesCantadas: novoValor, ausenteDesde: Date.now() }]);
+                    return arrayFilaParaMapa([...atualizados, { ...pedido, vezesCantadas: novoValor, ausenteDesde: Date.now() }]);
                 }, (errorFila, comprometidoFila, snapshotFila) => {
-                    if (errorFila) {
-                        console.error('❌ Erro ao devolver pedido pra fila:', errorFila);
-                        avisarFalhaAoSalvar(errorFila);
+                    if (errorFila || !comprometidoFila) {
+                        console.error('❌ Não foi possível devolver o pedido à fila:', errorFila || 'Pedido já está na fila');
+                        // A contagem foi reduzida antes da tentativa de retorno.
+                        // Se a fila não confirmou a gravação, restaura a contagem e
+                        // mantém a apresentação atual para o DJ tentar novamente.
+                        db.ref(caminhoBar('contagem')).transaction((atual) => {
+                            const novo = { ...(atual || {}) };
+                            novo[key] = (novo[key] || 0) + 1;
+                            return novo;
+                        }, (erroRollback, okRollback, snapRollback) => {
+                            if (!erroRollback && okRollback) contagemCantores = snapRollback.val() || {};
+                            avisarFalhaAoSalvar(errorFila);
+                            atualizarUI();
+                        });
+                        return;
                     }
-                    fila = snapshotFila ? mapaFilaParaArray(snapshotFila.val()) : fila;
 
+                    fila = mapaFilaParaArray(snapshotFila.val());
                     db.ref(caminhoBar('apresentacaoAtual')).set(null, (errorLimpar) => {
-                        if (errorLimpar) console.error('❌ Erro ao liberar apresentação:', errorLimpar);
+                        if (errorLimpar) {
+                            console.error('❌ Erro ao liberar apresentação:', errorLimpar);
+                            avisarFalhaAoSalvar(errorLimpar);
+                            return;
+                        }
+                        apresentacaoAtual = null;
+                        atualizarUI();
+                        agendarChamadaAutomatica();
                     });
-                    apresentacaoAtual = null;
-
-                    atualizarUI();
-                    agendarChamadaAutomatica();
                 });
             });
         }
