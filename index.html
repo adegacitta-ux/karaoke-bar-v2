@@ -196,6 +196,78 @@
         .modo-escuro .queue-caption,
         .modo-escuro .song-ranking li { color: #d7c9bf; }
         .modo-escuro .citta-nav { background: rgba(14, 6, 8, .84); }
+    
+        /* --- CITTÀ ITALIANO CONTEMPORÂNEO: acabamento visual e temas claro/escuro --- */
+        :root {
+            --citta-vinho: #241116;
+            --citta-bordo: #5b2028;
+            --citta-ouro: #c5a15a;
+            --citta-creme: #f4efe6;
+            --citta-preto: #292321;
+            --citta-oliva: #34443d;
+            --citta-light-bg: #eee8dd;
+            --citta-light-card: #fffdf8;
+            --citta-dark-bg: #191316;
+            --citta-dark-card: #2a2023;
+            --citta-dark-border: #514047;
+        }
+        body { background: var(--citta-light-bg); color: var(--citta-preto); transition: background-color .2s ease, color .2s ease; }
+        body::before { background: radial-gradient(circle at 12% 4%, rgba(197,161,90,.13), transparent 24rem), linear-gradient(135deg,#f4efe6 0%,#e8dfd2 100%); }
+        .citta-nav { background: rgba(36,17,22,.97); border-bottom: 2px solid var(--citta-ouro); }
+        .citta-nav .text-indigo-600 { color: #e0c58c; }
+        .citta-nav button[role="tab"] { color: #f4efe6; border-radius: 999px; }
+        .citta-nav button[role="tab"][aria-selected="true"] { background: var(--citta-ouro); color: #241116; }
+        .citta-nav .toggle-tema-btn { color: #f4efe6; }
+        .citta-hero { background: linear-gradient(115deg,#241116 0%,#5b2028 68%,#34443d 130%); border-color: rgba(197,161,90,.55); }
+        .client-primary > .bg-white, .live-card, #secao-meus-pedidos { background: var(--citta-light-card); border-color: #dfd2bf; box-shadow: 0 12px 32px rgba(45,30,25,.10); }
+        .client-primary .bg-gradient-custom { background: linear-gradient(115deg,#241116,#5b2028 72%,#34443d); }
+        #btn-enviar { background: linear-gradient(110deg,#d4b875,#b58b43); color: #241116; }
+        .live-card--now { background: linear-gradient(140deg,#fffaf0,#f0e2c4); }
+        .live-label { color: #6a2932; }
+        .live-name { color: #3b2025; }
+        .citta-kicker { color: #e4c98d; }
+        .toggle-tema-btn { border: 1px solid rgba(197,161,90,.35); border-radius: 999px; }
+        button, input, textarea, select { accent-color: #8a4b3f; }
+        .modo-escuro { color-scheme: dark; }
+        body.modo-escuro { background: var(--citta-dark-bg); color: #f4efe6; }
+        .modo-escuro::before { background: radial-gradient(circle at 12% 4%,rgba(197,161,90,.12),transparent 24rem),linear-gradient(135deg,#191316 0%,#281a20 55%,#1b2923 100%); }
+        .modo-escuro .citta-nav { background: rgba(25,19,22,.97); border-bottom-color: #9d7c42; }
+        .modo-escuro .citta-nav button[role="tab"] { color: #f4efe6; }
+        .modo-escuro .citta-nav button[role="tab"][aria-selected="true"] { background: #c5a15a; color: #241116; }
+        .modo-escuro .citta-hero { background: linear-gradient(115deg,#241116 0%,#51232b 68%,#26372f 130%); }
+        .modo-escuro .client-primary > .bg-white,
+        .modo-escuro .live-card,
+        .modo-escuro #secao-meus-pedidos,
+        .modo-escuro .bg-white,
+        .modo-escuro .bg-gray-100 { background: var(--citta-dark-card); color: #f4efe6; border-color: var(--citta-dark-border); }
+        .modo-escuro .client-primary .bg-gradient-custom { background: linear-gradient(115deg,#241116,#51232b 72%,#26372f); }
+        .modo-escuro .live-card--now { background: linear-gradient(140deg,#45352a,#38282d); }
+        .modo-escuro .live-name,
+        .modo-escuro .client-primary label,
+        .modo-escuro .text-gray-800,
+        .modo-escuro .text-gray-700 { color: #f4efe6; }
+        .modo-escuro .live-song,
+        .modo-escuro .live-empty,
+        .modo-escuro .queue-caption,
+        .modo-escuro .song-ranking li,
+        .modo-escuro .text-gray-600,
+        .modo-escuro .text-gray-500 { color: #d6c9c1; }
+        .modo-escuro .client-primary input[type="text"],
+        .modo-escuro input[type="text"],
+        .modo-escuro textarea,
+        .modo-escuro select { background: #21191d; color: #f4efe6; border-color: #65515a; }
+        .modo-escuro input::placeholder,
+        .modo-escuro textarea::placeholder { color: #b6a6ad; }
+        .modo-escuro .bg-indigo-50 { background: #35252d; }
+        .modo-escuro .bg-green-50 { background: #24352d; }
+        .modo-escuro .bg-yellow-50 { background: #3b3221; }
+        .modo-escuro .bg-red-50 { background: #3b2528; }
+        .modo-escuro .border-gray-100,
+        .modo-escuro .border-gray-200,
+        .modo-escuro .border-gray-300 { border-color: #514047; }
+        .modo-escuro .toggle-tema-btn { color: #f4efe6; }
+        @media (prefers-reduced-motion: reduce) { body { transition: none; } }
+
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
