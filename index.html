@@ -3285,7 +3285,8 @@
                         if (pedidoIdFixo !== null) { novoPedido.id = pedidoIdFixo; }
                         pedidoIdFixo = novoPedido.id;
 
-                        db.ref(caminhoBar('fila/' + novoPedido.id)).set(novoPedido, (error) => {
+                        const { id: _idDoPedido, ...dadosDoPedido } = novoPedido;
+                        db.ref(caminhoBar('fila/' + novoPedido.id)).set(dadosDoPedido, (error) => {
                             if (!error) {
                                 // Atualização otimista: já soma o pedido novo à cópia local
                                 // (o listener em tempo real de sincronizarComFirebase() vai
