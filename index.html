@@ -531,7 +531,7 @@
 
                     <div class="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
                         <div class="bg-gray-50 px-6 py-4 border-b flex justify-between items-center">
-                            <h3 class="font-bold text-gray-800">Fila de Reprodução (Ordenada por Rodadas)</h3>
+                            <div class="flex flex-wrap items-center gap-2"><h3 class="font-bold text-gray-800">Fila de Reprodução (Ordenada por Rodadas)</h3><span id="badge-novos-pedidos" class="hidden text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded-full font-bold" aria-live="polite"></span><button type="button" id="btn-marcar-pedidos-vistos" onclick="marcarPedidosComoVistos()" class="hidden text-xs font-semibold text-indigo-700 underline">Marcar como vistos</button></div>
                             <span class="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full font-bold">PRIORIDADE ATIVA</span>
                         </div>
                         <div class="overflow-x-auto">
@@ -1427,6 +1427,9 @@
         // o HTML dessas listas sem necessidade (ex: a cada voto de avaliação)
         let _ultimaFilaHash = null;
         let _ultimoHistoricoHash = null;
+        // IDs de pedidos que chegaram desde a última confirmação do DJ.
+        let _idsFilaAnterior = null;
+        const _novosPedidosNaoVistos = new Set();
 
         // HTML de cada item do histórico, calculado uma vez (ver atualizarUI) e
         // reaproveitado pela lista paginada do cliente — evita recalcular tudo de
@@ -2434,7 +2437,18 @@
 
             db.ref(caminhoBar('fila')).on('value', (snapshot) => {
                 if (syncInProgress) return;
-                fila = mapaFilaParaArray(snapshot.val());
+                const filaRecebida = mapaFilaParaArray(snapshot.val());
+                const idsRecebidos = new Set(filaRecebida.map(p => String(p.id)));
+                if (_idsFilaAnterior === null) {
+                    _idsFilaAnterior = idsRecebidos;
+                } else {
+                    if (isAdminAuthenticated()) {
+                        idsRecebidos.forEach(id => { if (!_idsFilaAnterior.has(id)) _novosPedidosNaoVistos.add(id); });
+                    }
+                    _idsFilaAnterior = idsRecebidos;
+                }
+                atualizarIndicadorNovosPedidos();
+                fila = filaRecebida;
                 atualizarUI();
             }, (error) => tratarErroDeSincronizacao(error));
 
@@ -4494,6 +4508,48 @@
             return previsaoTermino >= dataLimite;
         }
 
+        // --- FERRAMENTAS RÁPIDAS DO DJ ---
+        function atualizarIndicadorNovosPedidos() {
+            const badge = document.getElementById('badge-novos-pedidos');
+            const botao = document.getElementById('btn-marcar-pedidos-vistos');
+            if (!badge || !botao) return;
+            const quantidade = _novosPedidosNaoVistos.size;
+            badge.textContent = quantidade ? quantidade + (quantidade === 1 ? ' pedido novo' : ' pedidos novos') : '';
+            badge.classList.toggle('hidden', quantidade === 0);
+            botao.classList.toggle('hidden', quantidade === 0);
+        }
+
+        function marcarPedidosComoVistos() {
+            _novosPedidosNaoVistos.clear();
+            atualizarIndicadorNovosPedidos();
+        }
+
+        async function copiarMusicaPedido(id) {
+            const pedido = fila.find(p => String(p.id) === String(id));
+            if (!pedido) return;
+            const texto = [pedido.musica, pedido.artista].filter(Boolean).join(' - ');
+            try {
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(texto);
+                } else {
+                    const campo = document.createElement('textarea');
+                    campo.value = texto;
+                    campo.setAttribute('readonly', '');
+                    campo.style.position = 'fixed';
+                    campo.style.opacity = '0';
+                    document.body.appendChild(campo);
+                    campo.select();
+                    const copiou = document.execCommand('copy');
+                    campo.remove();
+                    if (!copiou) throw new Error('Cópia não suportada neste navegador');
+                }
+                mostrarToast('Música copiada!');
+            } catch (error) {
+                console.warn('Não foi possível copiar a música:', error);
+                mostrarToast('Não foi possível copiar.');
+            }
+        }
+
         // --- ATUALIZAÇÃO DA INTERFACE ---
 
         function atualizarUI() {
@@ -4633,7 +4689,7 @@
                                 ${pedido.mesa ? `<div class="text-xs text-gray-400 mt-1">Mesa: ${escaparHtml(pedido.mesa)}</div>` : ''}
                                 <div class="text-xs text-gray-400 mt-1"><i class="fas fa-clock mr-1" aria-hidden="true"></i>Pedido às ${formatarHoraPedido(pedido.timestamp)}${badgeDispositivo(pedido, fila)}</div>
                             </td>
-                            <td class="px-6 py-4 text-gray-600">${escaparHtml(pedido.musica)} ${pedido.artista ? `<br> <span class="text-xs text-gray-400">${escaparHtml(pedido.artista)}</span>` : ''} ${linkYoutubeSeguro(pedido.youtubeUrl)}</td>
+                            <td class="px-6 py-4 text-gray-600"><div>${escaparHtml(pedido.musica)} ${pedido.artista ? `<br> <span class="text-xs text-gray-400">${escaparHtml(pedido.artista)}</span>` : ''} ${linkYoutubeSeguro(pedido.youtubeUrl)}</div><button type="button" onclick="copiarMusicaPedido(${pedido.id})" class="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800" title="Copiar música e artista"><i class="fas fa-copy" aria-hidden="true"></i> Copiar música</button></td>
                             <td class="px-6 py-4">
                                 <span class="px-2 py-1 bg-gray-100 rounded text-xs font-bold">${pedido.vezesCantadas}x</span>
                             </td>
