@@ -288,6 +288,33 @@
           .client-wait-info { margin-bottom: .65rem !important; }
           .client-notification-toggle { margin-bottom: .65rem !important; }
         }
+
+        /* Formulário compacto: prioriza botão de envio acima da dobra */
+        .client-form-header { padding: .65rem 1rem !important; }
+        .client-form-header h2 { font-size: 1.15rem !important; line-height: 1.3 !important; }
+        .client-form-header p { display: none !important; }
+        .client-primary > .bg-white.rounded-2xl.shadow-xl.overflow-hidden > .p-6 { padding: .85rem !important; }
+        #form-pedido { gap: .55rem !important; }
+        #form-pedido > div { margin-bottom: 0 !important; }
+        #form-pedido label { font-size: .8rem !important; margin-bottom: .15rem !important; }
+        #form-pedido input[type="text"] { min-height: 2.55rem !important; padding: .45rem .75rem !important; font-size: .95rem !important; }
+        #btn-abrir-youtube { margin-top: .25rem !important; padding: .35rem .65rem !important; }
+        #form-pedido > div:nth-of-type(3) p.text-xs.text-gray-400 { display: none !important; }
+        #form-pedido button[type="submit"] { padding: .7rem !important; margin-top: .15rem !important; }
+        .client-wait-info { padding: .45rem .65rem !important; margin-bottom: .5rem !important; font-size: .7rem !important; }
+        .client-notification-toggle { padding: .45rem .65rem !important; margin-bottom: .5rem !important; font-size: .7rem !important; }
+        #aviso-regras-musicas { margin-bottom: .5rem !important; }
+        #aviso-regras-musicas summary { padding: .45rem .65rem !important; }
+        @media (max-width: 560px) {
+          .client-primary { gap: .75rem !important; }
+          .client-primary > .bg-white.rounded-2xl.shadow-xl.overflow-hidden > .p-6 { padding: .75rem !important; }
+          #form-pedido { gap: .5rem !important; }
+          #form-pedido input[type="text"] { min-height: 2.4rem !important; }
+          #form-pedido label { font-size: .78rem !important; }
+          #form-pedido button[type="submit"] { min-height: 2.8rem !important; }
+          .client-wait-info { margin-bottom: .4rem !important; }
+          .client-notification-toggle { margin-bottom: .4rem !important; }
+        }
 </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
