@@ -3343,7 +3343,7 @@
                     // lido diretamente do Firebase, não apenas a cópia local do cliente.
                     if (fechamentoSnapshot.val() === true) {
                         filaManualFechada = true;
-                        if (btnEnviar) { btnEnviar.disabled = false; }
+                        if (btnEnviar) { btnEnviar.disabled = false; btnEnviar.textContent = btnEnviar.dataset.labelOriginal || 'ENVIAR PEDIDO'; }
                         mostrarAvisoCliente(t('fila_encerrada_alert'));
                         atualizarUI();
                         return;
