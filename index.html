@@ -315,6 +315,24 @@
           .client-wait-info { margin-bottom: .4rem !important; }
           .client-notification-toggle { margin-bottom: .4rem !important; }
         }
+
+        /* Compacta cabeçalho e elimina espaço vazio antes do formulário */
+        .citta-nav { margin-bottom: .35rem !important; }
+        .citta-nav .citta-shell { padding-top: .45rem !important; padding-bottom: .45rem !important; min-height: 0 !important; }
+        #cliente { padding-top: 0 !important; margin-top: 0 !important; }
+        #cliente .client-layout { margin-top: 0 !important; }
+        @media (max-width: 560px) {
+          .citta-nav .citta-shell { gap: .35rem !important; flex-wrap: nowrap !important; }
+          .citta-nav h1 { font-size: 1rem !important; line-height: 1.15 !important; white-space: nowrap !important; }
+          .citta-nav .flex.items-center.space-x-2 { gap: .25rem !important; }
+          .citta-nav [role="tab"] { padding: .4rem .55rem !important; font-size: .75rem !important; line-height: 1.15 !important; }
+          .citta-nav .toggle-tema-btn { padding: .35rem .45rem !important; font-size: .8rem !important; }
+          .citta-nav .toggle-tema-btn i { font-size: .9rem !important; }
+          .citta-nav { margin-bottom: .25rem !important; }
+          main.citta-shell { padding-top: 0 !important; }
+          #cliente .client-layout { margin-top: 0 !important; }
+          #cliente .client-primary { gap: .5rem !important; }
+        }
 </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
