@@ -362,6 +362,13 @@
           #feedback-sucesso p { margin-top: .1rem !important; }
           .client-primary { gap: .35rem !important; }
         }
+
+        /* Botão principal de envio em verde: ação clara e reconhecível */
+        #btn-enviar { background: #168447 !important; color: #fff !important; border: 1px solid #11723b !important; }
+        #btn-enviar:hover { background: #11723b !important; }
+        #btn-enviar:active { background: #0d6533 !important; transform: translateY(1px); }
+        #btn-enviar:focus-visible { outline: 3px solid #9bd8b2; outline-offset: 2px; }
+        #btn-enviar:disabled { opacity: .72; cursor: wait; }
 </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
@@ -506,7 +513,7 @@
                             </div>
                             <p id="indicador-creditos" class="hidden text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-center" role="status" aria-live="polite"></p>
 
-                            <button type="submit" id="btn-enviar" class="w-full bg-gradient-custom text-white font-bold py-3 rounded-lg shadow-lg hover:opacity-90 transition-all" data-i18n="btn_enviar_pedido" data-label-original="ENVIAR PEDIDO">
+                            <button type="submit" id="btn-enviar" class="w-full bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-bold py-3 rounded-lg shadow-lg hover:opacity-95 transition-all focus:outline-none focus:ring-4 focus:ring-green-300" data-i18n="btn_enviar_pedido" data-label-original="ENVIAR PEDIDO">
                                 ENVIAR PEDIDO
                             </button>
                         </form>
