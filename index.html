@@ -4434,22 +4434,48 @@
         }
 
         function acaoPular(id) {
+            // Move o pedido apenas uma posição para baixo, sem mandá-lo ao fim
+            // da fila. A troca respeita a rodada de prioridade: só atravessa
+            // o próximo pedido quando ambos têm a mesma contagem de cantadas
+            // e estão na mesma faixa de espera (normal/estourada).
+            const ativos = filaAtiva();
+            const index = ativos.findIndex(p => String(p.id) === String(id));
+            if (index < 0 || index >= ativos.length - 1) return;
+
+            const pedido = ativos[index];
+            const proximo = ativos[index + 1];
+            const agora = Date.now();
+            const mesmaPrioridade = (pedido.vezesCantadas || 0) === (proximo.vezesCantadas || 0)
+                && estourouEsperaMaxima(pedido, agora) === estourouEsperaMaxima(proximo, agora);
+
+            if (!mesmaPrioridade) {
+                alert('Este pedido não pode ultrapassar a próxima rodada de prioridade. Tente novamente quando estiver no mesmo nível de prioridade.');
+                return;
+            }
+
+            // Coloca o pedido logo depois do próximo na ordem de chegada,
+            // preservando o timestamp original do pedido para relatórios.
+            const timestampProximo = proximo.timestampFila || proximo.timestamp || agora;
+            const novoTimestampFila = timestampProximo + 1;
+
             if (useFirebase && db) {
-                db.ref(caminhoBar('fila')).transaction((filaAtualDoServidor) => {
-                    const listaAtual = mapaFilaParaArray(filaAtualDoServidor);
-                    return arrayFilaParaMapa(listaAtual.map(p => p.id === id ? { ...p, timestampFila: Date.now() } : p));
-                }, (error, comprometido, snapshot) => {
-                    if (error) { console.error('❌ Erro ao pular vez:', error); avisarFalhaAoSalvar(error); return; }
-                    fila = mapaFilaParaArray(snapshot.val());
+                db.ref(caminhoBar('fila/' + id)).update({ timestampFila: novoTimestampFila }, (error) => {
+                    if (error) {
+                        console.error('❌ Erro ao pular uma posição:', error);
+                        avisarFalhaAoSalvar(error);
+                        return;
+                    }
+                    const local = fila.find(p => String(p.id) === String(id));
+                    if (local) local.timestampFila = novoTimestampFila;
+                    ordenarFila();
                     atualizarUI();
                 });
                 return;
             }
-            const index = fila.findIndex(p => p.id === id);
-            if (index !== -1) {
-                // Só reinicia o relógio de espera da fila — "timestamp" (hora do
-                // pedido, usada no relatório de horário de pico) fica intocado.
-                fila[index].timestampFila = Date.now();
+
+            const local = fila.find(p => String(p.id) === String(id));
+            if (local) {
+                local.timestampFila = novoTimestampFila;
                 ordenarFila();
                 salvarNoLocalStorage();
                 atualizarUI();
