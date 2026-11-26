@@ -363,6 +363,95 @@
           .client-primary { gap: .35rem !important; }
         }
 
+        /* Fila do DJ: visual compacto em telas pequenas, sem alterar a lógica da fila. */
+        @media (max-width: 560px) {
+          .dj-queue-card { border-radius: .85rem !important; }
+          .dj-queue-header { padding: .65rem .75rem !important; gap: .5rem !important; align-items: center !important; }
+          .dj-queue-header h3 { font-size: .88rem !important; line-height: 1.2 !important; }
+          .dj-queue-header > span { flex: 0 0 auto; font-size: .58rem !important; padding: .3rem .45rem !important; }
+          .dj-queue-scroll { overflow-x: hidden !important; }
+          .dj-queue-table { width: 100% !important; table-layout: fixed !important; border-collapse: collapse !important; }
+          .dj-queue-table thead { display: none !important; }
+          .dj-queue-table tbody tr {
+            display: grid !important;
+            grid-template-columns: minmax(76px, .88fr) minmax(94px, 1.25fr) 32px 84px;
+            align-items: center !important;
+            gap: .25rem !important;
+            padding: .48rem .35rem !important;
+            border-bottom: 1px solid #e5e7eb !important;
+          }
+          .dj-queue-table tbody td {
+            display: block !important;
+            min-width: 0 !important;
+            padding: .15rem .1rem !important;
+            font-size: .72rem !important;
+            line-height: 1.25 !important;
+            overflow-wrap: anywhere !important;
+          }
+          .dj-queue-table tbody td:nth-child(1) { display: none !important; }
+          .dj-queue-table tbody td:nth-child(2) { font-size: .76rem !important; }
+          .dj-queue-table tbody td:nth-child(2) > div {
+            margin-top: .12rem !important;
+            font-size: .61rem !important;
+            line-height: 1.2 !important;
+          }
+          .dj-queue-table tbody td:nth-child(3) { color: #4b5563 !important; }
+          .dj-queue-table tbody td:nth-child(3) > div {
+            display: -webkit-box !important;
+            -webkit-box-orient: vertical !important;
+            -webkit-line-clamp: 2 !important;
+            overflow: hidden !important;
+            line-height: 1.2 !important;
+          }
+          .dj-queue-table tbody td:nth-child(3) button {
+            margin-top: .18rem !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: .2rem !important;
+            font-size: .61rem !important;
+            line-height: 1.1 !important;
+          }
+          .dj-queue-table tbody td:nth-child(4) { text-align: center !important; }
+          .dj-queue-table tbody td:nth-child(4) span {
+            display: inline-block !important;
+            padding: .22rem .32rem !important;
+            font-size: .68rem !important;
+          }
+          .dj-queue-table tbody td:nth-child(5) {
+            display: flex !important;
+            justify-content: flex-end !important;
+            align-items: center !important;
+            gap: .05rem !important;
+            white-space: nowrap !important;
+          }
+          .dj-queue-table tbody td:nth-child(5) button {
+            padding: .28rem !important;
+            margin: 0 !important;
+            width: 1.65rem !important;
+            height: 1.65rem !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            font-size: .72rem !important;
+          }
+          #fila-vazia { padding: 1.5rem .75rem !important; }
+          #fila-vazia .fa-music { font-size: 1.6rem !important; margin-bottom: .35rem !important; }
+        }
+
+        /* Em celulares muito estreitos, reduzir um pouco mais sem criar rolagem horizontal. */
+        @media (max-width: 380px) {
+          .dj-queue-table tbody tr {
+            grid-template-columns: minmax(68px, .82fr) minmax(84px, 1.18fr) 29px 76px;
+            gap: .16rem !important;
+            padding-inline: .25rem !important;
+          }
+          .dj-queue-table tbody td:nth-child(5) button {
+            width: 1.48rem !important;
+            height: 1.48rem !important;
+            padding: .2rem !important;
+          }
+        }
+
         /* Botão principal de envio em verde: ação clara e reconhecível */
         #btn-enviar { background: #168447 !important; color: #fff !important; border: 1px solid #11723b !important; }
         #btn-enviar:hover { background: #11723b !important; }
@@ -723,13 +812,13 @@
                         </button>
                     </div>
 
-                    <div class="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
-                        <div class="bg-gray-50 px-6 py-4 border-b flex justify-between items-center">
+                    <div class="dj-queue-card bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
+                        <div class="dj-queue-header bg-gray-50 px-6 py-4 border-b flex justify-between items-center">
                             <div class="flex flex-wrap items-center gap-2"><h3 class="font-bold text-gray-800">Fila de Reprodução (Ordenada por Rodadas)</h3><span id="badge-novos-pedidos" class="hidden text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded-full font-bold" aria-live="polite"></span><button type="button" id="btn-marcar-pedidos-vistos" onclick="marcarPedidosComoVistos()" class="hidden text-xs font-semibold text-indigo-700 underline">Marcar como vistos</button></div>
                             <span class="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full font-bold">PRIORIDADE ATIVA</span>
                         </div>
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left">
+                        <div class="dj-queue-scroll overflow-x-auto">
+                            <table class="dj-queue-table w-full text-left">
                                 <thead class="bg-gray-50 text-gray-500 text-xs uppercase">
                                     <tr>
                                         <th class="px-6 py-3">#</th>
