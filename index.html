@@ -338,6 +338,30 @@
         .participation-options label { color: #6b625e; border-color: #d8cec2; background: #fffdf8; min-height: 5.2rem; }
         .participation-options label:has(input:checked) { color: #5b2028; border-color: #c5a15a; background: #f7f0e3; box-shadow: 0 0 0 1px #c5a15a inset; }
         .participation-options label:has(input:focus-visible) { outline: 3px solid #c5a15a; outline-offset: 2px; }
+
+        /* Modo compacto para celular: formulário inteiro com menos rolagem */
+        @media (max-width: 560px) {
+          .client-form-header { padding: .45rem .75rem !important; }
+          .client-form-header h2 { font-size: 1.05rem !important; line-height: 1.2 !important; }
+          .client-form-header p { display: none !important; }
+          .client-primary > .bg-white.rounded-2xl.shadow-xl.overflow-hidden > .p-6 { padding: .55rem !important; }
+          .client-wait-info, .client-notification-toggle, #aviso-iphone, #notif-status, #aviso-regras-musicas,
+          #form-pedido > div:nth-of-type(3) > p.text-xs.text-gray-400 { display: none !important; }
+          #form-pedido { display: flex !important; flex-direction: column !important; gap: .32rem !important; }
+          #form-pedido > div { margin: 0 !important; }
+          #form-pedido label { font-size: .72rem !important; line-height: 1.1 !important; margin-bottom: .1rem !important; }
+          #form-pedido input[type="text"] { min-height: 2.05rem !important; height: 2.05rem !important; padding: .25rem .6rem !important; font-size: .88rem !important; border-radius: .65rem !important; }
+          .participation-options { margin: 0 0 .25rem !important; gap: .35rem !important; }
+          .participation-options label { min-height: 2.45rem !important; height: 2.45rem !important; padding: .2rem .5rem !important; flex-direction: row !important; gap: .4rem !important; border-radius: .65rem !important; }
+          .participation-options label i { font-size: 1rem !important; }
+          .participation-options label span { font-size: .8rem !important; }
+          #campo-segundo-participante { margin-top: .25rem !important; }
+          #btn-abrir-youtube { margin-top: .2rem !important; padding: .25rem .5rem !important; font-size: .78rem !important; }
+          #form-pedido button[type="submit"] { min-height: 2.5rem !important; height: 2.5rem !important; padding: .35rem !important; margin-top: .15rem !important; font-size: .9rem !important; }
+          #feedback-sucesso { margin-top: .4rem !important; padding: .55rem !important; font-size: .8rem !important; }
+          #feedback-sucesso p { margin-top: .1rem !important; }
+          .client-primary { gap: .35rem !important; }
+        }
 </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
