@@ -333,6 +333,11 @@
           #cliente .client-layout { margin-top: 0 !important; }
           #cliente .client-primary { gap: .5rem !important; }
         }
+
+        /* Ícones e estado selecionado para Solo/Dupla */
+        .participation-options label { color: #6b625e; border-color: #d8cec2; background: #fffdf8; min-height: 5.2rem; }
+        .participation-options label:has(input:checked) { color: #5b2028; border-color: #c5a15a; background: #f7f0e3; box-shadow: 0 0 0 1px #c5a15a inset; }
+        .participation-options label:has(input:focus-visible) { outline: 3px solid #c5a15a; outline-offset: 2px; }
 </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
@@ -429,9 +434,17 @@
 <form id="form-pedido" class="space-y-4" novalidate>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-2">Quem vai cantar?</label>
-                                <div class="grid grid-cols-2 gap-2 mb-3">
-                                    <label class="flex items-center justify-center gap-2 border rounded-lg p-2 cursor-pointer"><input type="radio" name="tipo-participacao" value="solo" checked class="accent-amber-600" /><span class="font-semibold">Solo</span></label>
-                                    <label class="flex items-center justify-center gap-2 border rounded-lg p-2 cursor-pointer"><input type="radio" name="tipo-participacao" value="dupla" class="accent-amber-600" /><span class="font-semibold">Dupla</span></label>
+                                <div class="grid grid-cols-2 gap-2 mb-3 participation-options">
+                                    <label class="flex flex-col items-center justify-center gap-1 border-2 rounded-xl p-3 cursor-pointer transition-colors">
+                                        <input type="radio" name="tipo-participacao" value="solo" checked class="sr-only" />
+                                        <i class="fas fa-user text-2xl" aria-hidden="true"></i>
+                                        <span class="font-semibold">Solo</span>
+                                    </label>
+                                    <label class="flex flex-col items-center justify-center gap-1 border-2 rounded-xl p-3 cursor-pointer transition-colors">
+                                        <input type="radio" name="tipo-participacao" value="dupla" class="sr-only" />
+                                        <i class="fas fa-user-friends text-2xl" aria-hidden="true"></i>
+                                        <span class="font-semibold">Dupla</span>
+                                    </label>
                                 </div>
                                 <div class="mb-1 flex justify-between items-center">
                                     <label for="input-nome" class="block text-sm font-medium text-gray-700">Primeiro participante</label>
